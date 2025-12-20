@@ -27,7 +27,7 @@ describe('MCP Tools Integration', () => {
 
   describe('stats tool', () => {
     testFn('should return database statistics', async () => {
-      const result = await stats({});
+      const result = await stats({ workspace: undefined });
 
       expect(result).toBeDefined();
       expect(result.workspace).toBeDefined();
@@ -48,7 +48,7 @@ describe('MCP Tools Integration', () => {
 
   describe('supertags tool', () => {
     testFn('should return list of supertags', async () => {
-      const result = await supertags({});
+      const result = await supertags({ workspace: undefined, limit: 20 });
 
       expect(result).toBeDefined();
       expect(result.workspace).toBeDefined();
@@ -57,13 +57,13 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should respect limit parameter', async () => {
-      const result = await supertags({ limit: 5 });
+      const result = await supertags({ workspace: undefined, limit: 5 });
 
       expect(result.supertags.length).toBeLessThanOrEqual(5);
     });
 
     testFn('should return supertag with correct structure', async () => {
-      const result = await supertags({ limit: 1 });
+      const result = await supertags({ workspace: undefined, limit: 1 });
 
       if (result.supertags.length > 0) {
         const tag = result.supertags[0];
@@ -78,7 +78,7 @@ describe('MCP Tools Integration', () => {
 
   describe('search tool', () => {
     testFn('should search nodes by query', async () => {
-      const result = await search({ query: 'test' });
+      const result = await search({ query: 'test', workspace: undefined, limit: 20, raw: false, includeAncestor: true });
 
       expect(result).toBeDefined();
       expect(result.workspace).toBeDefined();
@@ -88,13 +88,13 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should respect limit parameter', async () => {
-      const result = await search({ query: 'a', limit: 3 });
+      const result = await search({ query: 'a', workspace: undefined, limit: 3, raw: false, includeAncestor: true });
 
       expect(result.results.length).toBeLessThanOrEqual(3);
     });
 
     testFn('should return search result with correct structure', async () => {
-      const result = await search({ query: 'a', limit: 1 });
+      const result = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (result.results.length > 0) {
         const item = result.results[0];
@@ -107,7 +107,7 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should include tags when raw is false', async () => {
-      const result = await search({ query: 'a', limit: 1, raw: false });
+      const result = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (result.results.length > 0) {
         const item = result.results[0];
@@ -117,7 +117,7 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should exclude tags when raw is true', async () => {
-      const result = await search({ query: 'a', limit: 1, raw: true });
+      const result = await search({ query: 'a', workspace: undefined, limit: 1, raw: true, includeAncestor: true });
 
       if (result.results.length > 0) {
         const item = result.results[0];
@@ -129,11 +129,11 @@ describe('MCP Tools Integration', () => {
   describe('tagged tool', () => {
     testFn('should find nodes by tag', async () => {
       // First get a tag that exists
-      const tagsResult = await supertags({ limit: 1 });
+      const tagsResult = await supertags({ workspace: undefined, limit: 1 });
 
       if (tagsResult.supertags.length > 0) {
         const tagName = tagsResult.supertags[0].tagName;
-        const result = await tagged({ tagname: tagName });
+        const result = await tagged({ tagname: tagName, workspace: undefined, limit: 20, orderBy: 'created', caseInsensitive: false });
 
         expect(result).toBeDefined();
         expect(result.workspace).toBeDefined();
@@ -144,22 +144,22 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should respect limit parameter', async () => {
-      const tagsResult = await supertags({ limit: 1 });
+      const tagsResult = await supertags({ workspace: undefined, limit: 1 });
 
       if (tagsResult.supertags.length > 0) {
         const tagName = tagsResult.supertags[0].tagName;
-        const result = await tagged({ tagname: tagName, limit: 2 });
+        const result = await tagged({ tagname: tagName, workspace: undefined, limit: 2, orderBy: 'created', caseInsensitive: false });
 
         expect(result.nodes.length).toBeLessThanOrEqual(2);
       }
     });
 
     testFn('should return node with correct structure', async () => {
-      const tagsResult = await supertags({ limit: 1 });
+      const tagsResult = await supertags({ workspace: undefined, limit: 1 });
 
       if (tagsResult.supertags.length > 0) {
         const tagName = tagsResult.supertags[0].tagName;
-        const result = await tagged({ tagname: tagName, limit: 1 });
+        const result = await tagged({ tagname: tagName, workspace: undefined, limit: 1, orderBy: 'created', caseInsensitive: false });
 
         if (result.nodes.length > 0) {
           const node = result.nodes[0];
@@ -173,7 +173,7 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should handle case-insensitive search', async () => {
-      const tagsResult = await supertags({ limit: 1 });
+      const tagsResult = await supertags({ workspace: undefined, limit: 1 });
 
       if (tagsResult.supertags.length > 0) {
         const tagName = tagsResult.supertags[0].tagName;
@@ -181,6 +181,9 @@ describe('MCP Tools Integration', () => {
 
         const result = await tagged({
           tagname: upperTag,
+          workspace: undefined,
+          limit: 20,
+          orderBy: 'created',
           caseInsensitive: true,
         });
 
@@ -193,14 +196,14 @@ describe('MCP Tools Integration', () => {
   describe('showNode tool', () => {
     testFn('should show node by ID', async () => {
       // First search for a node to get a valid ID
-      const searchResult = await search({ query: 'a', limit: 1 });
+      const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
         const nodeId = searchResult.results[0].id;
-        const result = await showNode({ nodeId });
+        const result = await showNode({ nodeId, workspace: undefined, depth: 0 });
 
         expect(result).toBeDefined();
-        expect(result.id).toBe(nodeId);
+        expect(result!.id).toBe(nodeId);
         expect(result).toHaveProperty('name');
         expect(result).toHaveProperty('tags');
         expect(result).toHaveProperty('fields');
@@ -209,22 +212,22 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should return null for non-existent node', async () => {
-      const result = await showNode({ nodeId: 'nonexistent_node_id_12345' });
+      const result = await showNode({ nodeId: 'nonexistent_node_id_12345', workspace: undefined, depth: 0 });
       expect(result).toBeNull();
     });
 
     testFn('should respect depth parameter', async () => {
-      const searchResult = await search({ query: 'a', limit: 1 });
+      const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
         const nodeId = searchResult.results[0].id;
 
         // Depth 0 - no children content
-        const result0 = await showNode({ nodeId, depth: 0 });
+        const result0 = await showNode({ nodeId, workspace: undefined, depth: 0 });
         expect(result0).toBeDefined();
 
         // Depth 1 - include direct children
-        const result1 = await showNode({ nodeId, depth: 1 });
+        const result1 = await showNode({ nodeId, workspace: undefined, depth: 1 });
         expect(result1).toBeDefined();
 
         // Children should be arrays
@@ -235,11 +238,11 @@ describe('MCP Tools Integration', () => {
     });
 
     testFn('should return node with correct structure', async () => {
-      const searchResult = await search({ query: 'a', limit: 1 });
+      const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
         const nodeId = searchResult.results[0].id;
-        const result = await showNode({ nodeId });
+        const result = await showNode({ nodeId, workspace: undefined, depth: 0 });
 
         if (result) {
           expect(result).toHaveProperty('id');

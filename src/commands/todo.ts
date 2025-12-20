@@ -141,7 +141,7 @@ export async function todoCommand(name: string | undefined, options: TodoOptions
       if (todoNode.children && todoNode.children.length > 0) {
         console.error('   Fields:');
         for (const child of todoNode.children) {
-          if ('type' in child && child.type === 'field') {
+          if ('type' in child && child.type === 'field' && child.attributeId) {
             const fieldName = getFieldName(child.attributeId);
             if (child.children && child.children.length > 0) {
               const firstChild = child.children[0];

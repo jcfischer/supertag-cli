@@ -25,7 +25,15 @@ describe("tana_semantic_search", () => {
 
     it("should accept valid input with defaults", async () => {
       // This will fail because no embeddings configured, but validates schema
-      const input = { query: "test query" };
+      const input = {
+        query: "test query",
+        workspace: undefined,
+        limit: 20,
+        raw: false,
+        includeContents: false,
+        depth: 0,
+        includeAncestor: true,
+      };
       try {
         await semanticSearch(input);
       } catch (e) {

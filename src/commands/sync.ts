@@ -348,7 +348,7 @@ export function registerSyncCommands(program: Command): void {
       const cleanupConfig = getConfig().getCleanupConfig();
 
       // Use CLI option if provided, otherwise use config default
-      const keepCount = options.keep ? parseInt(options.keep) : cleanupConfig.keepCount;
+      const keepCount = options.keep ? parseInt(options.keep) : (cleanupConfig.keepCount ?? 3);
 
       if (isNaN(keepCount) || keepCount < 1) {
         logger.error("Invalid --keep value. Must be a positive integer.");

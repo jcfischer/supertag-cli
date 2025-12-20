@@ -98,7 +98,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           ...schemas.zodToJsonSchema(schemas.createSchema),
           // Override name and children description to document inline references
           properties: {
-            ...schemas.zodToJsonSchema(schemas.createSchema).properties,
+            ...(schemas.zodToJsonSchema(schemas.createSchema).properties ?? {}),
             name: {
               type: 'string',
               description: 'Node name/title. For inline references, use: <span data-inlineref-node="NODE_ID">Text</span>. IMPORTANT: Never end with an inline ref - add text after. Good: "Meeting with <span data-inlineref-node="abc123">John</span> today". Bad: "Meeting with <span data-inlineref-node="abc123">John</span>"',

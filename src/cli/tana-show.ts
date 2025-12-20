@@ -224,7 +224,7 @@ function getFieldNameFromDb(db: Database, fieldId: string): string {
   return fallbackFields[fieldId] || fieldId;
 }
 
-function isFieldName(name: string | null): boolean {
+function isFieldName(name: string | null | undefined): boolean {
   if (!name) return false;
   // Field names often start with ⚙️ or are known field patterns
   return (
@@ -235,7 +235,7 @@ function isFieldName(name: string | null): boolean {
   );
 }
 
-function formatValue(name: string | null, id: string): string {
+function formatValue(name: string | null | undefined, id: string): string {
   if (!name) return id;
 
   // Handle inline date references (with HTML entity encoding)

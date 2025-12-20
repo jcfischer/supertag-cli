@@ -16,8 +16,8 @@ import {
   getDatabasePath,
   resolveWorkspace,
   getEnabledWorkspaces,
-  type WorkspaceContext,
 } from "../config/paths";
+import type { WorkspaceContext } from "../types";
 import { ConfigManager } from "../config/manager";
 import {
   buildContentFilterQuery,
@@ -300,7 +300,6 @@ export function createEmbedCommand(): Command {
 
         const result = await embeddingService.embedNodes(contextualizedNodes, {
           forceAll: options.all,
-          storeBatchSize: options.lanceBatchSize ? parseInt(options.lanceBatchSize) : undefined,
           progressInterval: 50, // More frequent updates
           onProgress: (progress) => {
             const pct = ((progress.processed + progress.errors + progress.skipped) / progress.total * 100).toFixed(1);
@@ -310,11 +309,9 @@ export function createEmbedCommand(): Command {
               : 0;
             const etaStr = eta > 0 ? `ETA: ${Math.floor(eta / 60)}m${eta % 60}s` : "";
 
-            // Clear previous line and write progress with dual counters
-            const storedStr = progress.stored !== undefined ? progress.stored.toLocaleString() : '0';
-            const bufferStr = progress.bufferSize !== undefined ? progress.bufferSize : 0;
+            // Clear previous line and write progress
             const errStr = progress.errors > 0 ? ` | Err: ${progress.errors}` : '';
-            const line = `   ⏳ ${pct}% | Ollama: ${progress.processed.toLocaleString()} | LanceDB: ${storedStr} | Buffer: ${bufferStr}${errStr} | ${rateStr} | ${etaStr}`;
+            const line = `   ⏳ ${pct}% | Processed: ${progress.processed.toLocaleString()}${errStr} | ${rateStr} | ${etaStr}`;
             if (process.stdout.isTTY) {
               process.stdout.write(`\r${line.padEnd(lastLine.length)}`);
             } else if (progress.processed % 1000 === 0) {
@@ -783,7 +780,7 @@ export function createEmbedCommand(): Command {
           skipIndex: options.skipIndex,
           skipCleanup: options.skipCleanup,
           retentionDays: parseInt(options.retentionDays),
-          onProgress: (step, details) => {
+          onProgress: (step: string, details?: string) => {
             if (details) {
               console.log(`   ${step} (${details})`);
             } else {

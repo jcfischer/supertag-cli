@@ -184,20 +184,38 @@ export const semanticSearchSchema = z.object({
 });
 export type SemanticSearchInput = z.infer<typeof semanticSearchSchema>;
 
+// Zod v4 internal type definition
+interface ZodDef {
+  type: string;
+  innerType?: { _zod?: { def: ZodDef } };
+  defaultValue?: unknown;
+  entries?: Record<string, unknown>;
+  element?: { _zod?: { def: ZodDef } };
+  options?: Array<{ _zod?: { def: ZodDef } }>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyZodType = z.ZodType<any, any, any>;
+
+function getZodDef(schema: AnyZodType): ZodDef | undefined {
+  // Zod v4 uses _zod.def for internal structure
+  return (schema as unknown as { _zod?: { def: ZodDef } })._zod?.def;
+}
+
 /**
  * Convert Zod schema to JSON Schema for MCP tool registration
+ * Compatible with Zod v4
  */
-export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  // For MCP, we use the Zod schema's JSON representation
-  // The MCP SDK accepts Zod schemas directly in newer versions,
-  // but for compatibility we convert to JSON Schema format
-  if (schema instanceof z.ZodObject) {
-    const shape = schema.shape;
+export function zodToJsonSchema(schema: AnyZodType): Record<string, unknown> {
+  const def = getZodDef(schema);
+
+  if (def?.type === 'object' || 'shape' in schema) {
+    const shape = (schema as z.ZodObject<z.ZodRawShape>).shape;
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
 
     for (const [key, value] of Object.entries(shape)) {
-      const zodValue = value as z.ZodType;
+      const zodValue = value as AnyZodType;
       properties[key] = zodTypeToJsonSchema(zodValue);
 
       // Check if required (not optional and not has default)
@@ -216,7 +234,7 @@ export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
   return { type: 'object' };
 }
 
-function zodTypeToJsonSchema(zodType: z.ZodType): Record<string, unknown> {
+function zodTypeToJsonSchema(zodType: AnyZodType): Record<string, unknown> {
   const description = zodType.description;
   const base: Record<string, unknown> = {};
 
@@ -224,62 +242,82 @@ function zodTypeToJsonSchema(zodType: z.ZodType): Record<string, unknown> {
     base.description = description;
   }
 
-  // Unwrap optional/default
-  let innerType = zodType;
-  if (innerType instanceof z.ZodOptional) {
-    innerType = innerType.unwrap();
-  }
-  if (innerType instanceof z.ZodDefault) {
-    // Get default value - handle both zod v3 and v4
-    const def = innerType._def as { defaultValue?: unknown; innerType?: z.ZodType };
-    if (typeof def.defaultValue === 'function') {
-      base.default = def.defaultValue();
-    } else if (def.defaultValue !== undefined) {
+  // Get the internal definition
+  let def = getZodDef(zodType);
+
+  // Unwrap optional/default/nullable/pipe using Zod v4 structure
+  while (def && ['optional', 'default', 'nullable', 'pipe'].includes(def.type)) {
+    if (def.type === 'default' && def.defaultValue !== undefined) {
       base.default = def.defaultValue;
     }
-    if (def.innerType) {
-      innerType = def.innerType;
+
+    // For pipe (transform), check 'in' schema
+    if (def.type === 'pipe') {
+      const pipeDef = def as unknown as { in?: { _zod?: { def: ZodDef } } };
+      if (pipeDef.in?._zod?.def) {
+        def = pipeDef.in._zod.def;
+        continue;
+      }
+    }
+
+    if (def.innerType?._zod?.def) {
+      def = def.innerType._zod.def;
+    } else {
+      break;
     }
   }
 
-  if (innerType instanceof z.ZodString) {
+  if (!def) {
     return { ...base, type: 'string' };
   }
-  if (innerType instanceof z.ZodNumber) {
-    return { ...base, type: 'number' };
-  }
-  if (innerType instanceof z.ZodBoolean) {
-    return { ...base, type: 'boolean' };
-  }
-  if (innerType instanceof z.ZodEnum) {
-    return { ...base, type: 'string', enum: innerType._def.values };
-  }
-  if (innerType instanceof z.ZodArray) {
-    return { ...base, type: 'array', items: zodTypeToJsonSchema(innerType.element) };
-  }
-  if (innerType instanceof z.ZodRecord) {
-    return { ...base, type: 'object', additionalProperties: true };
-  }
-  if (innerType instanceof z.ZodUnion) {
-    return { ...base, oneOf: innerType._def.options.map(zodTypeToJsonSchema) };
-  }
 
-  return { ...base, type: 'string' };
+  switch (def.type) {
+    case 'string':
+      return { ...base, type: 'string' };
+    case 'number':
+      return { ...base, type: 'number' };
+    case 'boolean':
+      return { ...base, type: 'boolean' };
+    case 'enum':
+      return { ...base, type: 'string', enum: def.entries ? Object.values(def.entries) : [] };
+    case 'array':
+      if (def.element?._zod?.def) {
+        const elementType = { _zod: { def: def.element._zod.def } } as AnyZodType;
+        return { ...base, type: 'array', items: zodTypeToJsonSchema(elementType) };
+      }
+      return { ...base, type: 'array' };
+    case 'record':
+      return { ...base, type: 'object', additionalProperties: true };
+    case 'union':
+      if (def.options) {
+        const options = def.options
+          .filter(opt => opt._zod?.def)
+          .map(opt => zodTypeToJsonSchema({ _zod: { def: opt._zod!.def } } as AnyZodType));
+        return { ...base, oneOf: options };
+      }
+      return { ...base, type: 'string' };
+    default:
+      return { ...base, type: 'string' };
+  }
 }
 
-function isOptional(zodType: z.ZodType): boolean {
-  if (zodType instanceof z.ZodOptional) return true;
-  if (zodType instanceof z.ZodDefault) return true;
-  if (zodType instanceof z.ZodNullable) return true;
-  // Handle Zod v4 pipe (used by .transform()) - check the 'in' schema
-  const def = zodType._def as { type?: string; in?: z.ZodType; schema?: z.ZodType };
-  if (def.type === 'pipe' && def.in) {
-    return isOptional(def.in);
+function isOptional(zodType: AnyZodType): boolean {
+  const def = getZodDef(zodType);
+  if (!def) return false;
+
+  // Check for optional, default, nullable types
+  if (['optional', 'default', 'nullable'].includes(def.type)) {
+    return true;
   }
-  // Handle transform (ZodEffects in Zod v3) - check the inner schema
-  if (def.schema) {
-    return isOptional(def.schema);
+
+  // Handle pipe (transform) - check the 'in' schema
+  if (def.type === 'pipe') {
+    const pipeDef = def as unknown as { in?: { _zod?: { def: ZodDef } } };
+    if (pipeDef.in?._zod?.def) {
+      return isOptional({ _zod: { def: pipeDef.in._zod.def } } as AnyZodType);
+    }
   }
+
   return false;
 }
 

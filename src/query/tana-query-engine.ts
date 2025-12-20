@@ -147,6 +147,7 @@ export class TanaQueryEngine {
           nodeType: nodes.nodeType,
           created: nodes.created,
           updated: nodes.updated,
+          doneAt: nodes.doneAt,
           rawData: nodes.rawData,
         })
         .from(nodes)
@@ -155,7 +156,7 @@ export class TanaQueryEngine {
 
       // Add other conditions to join query
       if (conditions.length > 0) {
-        joinQuery = joinQuery.where(sql.join(conditions, sql` AND `)) as any;
+        joinQuery = (joinQuery as any).where(sql.join(conditions, sql` AND `));
       }
 
       return await joinQuery.limit(query.limit || 100);

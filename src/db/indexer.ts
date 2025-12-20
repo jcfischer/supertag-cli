@@ -743,6 +743,7 @@ export class TanaIndexer {
         nodeType: nodes.nodeType,
         created: nodes.created,
         updated: nodes.updated,
+        doneAt: nodes.doneAt,
         rawData: nodes.rawData,
       })
       .from(nodes)
@@ -773,6 +774,7 @@ export class TanaIndexer {
         n.node_type as nodeType,
         n.created,
         n.updated,
+        n.done_at as doneAt,
         n.raw_data as rawData
       FROM nodes n
       INNER JOIN tag_applications ta ON ta.data_node_id = n.id

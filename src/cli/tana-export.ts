@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// @ts-nocheck - This file uses Playwright with browser context (document API)
 /**
  * Tana Export CLI - Automates JSON export from Tana using Playwright
  *

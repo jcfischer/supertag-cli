@@ -210,7 +210,7 @@ export function getFilterableNodeCount(
   const countParams = params.filter((p) => p !== options.limit);
 
   const result = withDbRetrySync(
-    () => db.query(countQueryNoLimit).get(...countParams) as { "COUNT(n.id)": number } | { "COUNT(DISTINCT n.id)": number },
+    () => db.query(countQueryNoLimit).get(...countParams) as Record<string, number>,
     "getFilterableNodeCount"
   );
 

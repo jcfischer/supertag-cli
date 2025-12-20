@@ -238,9 +238,12 @@ describe('SchemaRegistry', () => {
       const todoSchema = registry.getSupertag('todo');
       const videoSchema = registry.getSupertag('video');
 
+      expect(todoSchema).toBeDefined();
+      expect(videoSchema).toBeDefined();
+
       const supertagIds = payload.supertags?.map(s => s.id) ?? [];
-      expect(supertagIds).toContain(todoSchema?.id);
-      expect(supertagIds).toContain(videoSchema?.id);
+      expect(supertagIds).toContain(todoSchema!.id);
+      expect(supertagIds).toContain(videoSchema!.id);
     });
 
     it('should combine fields from all supertags', () => {

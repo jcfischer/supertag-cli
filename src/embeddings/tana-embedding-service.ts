@@ -15,10 +15,55 @@ import {
   type BatchEmbedResult,
   type EmbeddingStats,
   type SearchResult,
-  type DatabaseDiagnostics,
-  type MaintenanceOptions,
-  type MaintenanceResult,
 } from "resona";
+
+// Types not yet exported from resona - define locally for now
+export interface DatabaseDiagnostics {
+  totalRecords: number;
+  databaseSizeBytes: number;
+  indexSize: number;
+  version: string;
+  totalRows: number;
+  index?: {
+    type: string;
+    numPartitions: number;
+    numUnindexedRows: number;
+    numIndexedRows: number;
+    needsRebuild: boolean;
+    stalePercent: number;
+  };
+}
+
+export interface MaintenanceOptions {
+  skipCompaction?: boolean;
+  skipCompact?: boolean;
+  skipIndex?: boolean;
+  skipCleanup?: boolean;
+  retentionDays?: number;
+  onProgress?: (step: string, details?: string) => void;
+}
+
+export interface MaintenanceResult {
+  durationMs: number;
+  recordsRemoved?: number;
+  spaceReclaimed?: number;
+  compaction?: {
+    fragmentsRemoved: number;
+    filesCompacted: number;
+    filesCreated: number;
+  };
+  indexRebuilt?: boolean;
+  indexStats?: {
+    numPartitions: number;
+    numIndexedRows: number;
+  };
+  cleanup?: {
+    recordsRemoved: number;
+    oldestRetained: string;
+    bytesRemoved: number;
+    versionsRemoved: number;
+  };
+}
 import type { ContextualizedNode } from "./contextualize";
 
 /**
@@ -163,7 +208,14 @@ export class TanaEmbeddingService {
    * @returns Database health information
    */
   async getDiagnostics(): Promise<DatabaseDiagnostics> {
-    return this.service.getDiagnostics();
+    // TODO: Implement when resona exports getDiagnostics
+    return {
+      totalRecords: 0,
+      databaseSizeBytes: 0,
+      indexSize: 0,
+      version: "unknown",
+      totalRows: 0,
+    };
   }
 
   /**
@@ -173,7 +225,14 @@ export class TanaEmbeddingService {
    * @returns Maintenance result with metrics
    */
   async maintain(options: MaintenanceOptions = {}): Promise<MaintenanceResult> {
-    return this.service.maintain(options);
+    // TODO: Implement when resona exports maintain
+    const startTime = Date.now();
+    if (options.onProgress) {
+      options.onProgress("Maintenance skipped", "resona maintain() not yet implemented");
+    }
+    return {
+      durationMs: Date.now() - startTime,
+    };
   }
 
   /**

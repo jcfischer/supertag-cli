@@ -94,7 +94,7 @@ function getFieldNameFromDb(db: Database, fieldId: string): string {
   return fallbackFields[fieldId] || fieldId;
 }
 
-function isFieldName(name: string | null): boolean {
+function isFieldName(name: string | null | undefined): boolean {
   if (!name) return false;
   return (
     name.startsWith("⚙️") ||
@@ -102,7 +102,7 @@ function isFieldName(name: string | null): boolean {
   );
 }
 
-function formatValue(name: string | null, id: string): string {
+function formatValue(name: string | null | undefined, id: string): string {
   if (!name) return id;
 
   if (name.includes("data-inlineref-date")) {

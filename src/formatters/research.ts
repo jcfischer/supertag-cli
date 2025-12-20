@@ -3,7 +3,7 @@
  * Creates Research supertag nodes for Tana with proper field structure
  */
 
-import type { TanaNode } from '../types';
+import type { TanaNode, TanaApiNode } from '../types';
 
 /**
  * Research supertag ID and field attribute IDs
@@ -155,10 +155,10 @@ function parseTextContent(content: string): TanaNode[] {
 /**
  * Create a Research supertag node
  * @param input Research data
- * @returns TanaNode for API posting
+ * @returns TanaApiNode for API posting
  */
-export function createResearchNode(input: ResearchInput): TanaNode {
-  const node: TanaNode = {
+export function createResearchNode(input: ResearchInput): TanaApiNode {
+  const node: TanaApiNode = {
     name: input.name,
     supertags: [{ id: RESEARCH_SUPERTAG_ID }],
     children: [],

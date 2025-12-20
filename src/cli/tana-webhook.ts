@@ -103,7 +103,8 @@ program
     const server = new TanaWebhookServer({
       port,
       host,
-      dbPath,
+      workspaces: new Map([['default', dbPath]]),
+      defaultWorkspace: 'default',
     });
 
     try {
@@ -208,8 +209,8 @@ program
         try {
           const response = await fetch(`http://${config.host}:${config.port}/health`);
           if (response.ok) {
-            const data = await response.json();
-            console.log(`   Health: ${data.status}`);
+            const data = await response.json() as { status?: string };
+            console.log(`   Health: ${data.status ?? 'unknown'}`);
           }
         } catch (e) {
           console.log(`   Health: unreachable`);

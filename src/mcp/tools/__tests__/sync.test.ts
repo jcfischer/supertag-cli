@@ -27,6 +27,7 @@ describe('MCP tana_sync Tool', () => {
     testFn('should return correct structure for status action', async () => {
       const result = await sync({
         action: 'status',
+        workspace: undefined,
       });
 
       expect(result).toBeDefined();
@@ -39,6 +40,7 @@ describe('MCP tana_sync Tool', () => {
     testFn('should include export file info in status', async () => {
       const result = await sync({
         action: 'status',
+        workspace: undefined,
       });
 
       expect(result).toBeDefined();
@@ -60,6 +62,7 @@ describe('MCP tana_sync Tool', () => {
     testFn('should return index results for index action', async () => {
       const result = await sync({
         action: 'index',
+        workspace: undefined,
       });
 
       expect(result).toBeDefined();

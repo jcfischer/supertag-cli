@@ -30,6 +30,7 @@ describe('MCP tana_create Tool', () => {
         await create({
           supertag: '',
           name: 'Test Node',
+          workspace: undefined,
           dryRun: true,
         });
         expect(true).toBe(false); // Should not reach here
@@ -44,6 +45,7 @@ describe('MCP tana_create Tool', () => {
         await create({
           supertag: 'nonexistent_supertag_xyz123',
           name: 'Test Node',
+          workspace: undefined,
           dryRun: true,
         });
         expect(true).toBe(false); // Should not reach here
@@ -70,6 +72,7 @@ describe('MCP tana_create Tool', () => {
       const result = await create({
         supertag: testSupertag,
         name: 'Test Node from MCP',
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -114,6 +117,7 @@ describe('MCP tana_create Tool', () => {
         supertag: testSupertag,
         name: 'Test Node with Field',
         fields: { [testField]: 'Test Value' },
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -139,6 +143,7 @@ describe('MCP tana_create Tool', () => {
       const result = await create({
         supertag: `${tag1},${tag2}`,
         name: 'Multi-tag Node',
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -159,6 +164,7 @@ describe('MCP tana_create Tool', () => {
       const result = await create({
         supertag: supertags[0].name,
         name: 'Workspace Test Node',
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -179,6 +185,7 @@ describe('MCP tana_create Tool', () => {
         supertag: supertags[0].name,
         name: 'Target Test Node',
         target: 'INBOX',
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -202,6 +209,7 @@ describe('MCP tana_create Tool', () => {
           { name: 'Plain child 1' },
           { name: 'Plain child 2' },
         ],
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -230,6 +238,7 @@ describe('MCP tana_create Tool', () => {
         children: [
           { name: 'hook://email/test%40example.com', dataType: 'url' },
         ],
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -239,7 +248,7 @@ describe('MCP tana_create Tool', () => {
       // Find the URL child
       const urlChild = result.payload.children?.find(
         (c: any) => c.name === 'hook://email/test%40example.com'
-      );
+      ) as any;
       expect(urlChild).toBeDefined();
       expect(urlChild?.dataType).toBe('url');
     });
@@ -259,6 +268,7 @@ describe('MCP tana_create Tool', () => {
         children: [
           { name: 'Reference', id: 'abc123' },
         ],
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -289,6 +299,7 @@ describe('MCP tana_create Tool', () => {
           { name: 'https://example.com', dataType: 'url' },
           { name: 'Reference node', id: 'xyz789' },
         ],
+        workspace: undefined,
         dryRun: true,
       });
 
@@ -298,17 +309,17 @@ describe('MCP tana_create Tool', () => {
       const children = result.payload.children || [];
 
       // Check plain child
-      const plainChild = children.find((c: any) => c.name === 'Plain text child');
+      const plainChild = children.find((c: any) => c.name === 'Plain text child') as any;
       expect(plainChild).toBeDefined();
       expect(plainChild?.dataType).toBeUndefined();
 
       // Check URL child
-      const urlChild = children.find((c: any) => c.name === 'https://example.com');
+      const urlChild = children.find((c: any) => c.name === 'https://example.com') as any;
       expect(urlChild).toBeDefined();
       expect(urlChild?.dataType).toBe('url');
 
       // Check reference child
-      const refChild = children.find((c: any) => c.id === 'xyz789');
+      const refChild = children.find((c: any) => c.id === 'xyz789') as any;
       expect(refChild).toBeDefined();
       expect(refChild?.dataType).toBe('reference');
     });
