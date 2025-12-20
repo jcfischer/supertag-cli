@@ -3,22 +3,23 @@
  *
  * Tests the CLI integration between semantic search and node display.
  * Requires embeddings to be generated first.
+ *
+ * NOTE: These tests are skipped in CI if no database exists.
  */
 
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, test, expect } from "bun:test";
 import { existsSync } from "fs";
 import { getDatabasePath } from "../../src/config/paths";
 
 const DB_PATH = getDatabasePath();
+const DB_EXISTS = existsSync(DB_PATH);
+
+// Skip all tests in this file if database doesn't exist (CI environment)
+const testOrSkip = DB_EXISTS ? test : test.skip;
 
 describe("embed search --show integration", () => {
-  beforeAll(() => {
-    if (!existsSync(DB_PATH)) {
-      throw new Error(`Database not found: ${DB_PATH}. Run 'supertag sync index' first.`);
-    }
-  });
 
-  test("--show flag returns full node contents in JSON", async () => {
+  testOrSkip("--show flag returns full node contents in JSON", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--show", "--format", "json"],
       { stdout: "pipe", stderr: "pipe" }
@@ -61,7 +62,7 @@ describe("embed search --show integration", () => {
     }
   });
 
-  test("without --show flag returns minimal info in JSON", async () => {
+  testOrSkip("without --show flag returns minimal info in JSON", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--format", "json"],
       { stdout: "pipe", stderr: "pipe" }
@@ -103,7 +104,7 @@ describe("embed search --show integration", () => {
     }
   });
 
-  test("--show with --depth includes child nodes", async () => {
+  testOrSkip("--show with --depth includes child nodes", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--show", "--depth", "1", "--format", "json"],
       { stdout: "pipe", stderr: "pipe" }
@@ -149,7 +150,7 @@ describe("embed search --show integration", () => {
     }
   });
 
-  test("--show in table format displays rich output", async () => {
+  testOrSkip("--show in table format displays rich output", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "meeting", "--limit", "2", "--show"],
       { stdout: "pipe", stderr: "pipe" }
@@ -179,7 +180,7 @@ describe("embed search --show integration", () => {
     expect(output).toContain("% similar");
   });
 
-  test("default format shows table output", async () => {
+  testOrSkip("default format shows table output", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "test", "--limit", "2"],
       { stdout: "pipe", stderr: "pipe" }
@@ -208,7 +209,7 @@ describe("embed search --show integration", () => {
 });
 
 describe("embed search flag validation", () => {
-  test("--depth without --show is accepted (has no effect)", async () => {
+  testOrSkip("--depth without --show is accepted (has no effect)", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "test", "--limit", "1", "--depth", "1"],
       { stdout: "pipe", stderr: "pipe" }
@@ -228,7 +229,7 @@ describe("embed search flag validation", () => {
     expect(proc.exitCode).toBe(0);
   });
 
-  test("--show flag is recognized", async () => {
+  testOrSkip("--show flag is recognized", async () => {
     const proc = Bun.spawn(
       ["bun", "run", "./src/index.ts", "embed", "search", "--help"],
       { stdout: "pipe", stderr: "pipe" }
