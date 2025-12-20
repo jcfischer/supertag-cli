@@ -1,0 +1,245 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test
+
+      - name: Type check
+        run: bun run typecheck
+
+  build-macos:
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            suffix: macos-arm64
+          - target: bun-darwin-x64
+            suffix: macos-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build main CLI
+        run: |
+          if [ "${{ matrix.target }}" = "bun-darwin-arm64" ]; then
+            bun build src/index.ts --compile --outfile=supertag
+          else
+            bun build src/index.ts --compile --target=${{ matrix.target }} --outfile=supertag
+          fi
+
+      - name: Build MCP server
+        run: |
+          if [ "${{ matrix.target }}" = "bun-darwin-arm64" ]; then
+            bun build src/mcp/index.ts --compile --outfile=supertag-mcp
+          else
+            bun build src/mcp/index.ts --compile --target=${{ matrix.target }} --outfile=supertag-mcp
+          fi
+
+      - name: Build export CLI
+        run: |
+          EXTERNAL_FLAGS="--external playwright --external playwright-core --external electron --external chromium-bidi"
+          if [ "${{ matrix.target }}" = "bun-darwin-arm64" ]; then
+            bun build export/index.ts --compile $EXTERNAL_FLAGS --outfile=supertag-export
+          else
+            bun build export/index.ts --compile --target=${{ matrix.target }} $EXTERNAL_FLAGS --outfile=supertag-export
+          fi
+
+      - name: Create distribution package
+        run: |
+          DIST_NAME="supertag-cli-${{ matrix.suffix }}"
+          mkdir -p "$DIST_NAME/export"
+          mkdir -p "$DIST_NAME/mcp"
+          cp supertag "$DIST_NAME/"
+          cp supertag-mcp "$DIST_NAME/mcp/"
+          cp supertag-export "$DIST_NAME/export/"
+          cp export/package.json "$DIST_NAME/export/"
+          cp README.md "$DIST_NAME/"
+          zip -r "supertag-cli-v${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}.zip" "$DIST_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertag-cli-${{ matrix.suffix }}
+          path: supertag-cli-v${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}.zip
+
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build main CLI
+        run: bun build src/index.ts --compile --target=bun-linux-x64 --outfile=supertag
+
+      - name: Build MCP server
+        run: bun build src/mcp/index.ts --compile --target=bun-linux-x64 --outfile=supertag-mcp
+
+      - name: Build export CLI
+        run: |
+          EXTERNAL_FLAGS="--external playwright --external playwright-core --external electron --external chromium-bidi"
+          bun build export/index.ts --compile --target=bun-linux-x64 $EXTERNAL_FLAGS --outfile=supertag-export
+
+      - name: Create distribution package
+        run: |
+          DIST_NAME="supertag-cli-linux-x64"
+          mkdir -p "$DIST_NAME/export"
+          mkdir -p "$DIST_NAME/mcp"
+          cp supertag "$DIST_NAME/"
+          cp supertag-mcp "$DIST_NAME/mcp/"
+          cp supertag-export "$DIST_NAME/export/"
+          cp export/package.json "$DIST_NAME/export/"
+          cp README.md "$DIST_NAME/"
+          zip -r "supertag-cli-v${{ steps.version.outputs.VERSION }}-linux-x64.zip" "$DIST_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertag-cli-linux-x64
+          path: supertag-cli-v${{ steps.version.outputs.VERSION }}-linux-x64.zip
+
+  build-windows:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build main CLI
+        run: bun build src/index.ts --compile --target=bun-windows-x64 --outfile=supertag.exe
+
+      - name: Build MCP server
+        run: bun build src/mcp/index.ts --compile --target=bun-windows-x64 --outfile=supertag-mcp.exe
+
+      - name: Build export CLI
+        run: |
+          EXTERNAL_FLAGS="--external playwright --external playwright-core --external electron --external chromium-bidi"
+          bun build export/index.ts --compile --target=bun-windows-x64 $EXTERNAL_FLAGS --outfile=supertag-export.exe
+
+      - name: Create distribution package
+        run: |
+          DIST_NAME="supertag-cli-windows-x64"
+          mkdir -p "$DIST_NAME/export"
+          mkdir -p "$DIST_NAME/mcp"
+          cp supertag.exe "$DIST_NAME/"
+          cp supertag-mcp.exe "$DIST_NAME/mcp/"
+          cp supertag-export.exe "$DIST_NAME/export/"
+          cp export/package.json "$DIST_NAME/export/"
+          cp README.md "$DIST_NAME/"
+          zip -r "supertag-cli-v${{ steps.version.outputs.VERSION }}-windows-x64.zip" "$DIST_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertag-cli-windows-x64
+          path: supertag-cli-v${{ steps.version.outputs.VERSION }}-windows-x64.zip
+
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*.zip"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Extract changelog section for this version
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' | head -50)
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="Release v$VERSION"
+          fi
+          # Write to file for multiline support
+          echo "$CHANGELOG" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Supertag CLI v${{ steps.version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/supertag-cli-macos-arm64/*.zip
+            artifacts/supertag-cli-macos-x64/*.zip
+            artifacts/supertag-cli-linux-x64/*.zip
+            artifacts/supertag-cli-windows-x64/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
