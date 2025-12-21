@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Firebase API Key Storage** - Firebase token now stored in `config.json` instead of `.env`
+  - `supertag-export --login` saves Firebase API key to `~/.config/supertag/config.json`
+  - Centralized configuration in config.json for better management
+  - Falls back to `TANA_FIREBASE_API_KEY` environment variable if not in config
+  - Existing `.env` files with `FIREBASE_API_TOKEN` can be safely deleted
+
 ## [0.13.2] - 2025-12-21
 
 ### Changed

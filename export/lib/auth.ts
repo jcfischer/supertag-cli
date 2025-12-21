@@ -12,12 +12,16 @@ import { chromium } from 'playwright';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { BROWSER_DATA_DIR, TANA_CACHE_DIR } from '../../src/config/paths';
+import { getConfig } from '../../src/config/manager';
 
 // Tana's Firebase Web API key - required for token refresh
 // This is a client-side key (visible in browser network requests), not a secret
 // Can be extracted from Tana app network traffic if needed
-const FIREBASE_API_KEY = process.env.TANA_FIREBASE_API_KEY || '';
-const TOKEN_REFRESH_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+// Reads from config.json (extracted during login process)
+function getFirebaseApiKey(): string {
+  return getConfig().getFirebaseApiKey() || process.env.TANA_FIREBASE_API_KEY || '';
+}
+
 const TOKEN_CACHE_FILE = join(TANA_CACHE_DIR, 'auth-token.json');
 
 export interface FirebaseAuth {
@@ -102,7 +106,10 @@ export async function getAuthToken(log?: AuthLogger): Promise<AuthResult | null>
  * @see https://firebase.google.com/docs/reference/rest/auth#section-refresh-token
  */
 export async function refreshAuthToken(refreshToken: string): Promise<FirebaseAuth | null> {
-  const response = await fetch(TOKEN_REFRESH_URL, {
+  const firebaseApiKey = getFirebaseApiKey();
+  const tokenRefreshUrl = `https://securetoken.googleapis.com/v1/token?key=${firebaseApiKey}`;
+
+  const response = await fetch(tokenRefreshUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

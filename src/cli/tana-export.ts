@@ -373,32 +373,12 @@ async function extractFirebaseToken(page: any, verbose: boolean): Promise<string
 }
 
 /**
- * Save Firebase token to .env file
+ * Save Firebase API key to config.json
  */
-function saveTokenToEnv(token: string): void {
-  const envPath = join(process.cwd(), '.env');
-  const envVar = `FIREBASE_API_TOKEN=${token}`;
-
-  if (existsSync(envPath)) {
-    // Read existing .env
-    const content = readFileSync(envPath, 'utf-8');
-
-    // Check if FIREBASE_API_TOKEN already exists
-    if (content.includes('FIREBASE_API_TOKEN=')) {
-      // Replace existing token
-      const updated = content.replace(/FIREBASE_API_TOKEN=.*/g, envVar);
-      writeFileSync(envPath, updated);
-      logger.info('Updated FIREBASE_API_TOKEN in .env');
-    } else {
-      // Append token
-      appendFileSync(envPath, `\n${envVar}\n`);
-      logger.info('Added FIREBASE_API_TOKEN to .env');
-    }
-  } else {
-    // Create new .env file
-    writeFileSync(envPath, `${envVar}\n`);
-    logger.info('Created .env with FIREBASE_API_TOKEN');
-  }
+function saveTokenToConfig(token: string): void {
+  const config = getConfig();
+  config.setFirebaseApiKey(token);
+  logger.info('Saved Firebase API key to config.json');
 }
 
 async function interactiveLogin(): Promise<void> {
@@ -451,10 +431,10 @@ async function interactiveLogin(): Promise<void> {
 
         const token = await extractFirebaseToken(page, true);
         if (token) {
-          saveTokenToEnv(token);
+          saveTokenToConfig(token);
           tokenExtracted = true;
           logger.info('');
-          logger.info('✅ Firebase token extracted and saved to .env');
+          logger.info('✅ Firebase API key extracted and saved to config');
           logger.info('You can now close the browser.');
         }
       }
@@ -473,7 +453,7 @@ async function interactiveLogin(): Promise<void> {
 
   logger.info('Login session saved. You can now run exports automatically.');
   if (tokenExtracted) {
-    logger.info('Firebase API token saved to .env file.');
+    logger.info('Firebase API key saved to config.json');
   }
 }
 

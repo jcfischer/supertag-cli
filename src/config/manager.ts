@@ -120,6 +120,22 @@ export class ConfigManager {
   }
 
   /**
+   * Get Firebase API key
+   */
+  getFirebaseApiKey(): string | undefined {
+    return this.config.firebaseApiKey;
+  }
+
+  /**
+   * Set Firebase API key
+   * @param key - Firebase Web API key
+   */
+  setFirebaseApiKey(key: string): void {
+    this.config.firebaseApiKey = key;
+    this.save({});
+  }
+
+  /**
    * Save configuration to file
    * @param updates Partial configuration to merge and save
    */

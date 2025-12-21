@@ -138,6 +138,8 @@ export interface TanaConfig {
   cleanup?: CleanupConfig;
   /** Embedding configuration for semantic search */
   embeddings?: EmbeddingConfig;
+  /** Firebase Web API key for token refresh (public client-side key) */
+  firebaseApiKey?: string;
 }
 
 /**
