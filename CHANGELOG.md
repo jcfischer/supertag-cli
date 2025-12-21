@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2025-12-21
+
 ### Added
+
+- **Automatic Browser Installation** - `supertag-export` now auto-installs Chromium browser on first run
+  - No manual `bunx playwright install chromium` needed
+  - Auto-detects missing browser before login/discover commands
+  - New `supertag-export setup` command for explicit installation
+  - Improved first-time user experience with automatic dependency resolution
+
+## [0.13.0] - 2025-12-20
+
+### Added
+
+- **Firebase Token Extraction** - `supertag-export --login` now automatically extracts Firebase API token
+  - Token saved to `.env` as `FIREBASE_API_TOKEN`
+  - Polls for successful login and extracts from IndexedDB
+  - Updates existing `.env` or creates new one
 
 - **Open Source Release** - Repository is now publicly available on GitHub
   - MIT License
@@ -16,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SECURITY.md with vulnerability reporting process
   - GitHub issue and PR templates
   - GitHub Actions CI workflow for automated testing
+
+### Fixed
+
+- **TypeScript CI Compatibility** - Resolved all TypeScript errors for clean CI builds
+  - Fixed Zod v4 schema compatibility in MCP tools
+  - Added missing required parameters to MCP tool tests
+  - Fixed type assertions for API responses and union types
+  - Use GitHub reference for resona dependency (`github:jcfischer/resona#main`)
 
 ## [0.12.0] - 2025-12-20
 
