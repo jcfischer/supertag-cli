@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ch.invisible.supertag-server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- UPDATE THIS PATH to your supertag binary -->
+        <string>/usr/local/bin/supertag</string>
+        <string>server</string>
+        <string>start</string>
+        <string>--port</string>
+        <string>3100</string>
+    </array>
+
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <!-- UPDATE THIS to your home directory -->
+    <string>/Users/YOUR_USERNAME</string>
+
+    <!-- Start on boot -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if crashed -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <!-- UPDATE THIS to your home directory -->
+    <string>/Users/YOUR_USERNAME/.local/state/supertag/logs/supertag-server.log</string>
+
+    <key>StandardErrorPath</key>
+    <!-- UPDATE THIS to your home directory -->
+    <string>/Users/YOUR_USERNAME/.local/state/supertag/logs/supertag-server.error.log</string>
+
+    <!-- Environment -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <!-- UPDATE THIS to your home directory -->
+        <string>/Users/YOUR_USERNAME</string>
+    </dict>
+
+    <!-- Throttle restarts: 60 seconds between restart attempts -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+</dict>
+</plist>

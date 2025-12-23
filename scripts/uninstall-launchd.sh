@@ -1,37 +1,59 @@
 #!/bin/bash
 
 ##
-# Uninstall Tana Webhook Server launchd service
+# Uninstall Supertag LaunchAgent
+#
+# Usage:
+#   ./scripts/uninstall-launchd.sh server  # Uninstall webhook server
+#   ./scripts/uninstall-launchd.sh daily   # Uninstall daily export/sync
+#   ./scripts/uninstall-launchd.sh all     # Uninstall both
 ##
 
 set -e
 
-PLIST_NAME="com.pai.tana-webhook.plist"
-PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME"
+uninstall_service() {
+    local SERVICE="$1"
+    local PLIST_NAME="ch.invisible.supertag-${SERVICE}"
+    local PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_NAME}.plist"
 
-echo "🛑 Uninstalling Tana Webhook Server launchd service"
+    echo "🛑 Uninstalling supertag-${SERVICE}..."
+
+    if [ ! -f "$PLIST_PATH" ]; then
+        echo "   ⚠️  Not installed (plist not found)"
+        return 0
+    fi
+
+    # Stop service
+    if launchctl list 2>/dev/null | grep -q "$PLIST_NAME"; then
+        echo "   ⏹️  Stopping service..."
+        launchctl unload "$PLIST_PATH"
+    fi
+
+    # Remove plist
+    rm "$PLIST_PATH"
+    echo "   ✅ Uninstalled"
+}
+
+# Determine which service to uninstall
+SERVICE="${1:-all}"
+
+case "$SERVICE" in
+    server|daily)
+        uninstall_service "$SERVICE"
+        ;;
+    all)
+        uninstall_service "server"
+        uninstall_service "daily"
+        ;;
+    *)
+        echo "❌ Unknown service: $SERVICE"
+        echo "   Usage: $0 [server|daily|all]"
+        exit 1
+        ;;
+esac
+
 echo ""
-
-if [ ! -f "$PLIST_PATH" ]; then
-    echo "❌ Service not installed (plist not found)"
-    exit 1
-fi
-
-# Stop service
-if launchctl list | grep -q "com.pai.tana-webhook"; then
-    echo "⏹️  Stopping service..."
-    launchctl unload "$PLIST_PATH"
-    echo "✅ Service stopped"
-else
-    echo "⚠️  Service was not running"
-fi
-
-# Remove plist
-echo "🗑️  Removing plist..."
-rm "$PLIST_PATH"
-
+echo "✅ Uninstall complete"
 echo ""
-echo "✅ Service uninstalled successfully"
-echo ""
-echo "💡 Note: Log files are preserved in $(pwd)/logs/"
-echo "   To remove logs: rm -rf $(pwd)/logs/"
+echo "💡 Log files preserved in ~/.local/state/supertag/logs/"
+echo "   To remove: rm -rf ~/.local/state/supertag/logs/"

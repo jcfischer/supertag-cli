@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ch.invisible.supertag-daily</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- UPDATE THIS PATH to your supertag-cli installation -->
+        <string>/usr/local/bin/supertag-cli/tana-daily</string>
+    </array>
+
+    <!-- Run daily at 6:00 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <!-- UPDATE THIS to your home directory -->
+        <string>/Users/YOUR_USERNAME</string>
+    </dict>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <!-- UPDATE THIS PATH to your supertag-cli installation -->
+    <string>/usr/local/bin/supertag-cli</string>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <!-- UPDATE THIS to your home directory -->
+    <string>/Users/YOUR_USERNAME/.local/state/supertag/logs/supertag-daily.log</string>
+
+    <key>StandardErrorPath</key>
+    <!-- UPDATE THIS to your home directory -->
+    <string>/Users/YOUR_USERNAME/.local/state/supertag/logs/supertag-daily.error.log</string>
+
+    <!-- Don't run at load, only on schedule -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- Timeout: 30 minutes (export can take 15+ min for large workspaces) -->
+    <key>TimeOut</key>
+    <integer>1800</integer>
+
+    <!-- Throttle interval: don't restart more than once per hour -->
+    <key>ThrottleInterval</key>
+    <integer>3600</integer>
+</dict>
+</plist>
