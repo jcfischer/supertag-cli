@@ -35,7 +35,7 @@ export function getOutputConfig(): OutputConfig {
   try {
     const config = getConfig().getConfig();
     // Output config is stored under 'output' key in config file
-    const outputConfig = (config as Record<string, unknown>).output as OutputConfig | undefined;
+    const outputConfig = (config as unknown as Record<string, unknown>).output as OutputConfig | undefined;
     return outputConfig || {};
   } catch {
     // Config not available, return empty
