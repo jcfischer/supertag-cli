@@ -126,10 +126,10 @@ supertag-export discover --add
 ./supertag sync index
 
 # Search your workspace (requires indexed export)
-./supertag query search "meeting"
+./supertag search "meeting"
 
 # Show database stats
-./supertag query stats
+./supertag stats
 
 # Create a todo
 ./supertag create todo "Buy groceries" --status active
@@ -192,23 +192,27 @@ echo '{"name": "Task"}' | supertag format
 # First, index a Tana export
 supertag sync index
 
-# Search (resolves to tagged ancestors)
-supertag query search "project" --limit 10
-
-# Find by supertag
-supertag query tagged meeting --limit 5
+# Unified search command
+supertag search "project" --limit 10          # Full-text search
+supertag search "project" --semantic          # Semantic/vector search
+supertag search "todo" --tag todo             # Find by supertag
 
 # Show full node contents
-supertag show tagged project --limit 3
-supertag show node <node-id>
+supertag nodes show <node-id>                 # Basic view
+supertag nodes show <node-id> --depth 3       # Traverse 3 levels deep
+supertag nodes refs <node-id>                 # Show references
+supertag nodes recent --limit 20              # Recently updated
 
-# Show node with depth traversal (traverse children)
-supertag show node <node-id> -d 3          # 3 levels deep
-supertag show node <node-id> -d 2 --json   # JSON output with depth
+# Explore supertags
+supertag tags list --limit 50                 # All supertags
+supertag tags top --limit 20                  # Most used tags
+supertag tags show todo                       # Show tag schema
 
 # Statistics
-supertag query stats
-supertag query top-tags --limit 20
+supertag stats                                # All stats
+supertag stats --db                           # Database only
+supertag stats --embed                        # Embedding only
+supertag stats --filter                       # Filter breakdown
 ```
 
 ### EXPORT - Automated Backup (via `supertag-export`)
@@ -331,19 +335,19 @@ supertag embed generate --include-system     # Include system docTypes
 # View filtering statistics
 supertag embed filter-stats
 
-# Semantic search
-supertag embed search "project planning discussions"
-supertag embed search "authentication issues" --limit 20
+# Semantic search (now via unified search command)
+supertag search "project planning discussions" --semantic
+supertag search "authentication issues" --semantic --limit 20
 
 # Show full node details with search results
-supertag embed search "meeting notes" --show
-supertag embed search "project ideas" --show --depth 1    # Include children
+supertag search "meeting notes" --semantic --show
+supertag search "project ideas" --semantic --show --depth 1
 
 # JSON output with full node contents
-supertag embed search "tasks" --show --format json
+supertag search "tasks" --semantic --show --json
 
 # Show embedding statistics
-supertag embed stats
+supertag stats --embed
 
 # Note: Results may occasionally include deleted nodes because Tana's JSON export
 # doesn't include comprehensive deletion metadata. Nodes with _TRASH ancestors
@@ -427,7 +431,7 @@ supertag workspace set-default personal
 supertag workspace show personal
 
 # Use specific workspace
-supertag query search "meeting" -w work
+supertag search "meeting" -w work
 supertag sync index -w personal
 
 # Batch operations

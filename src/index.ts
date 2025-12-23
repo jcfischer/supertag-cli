@@ -14,7 +14,7 @@ import { Command } from 'commander';
 import { formatCommand } from './commands/format';
 import { postCommand } from './commands/post';
 import { configCommand } from './commands/config';
-import { schemaCommand } from './commands/schema';
+import { schemaCommand, createSchemaCommand } from './commands/schema';
 import { createCommand } from './commands/create';
 import { registerQueryCommands } from './commands/query';
 import { registerShowCommands } from './commands/show';
@@ -22,6 +22,11 @@ import { registerSyncCommands } from './commands/sync';
 import { registerServerCommands } from './commands/server';
 import { createWorkspaceCommand } from './commands/workspace';
 import { createEmbedCommand } from './commands/embed';
+// Harmonized commands (CLI Harmonization Phase 1)
+import { createSearchCommand } from './commands/search';
+import { createNodesCommand } from './commands/nodes';
+import { createTagsCommand } from './commands/tags';
+import { createStatsCommand } from './commands/stats';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -82,19 +87,10 @@ program
   });
 
 /**
- * Schema Command
+ * Schema Command (Commander subcommands)
  * Manage supertag schema registry
  */
-program
-  .command('schema [subcommand] [arg]')
-  .description('Manage supertag schema registry')
-  .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
-  .option('--export-path <path>', 'Path to Tana export JSON file')
-  .option('--format <fmt>', 'Output format: table, json, names')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (subcommand, arg, options) => {
-    await schemaCommand(subcommand, arg, options);
-  });
+program.addCommand(createSchemaCommand());
 
 /**
  * Create Command
@@ -143,6 +139,16 @@ program.addCommand(createWorkspaceCommand());  // tana workspace list|add|remove
 program.addCommand(createEmbedCommand());     // tana embed config|generate|search|stats
 
 /**
+ * Harmonized commands (CLI Harmonization Phase 1)
+ * These new commands follow the object-action pattern for consistency.
+ * They coexist with legacy commands during transition period.
+ */
+program.addCommand(createSearchCommand());    // supertag search <query> [--semantic] [--tag]
+program.addCommand(createNodesCommand());     // supertag nodes show|refs|recent
+program.addCommand(createTagsCommand());      // supertag tags list|top|show
+program.addCommand(createStatsCommand());     // supertag stats [--db] [--embed] [--filter]
+
+/**
  * Help text with examples
  */
 program.on('--help', () => {
@@ -154,13 +160,34 @@ program.on('--help', () => {
   console.log('    supertag format                Convert JSON to Tana Paste');
   console.log('    supertag post                  Post raw payload to Tana');
   console.log('');
-  console.log('  READ (Query Index):');
-  console.log('    supertag query search <query>  Full-text search');
-  console.log('    supertag query tagged <tag>    Find nodes by supertag');
-  console.log('    supertag query stats           Database statistics');
-  console.log('    supertag query top-tags        Most used supertags');
-  console.log('    supertag show node <id>        Display node contents');
-  console.log('    supertag show tagged <tag>     Display nodes by tag');
+  console.log('  SEARCH (Unified):');
+  console.log('    supertag search <query>        Full-text search (default)');
+  console.log('    supertag search <q> --semantic Semantic/vector search');
+  console.log('    supertag search <q> --tag <t>  Find nodes by supertag');
+  console.log('');
+  console.log('  NODES:');
+  console.log('    supertag nodes show <id>       Display node contents');
+  console.log('    supertag nodes refs <id>       Show node references');
+  console.log('    supertag nodes recent          Recently updated nodes');
+  console.log('');
+  console.log('  TAGS:');
+  console.log('    supertag tags list             List all supertags');
+  console.log('    supertag tags top              Most used supertags');
+  console.log('    supertag tags show <name>      Show tag schema');
+  console.log('');
+  console.log('  STATS:');
+  console.log('    supertag stats                 All statistics');
+  console.log('    supertag stats --db            Database stats only');
+  console.log('    supertag stats --embed         Embedding stats only');
+  console.log('    supertag stats --filter        Filter breakdown');
+  console.log('');
+  console.log('  LEGACY (will be removed):');
+  console.log('    supertag query search <query>  → use: supertag search <query>');
+  console.log('    supertag query tagged <tag>    → use: supertag search <q> --tag <t>');
+  console.log('    supertag query stats           → use: supertag stats --db');
+  console.log('    supertag query top-tags        → use: supertag tags top');
+  console.log('    supertag show node <id>        → use: supertag nodes show <id>');
+  console.log('    supertag show tagged <tag>     → use: supertag search <q> --tag <t>');
   console.log('');
   console.log('  EXPORT (Separate Tool):');
   console.log('    supertag-export login          First-time login setup');

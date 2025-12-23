@@ -323,3 +323,93 @@ export interface WorkspaceContext {
   /** Path to workspace export directory */
   exportDir: string;
 }
+
+// ============================================================================
+// Node Builder Types (shared between CLI and MCP)
+// ============================================================================
+
+/**
+ * Child node input - unified format for both CLI and MCP
+ * Used when creating nodes with children via the Input API
+ */
+export interface ChildNodeInput {
+  /** Child node name (may contain inline refs with <span data-inlineref-node="ID">) */
+  name: string;
+  /** Optional node ID for reference type (creates dataType: 'reference') */
+  id?: string;
+  /** Data type: 'url' for clickable links, 'reference' for node refs */
+  dataType?: 'url' | 'reference';
+}
+
+/**
+ * Node creation input - unified options for both CLI and MCP
+ * Provides a common interface for creating nodes via the Input API
+ */
+export interface CreateNodeInput {
+  /** Supertag name(s) - single name or comma-separated list */
+  supertag: string;
+  /** Node name/title */
+  name: string;
+  /** Field values as key-value pairs */
+  fields?: Record<string, string | string[]>;
+  /** Child nodes (plain text, URLs, or references) */
+  children?: ChildNodeInput[];
+  /** Target node ID (INBOX, SCHEMA, or specific node ID) */
+  target?: string;
+  /** Validate only, don't post to API */
+  dryRun?: boolean;
+}
+
+/**
+ * Node creation result - unified response for both CLI and MCP
+ * Returned after creating a node or validating in dry-run mode
+ */
+export interface CreateNodeResult {
+  /** Was operation successful */
+  success: boolean;
+  /** Created node ID (only present if not dry run and API call succeeded) */
+  nodeId?: string;
+  /** Validated payload (always present) */
+  payload: TanaApiNode;
+  /** Resolved target node ID */
+  target: string;
+  /** Was this a dry run */
+  dryRun: boolean;
+  /** Error message if operation failed */
+  error?: string;
+}
+
+// ============================================================================
+// CLI Harmonization Types
+// ============================================================================
+
+/**
+ * Standard flag options shared across commands
+ * Used for CLI harmonization to ensure consistent flags
+ */
+export interface StandardOptions {
+  /** Workspace alias or nodeid (-w, --workspace) */
+  workspace?: string;
+  /** Database path override (--db-path) */
+  dbPath?: string;
+  /** Result limit (-l, --limit) - NOT -k */
+  limit?: number;
+  /** JSON output (--json) - NOT --format json */
+  json?: boolean;
+  /** Show full content (-s, --show) */
+  show?: boolean;
+  /** Child traversal depth (-d, --depth) */
+  depth?: number;
+}
+
+/**
+ * Search type for unified search command
+ * Determines which search engine to use
+ */
+export type SearchType = "fts" | "semantic" | "tagged";
+
+/**
+ * Stats type for unified stats command
+ * Determines which statistics to display
+ */
+export type StatsType = "all" | "db" | "embed" | "filter";

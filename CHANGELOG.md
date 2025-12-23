@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### CLI Harmonization Phase 1 - New Unified Commands
+
+New commands following the `object action` pattern for consistency and discoverability:
+
+- **`supertag search <query>`** - Unified search command
+  - Full-text search (default)
+  - `--semantic` flag for vector similarity search
+  - `--tag <name>` flag for filtering by supertag
+  - `--show` flag for full node content display
+  - `--depth <n>` for child traversal with --show
+  - Replaces: `query search`, `embed search`, `query tagged`
+
+- **`supertag nodes show|refs|recent`** - Node operations
+  - `nodes show <id>` - Display node contents with depth traversal
+  - `nodes refs <id>` - Show references to a node
+  - `nodes recent` - Recently updated nodes
+  - Replaces: `show node`, `query refs`, `query recent`
+
+- **`supertag tags list|top|show`** - Supertag operations
+  - `tags list` - List all supertags
+  - `tags top` - Most used supertags
+  - `tags show <name>` - Show tag schema
+  - Replaces: `query top-tags`, `show tagged`, `schema show`
+
+- **`supertag stats`** - Unified statistics
+  - `--db` - Database statistics only
+  - `--embed` - Embedding statistics only
+  - `--filter` - Content filter breakdown
+  - Replaces: `query stats`, `embed stats`, `embed filter-stats`
+
+### Changed
+
+- Help text updated to show new command structure with legacy deprecation notices
+- Demo scripts updated to use new commands
+- README updated with new command examples
+
+### Deprecated
+
+The following commands will be removed in a future release:
+- `supertag query search` → use `supertag search`
+- `supertag query tagged` → use `supertag search --tag`
+- `supertag query stats` → use `supertag stats --db`
+- `supertag query top-tags` → use `supertag tags top`
+- `supertag show node` → use `supertag nodes show`
+- `supertag show tagged` → use `supertag search --tag --show`
+- `supertag embed search` → use `supertag search --semantic`
+- `supertag embed stats` → use `supertag stats --embed`
+
 ## [0.13.4] - 2025-12-21
 
 ### Fixed

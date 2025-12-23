@@ -3,8 +3,10 @@
  * Manage Tana schema registry (sync, list, show supertags)
  *
  * Supports multi-workspace configuration with per-workspace schema caches.
+ * Uses Commander.js subcommands for consistent CLI pattern.
  */
 
+import { Command } from 'commander';
 import { join, dirname } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { SchemaRegistry } from '../schema';
@@ -339,4 +341,70 @@ async function searchCommand(query: string | undefined, options: SchemaOptions):
     const fieldInfo = fieldCount > 0 ? ` (${fieldCount} fields)` : '';
     console.log(`  ${s.name}${fieldInfo}`);
   });
+}
+
+/**
+ * Create schema command with Commander subcommands
+ * Modern pattern following CLI Harmonization
+ */
+export function createSchemaCommand(): Command {
+  const schema = new Command('schema');
+  schema.description('Manage supertag schema registry');
+
+  // schema sync [path]
+  schema
+    .command('sync')
+    .description('Sync schema from Tana export')
+    .argument('[path]', 'Path to Tana export JSON file')
+    .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
+    .option('-v, --verbose', 'Verbose output')
+    .action(async (path: string | undefined, opts: { workspace?: string; verbose?: boolean }) => {
+      await syncCommand(path, {
+        workspace: opts.workspace,
+        verbose: opts.verbose,
+      });
+    });
+
+  // schema list
+  schema
+    .command('list')
+    .description('List all supertags')
+    .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
+    .option('--format <fmt>', 'Output format: table, json, names', 'table')
+    .action(async (opts: { workspace?: string; format?: 'table' | 'json' | 'names' }) => {
+      await listCommand({
+        workspace: opts.workspace,
+        format: opts.format,
+      });
+    });
+
+  // schema show <name>
+  schema
+    .command('show')
+    .description('Show supertag fields and details')
+    .argument('<name>', 'Supertag name')
+    .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
+    .option('--format <fmt>', 'Output format: table, json', 'table')
+    .action(async (name: string, opts: { workspace?: string; format?: 'table' | 'json' }) => {
+      await showCommand(name, {
+        workspace: opts.workspace,
+        format: opts.format,
+      });
+    });
+
+  // schema search <query>
+  schema
+    .command('search')
+    .description('Search supertags by name')
+    .argument('<query>', 'Search query')
+    .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
+    .option('--format <fmt>', 'Output format: table, json', 'table')
+    .action(async (query: string, opts: { workspace?: string; format?: 'table' | 'json' }) => {
+      await searchCommand(query, {
+        workspace: opts.workspace,
+        format: opts.format,
+      });
+    });
+
+  return schema;
 }
