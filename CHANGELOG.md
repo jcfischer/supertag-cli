@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **System Field Extraction** - Added support for Tana's built-in system fields
+  - `SYS_A90` → "Date" field (used by meeting, calendar-item, appointment supertags)
+  - `SYS_A61` → "Due Date" field (used by task, todo, project supertags)
+  - `Mp2A7_2PQw` → "Attendees" field (used by meeting supertag)
+  - System fields now appear in `supertag tags fields <tag>` output
+  - Mapping exported as `SYSTEM_FIELD_MARKERS` for extensibility
+
 ### Fixed
+
+- **Tags Show Command** - Fixed "Invalid export format" error in `supertag tags show <tag>`
+  - Command was incorrectly loading schema cache as Tana export format
+  - Now uses `getSchemaRegistry()` which correctly parses cached registry format
 
 - **Supertag Parent Extraction** - Fixed extraction of parent supertag relationships
   - SYS_A13 inheritance marker is now correctly detected as raw string (not node ID)

@@ -197,6 +197,149 @@ describe("Supertag Metadata Extraction", () => {
       expect(fields.length).toBe(0);
     });
 
+    it("should extract SYS_A90 as Date system field", () => {
+      // Real Tana exports have SYS_A90 as first child of tuple for Date field
+      // SYS_A90 is a raw string marker, NOT a node ID
+      const nodes = new Map<string, NodeDump>([
+        [
+          "meeting-tagdef",
+          {
+            id: "meeting-tagdef",
+            props: { name: "meeting", _docType: "tagDef", created: 1000 },
+            children: ["date-tuple", "regular-tuple"],
+          } as NodeDump,
+        ],
+        [
+          "date-tuple",
+          {
+            id: "date-tuple",
+            props: { _docType: "tuple", created: 1001 },
+            // SYS_A90 is a raw string marker for Date field
+            children: ["SYS_A90", "date-value"],
+          } as NodeDump,
+        ],
+        // NOTE: NO node with id="SYS_A90" exists - it's a raw string!
+        [
+          "date-value",
+          {
+            id: "date-value",
+            props: {
+              name: '<span data-inlineref-date="..."></span>',
+              created: 1002,
+            },
+          } as NodeDump,
+        ],
+        [
+          "regular-tuple",
+          {
+            id: "regular-tuple",
+            props: { _docType: "tuple", created: 1003 },
+            children: ["location-label", "location-value"],
+          } as NodeDump,
+        ],
+        [
+          "location-label",
+          {
+            id: "location-label",
+            props: { name: "Location", created: 1004 },
+          } as NodeDump,
+        ],
+        [
+          "location-value",
+          {
+            id: "location-value",
+            props: { name: "", created: 1005 },
+          } as NodeDump,
+        ],
+      ]);
+
+      const tagDef = nodes.get("meeting-tagdef")!;
+      const fields = extractFieldsFromTagDef(tagDef, nodes);
+
+      expect(fields.length).toBe(2);
+      expect(fields[0].fieldName).toBe("Date");
+      expect(fields[0].fieldLabelId).toBe("SYS_A90"); // System field marker
+      expect(fields[1].fieldName).toBe("Location");
+      expect(fields[1].fieldLabelId).toBe("location-label");
+    });
+
+    it("should extract Mp2A7_2PQw as Attendees system field", () => {
+      // Real Tana exports use Mp2A7_2PQw marker for Attendees field
+      const nodes = new Map<string, NodeDump>([
+        [
+          "meeting-tagdef",
+          {
+            id: "meeting-tagdef",
+            props: { name: "meeting", _docType: "tagDef", created: 1000 },
+            children: ["attendees-tuple"],
+          } as NodeDump,
+        ],
+        [
+          "attendees-tuple",
+          {
+            id: "attendees-tuple",
+            props: { _docType: "tuple", created: 1001 },
+            // Mp2A7_2PQw is a raw string marker for Attendees field
+            children: ["Mp2A7_2PQw", "attendee-value"],
+          } as NodeDump,
+        ],
+        // NOTE: NO node with id="Mp2A7_2PQw" exists - it's a raw string!
+        [
+          "attendee-value",
+          {
+            id: "attendee-value",
+            props: { name: "", created: 1002 },
+          } as NodeDump,
+        ],
+      ]);
+
+      const tagDef = nodes.get("meeting-tagdef")!;
+      const fields = extractFieldsFromTagDef(tagDef, nodes);
+
+      expect(fields.length).toBe(1);
+      expect(fields[0].fieldName).toBe("Attendees");
+      expect(fields[0].fieldLabelId).toBe("Mp2A7_2PQw");
+    });
+
+    it("should extract SYS_A61 as Due Date system field", () => {
+      // SYS_A61 appears on task/todo supertags
+      const nodes = new Map<string, NodeDump>([
+        [
+          "task-tagdef",
+          {
+            id: "task-tagdef",
+            props: { name: "task", _docType: "tagDef", created: 1000 },
+            children: ["due-tuple"],
+          } as NodeDump,
+        ],
+        [
+          "due-tuple",
+          {
+            id: "due-tuple",
+            props: { _docType: "tuple", created: 1001 },
+            children: ["SYS_A61", "due-value"],
+          } as NodeDump,
+        ],
+        [
+          "due-value",
+          {
+            id: "due-value",
+            props: {
+              name: '<span data-inlineref-date="..."></span>',
+              created: 1002,
+            },
+          } as NodeDump,
+        ],
+      ]);
+
+      const tagDef = nodes.get("task-tagdef")!;
+      const fields = extractFieldsFromTagDef(tagDef, nodes);
+
+      expect(fields.length).toBe(1);
+      expect(fields[0].fieldName).toBe("Due Date");
+      expect(fields[0].fieldLabelId).toBe("SYS_A61");
+    });
+
     it("should handle real-world bp-room pattern with 4 fields", () => {
       // Simulating bp-room supertag structure from Tana
       const nodes = new Map<string, NodeDump>([

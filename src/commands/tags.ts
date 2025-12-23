@@ -15,9 +15,7 @@
 import { Command } from "commander";
 import { Database } from "bun:sqlite";
 import { TanaQueryEngine } from "../query/tana-query-engine";
-import { SchemaRegistry } from "../schema/registry";
-import { getConfig } from "../config/manager";
-import { resolveWorkspace } from "../config/paths";
+import { getSchemaRegistry } from "./schema";
 import {
   resolveDbPath,
   checkDb,
@@ -152,12 +150,8 @@ export function createTagsCommand(): Command {
   addStandardOptions(showCmd, { defaultLimit: "1" });
 
   showCmd.action(async (tagname: string, options: StandardOptions) => {
-    const config = getConfig().getConfig();
-    const ctx = resolveWorkspace(options.workspace, config);
-
-    // Load schema registry
-    const registry = new SchemaRegistry(ctx.schemaPath);
-    await registry.load();
+    // Load schema registry from cache
+    const registry = getSchemaRegistry(options.workspace);
 
     // Find the tag
     const tag = registry.findTagByName(tagname);

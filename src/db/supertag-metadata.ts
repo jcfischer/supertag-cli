@@ -21,6 +21,23 @@ import type {
 } from "../types/supertag-metadata";
 
 /**
+ * Mapping of known Tana system field markers to human-readable names.
+ *
+ * These are raw string identifiers used in tagDef tuple children to indicate
+ * system-defined fields. They don't correspond to node IDs.
+ *
+ * Discovered markers:
+ * - SYS_A90 (10 tagDefs, 3572 uses) - Date field (calendar events, meetings)
+ * - SYS_A61 (17 tagDefs) - Due Date field (tasks, projects)
+ * - Mp2A7_2PQw (1 tagDef, 1608 uses) - Attendees field (meetings)
+ */
+export const SYSTEM_FIELD_MARKERS: Record<string, string> = {
+  SYS_A90: "Date",
+  SYS_A61: "Due Date",
+  Mp2A7_2PQw: "Attendees",
+};
+
+/**
  * Extract field definitions from a tagDef node.
  *
  * Examines the tagDef's children looking for tuples where:
@@ -56,9 +73,19 @@ export function extractFieldsFromTagDef(
       continue;
     }
 
-    // Get the first child of the tuple (field label)
+    // Get the first child of the tuple (field label or system marker)
     const labelId = child.children[0];
     const labelNode = nodes.get(labelId);
+
+    // Check if this is a system field marker (raw string, not a node)
+    if (!labelNode && labelId in SYSTEM_FIELD_MARKERS) {
+      fields.push({
+        fieldName: SYSTEM_FIELD_MARKERS[labelId],
+        fieldLabelId: labelId, // Keep the marker as the label ID
+        fieldOrder: fields.length,
+      });
+      continue;
+    }
 
     // Skip if label doesn't have a name
     if (!labelNode?.props.name) {
