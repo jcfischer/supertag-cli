@@ -10,7 +10,7 @@ import cors from "@fastify/cors";
 import { TanaQueryEngine, type SearchResult } from "../query/tana-query-engine";
 import { TanaPasteConverter } from "../converters/tana-paste";
 import { semanticSearch, type SemanticSearchResult, type SemanticSearchResultItem } from "../mcp/tools/semantic-search";
-import { getNodeContents, getNodeContentsWithDepth, formatNodeOutput } from "../commands/show";
+import { getNodeContents, getNodeContentsWithDepth, formatNodeOutput, type NodeContents } from "../commands/show";
 import { SchemaRegistry } from "../schema/registry";
 import type { SemanticSearchInput } from "../mcp/schemas";
 import { Database } from "bun:sqlite";
@@ -401,6 +401,8 @@ export class TanaWebhookServer {
             limit,
             includeContents,
             includeAncestor,
+            raw: false,
+            depth: 0,
           });
 
           if (format === 'json') {
@@ -764,8 +766,8 @@ export class TanaWebhookServer {
         if (tag.fields && tag.fields.length > 0) {
           children.push({
             name: `Fields (${tag.fields.length})`,
-            children: tag.fields.map(field => ({
-              name: `${field.name} (${field.id})`,
+            children: tag.fields.map((field: { name: string; attributeId: string }) => ({
+              name: `${field.name} (${field.attributeId})`,
             })),
           });
         } else {
@@ -963,7 +965,8 @@ export class TanaWebhookServer {
             return contents;
           }
 
-          const tana = formatNodeOutput(contents);
+          // formatNodeOutput handles both NodeContents and NodeContentsWithChildren
+          const tana = formatNodeOutput(contents as NodeContents);
           reply.header("Content-Type", "text/plain");
           return tana;
         } finally {

@@ -35,6 +35,8 @@ export interface SupertagSchema {
   normalizedName: string;
   /** Optional description */
   description?: string;
+  /** Tag color (hex code or name) */
+  color?: string;
   /** Fields belonging to this supertag */
   fields: FieldSchema[];
   /** Parent supertag IDs (for inheritance) */
@@ -105,6 +107,40 @@ export class SchemaRegistry {
   private supertagsByName: Map<string, SupertagSchema> = new Map(); // Case-sensitive exact name lookup
   private supertagsByNormalizedName: Map<string, SupertagSchema> = new Map(); // Kept for field matching
   private docsById: Map<string, TanaDoc> = new Map();
+  private schemaPath?: string;
+
+  /**
+   * Create a SchemaRegistry
+   * @param schemaPath Optional path to schema.json file for file-based loading
+   */
+  constructor(schemaPath?: string) {
+    this.schemaPath = schemaPath;
+  }
+
+  /**
+   * Load schema from file (uses schemaPath from constructor)
+   * Reads the JSON file and loads export data
+   */
+  async load(): Promise<void> {
+    if (!this.schemaPath) {
+      throw new Error('No schema path provided. Use loadFromExport() directly or pass path to constructor.');
+    }
+
+    const file = Bun.file(this.schemaPath);
+    if (!await file.exists()) {
+      throw new Error(`Schema file not found: ${this.schemaPath}`);
+    }
+
+    const data = await file.json();
+    this.loadFromExport(data);
+  }
+
+  /**
+   * Find supertag by name (alias for getSupertag)
+   */
+  findTagByName(name: string): SupertagSchema | undefined {
+    return this.getSupertag(name);
+  }
 
   /**
    * Load schema from Tana workspace export JSON

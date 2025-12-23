@@ -133,13 +133,10 @@ export function createTagsCommand(): Command {
 
       if (tag.fields && tag.fields.length > 0) {
         console.log(`\n   Fields (${tag.fields.length}):`);
-        tag.fields.forEach((field) => {
-          console.log(`   - ${field.name} (${field.id})`);
-          if (field.type) {
-            console.log(`     Type: ${field.type}`);
-          }
-          if (field.options && field.options.length > 0) {
-            console.log(`     Options: ${field.options.join(", ")}`);
+        tag.fields.forEach((field: { name: string; attributeId: string; dataType?: string }) => {
+          console.log(`   - ${field.name} (${field.attributeId})`);
+          if (field.dataType) {
+            console.log(`     Type: ${field.dataType}`);
           }
         });
       } else {
