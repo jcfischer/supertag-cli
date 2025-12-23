@@ -1,19 +1,22 @@
 /**
  * Create Command
  * Create any supertag node dynamically using schema registry
+ *
+ * Uses shared node-builder module for validation and payload building.
  */
 
 import { readFileSync, existsSync } from 'fs';
 import { readStdin, hasStdinData } from '../parsers/stdin';
 import { parseJsonSmart } from '../parsers/json';
-import { createApiClient } from '../api/client';
 import { getConfig } from '../config/manager';
 import { getSchemaRegistry } from './schema';
 import { exitWithError, ParseError, ConfigError } from '../utils/errors';
-import type { TanaApiNode } from '../types';
+import { createNode } from '../services/node-builder';
+import type { ChildNodeInput } from '../types';
 
 /**
  * Child node for references or URLs
+ * @deprecated Use ChildNodeInput from '../types' instead
  */
 export interface ChildNode {
   name: string;
@@ -332,36 +335,12 @@ export async function createCommand(
       console.error('');
     }
 
-    // Build the node payload
-    const nodePayload = registry.buildNodePayload(supertag, nodeName, fieldValues);
-
-    // Add children if provided (for references/links/urls or plain child nodes)
+    // Parse children if provided
+    let children: ChildNodeInput[] | undefined;
     if (options.children && options.children.length > 0) {
       const childNodes = parseChildren(options.children);
       if (childNodes.length > 0) {
-        const apiChildren: TanaApiNode[] = childNodes.map((child) => {
-          if (child.id) {
-            // Reference to existing node
-            return {
-              dataType: 'reference' as const,
-              id: child.id,
-            } as unknown as TanaApiNode;
-          }
-          if (child.dataType === 'url') {
-            // URL node - makes links clickable in Tana
-            return {
-              name: child.name,
-              dataType: 'url' as const,
-            } as unknown as TanaApiNode;
-          }
-          // Plain text child node (may contain [[inline references]] in name)
-          return { name: child.name };
-        });
-
-        // Append to existing children (fields) or create new array
-        nodePayload.children = nodePayload.children
-          ? [...nodePayload.children, ...apiChildren]
-          : apiChildren;
+        children = childNodes;
 
         if (options.verbose) {
           console.error('   Children:');
@@ -379,8 +358,18 @@ export async function createCommand(
       }
     }
 
-    // Dry run mode
-    if (options.dryRun) {
+    // Use shared createNode function
+    const result = await createNode({
+      supertag,
+      name: nodeName,
+      fields: fieldValues,
+      children,
+      target: targetNode,
+      dryRun: options.dryRun,
+    });
+
+    // Dry run mode - show validation results
+    if (result.dryRun) {
       console.error('🔍 DRY RUN MODE - Not posting to API');
       console.error('');
       const tagDisplay = schemas.length === 1
@@ -398,10 +387,9 @@ export async function createCommand(
         console.error(`  ${field}: ${value}`);
       }
       // Show children in dry run
-      if (options.children && options.children.length > 0) {
-        const childNodes = parseChildren(options.children);
+      if (children && children.length > 0) {
         console.error('  Children:');
-        for (const child of childNodes) {
+        for (const child of children) {
           if (child.id) {
             console.error(`    - ${child.name} → ref:${child.id}`);
           } else if (child.dataType === 'url') {
@@ -413,22 +401,19 @@ export async function createCommand(
       }
       console.error('');
       console.error('Payload:');
-      console.log(JSON.stringify(nodePayload, null, 2));
+      console.log(JSON.stringify(result.payload, null, 2));
       console.error('');
       console.error('✅ Validation passed - ready to post');
       console.error('To actually post, remove the --dry-run flag');
       return;
     }
 
-    // Create API client and post
-    const client = createApiClient(apiToken!, apiEndpoint);
-    const response = await client.postNodes(targetNode, [nodePayload], options.verbose);
-
-    if (response.success) {
+    // Handle result
+    if (result.success) {
       const tagNames = schemas.map(s => s.name).join(', ');
       console.log(`✅ Node created successfully in Tana`);
-      if (response.nodeIds && response.nodeIds.length > 0) {
-        console.log(`   Node ID: ${response.nodeIds[0]}`);
+      if (result.nodeId) {
+        console.log(`   Node ID: ${result.nodeId}`);
       }
       if (schemas.length === 1) {
         console.log(`   Supertag: ${primarySchema.name}`);
@@ -436,7 +421,7 @@ export async function createCommand(
         console.log(`   Supertags: ${tagNames}`);
       }
     } else {
-      throw new Error('API returned success: false');
+      throw new Error(result.error || 'API returned success: false');
     }
 
   } catch (error) {

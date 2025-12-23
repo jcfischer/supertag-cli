@@ -16,8 +16,11 @@ import { postCommand } from './commands/post';
 import { configCommand } from './commands/config';
 import { schemaCommand, createSchemaCommand } from './commands/schema';
 import { createCommand } from './commands/create';
-import { registerQueryCommands } from './commands/query';
-import { registerShowCommands } from './commands/show';
+// Legacy query and show commands removed in v1.0.0 - use harmonized commands:
+// - supertag search (replaces query search, query tagged)
+// - supertag nodes (replaces show node, query refs, query recent)
+// - supertag tags (replaces query tags, query top-tags)
+// - supertag stats (replaces query stats)
 import { registerSyncCommands } from './commands/sync';
 import { registerServerCommands } from './commands/server';
 import { createWorkspaceCommand } from './commands/workspace';
@@ -129,19 +132,16 @@ program
   });
 
 /**
- * Register command groups from consolidated CLIs
+ * Register command groups
  */
-registerQueryCommands(program);   // tana query search|nodes|tags|refs|stats|tagged|top-tags|recent
-registerShowCommands(program);    // tana show node|tagged
-registerSyncCommands(program);    // tana sync monitor|index|status
-registerServerCommands(program);  // tana server start|stop|status
-program.addCommand(createWorkspaceCommand());  // tana workspace list|add|remove|set-default|show
-program.addCommand(createEmbedCommand());     // tana embed config|generate|search|stats
+registerSyncCommands(program);    // supertag sync monitor|index|status
+registerServerCommands(program);  // supertag server start|stop|status
+program.addCommand(createWorkspaceCommand());  // supertag workspace list|add|remove|set-default|show
+program.addCommand(createEmbedCommand());     // supertag embed config|generate|stats
 
 /**
  * Harmonized commands (CLI Harmonization Phase 1)
- * These new commands follow the object-action pattern for consistency.
- * They coexist with legacy commands during transition period.
+ * Object-action pattern for consistent CLI experience.
  */
 program.addCommand(createSearchCommand());    // supertag search <query> [--semantic] [--tag]
 program.addCommand(createNodesCommand());     // supertag nodes show|refs|recent
@@ -181,14 +181,6 @@ program.on('--help', () => {
   console.log('    supertag stats --embed         Embedding stats only');
   console.log('    supertag stats --filter        Filter breakdown');
   console.log('');
-  console.log('  LEGACY (will be removed):');
-  console.log('    supertag query search <query>  → use: supertag search <query>');
-  console.log('    supertag query tagged <tag>    → use: supertag search <q> --tag <t>');
-  console.log('    supertag query stats           → use: supertag stats --db');
-  console.log('    supertag query top-tags        → use: supertag tags top');
-  console.log('    supertag show node <id>        → use: supertag nodes show <id>');
-  console.log('    supertag show tagged <tag>     → use: supertag search <q> --tag <t>');
-  console.log('');
   console.log('  EXPORT (Separate Tool):');
   console.log('    supertag-export login          First-time login setup');
   console.log('    supertag-export run            Export workspace JSON');
@@ -206,11 +198,11 @@ program.on('--help', () => {
   console.log('    supertag server stop           Stop daemon server');
   console.log('    supertag server status         Check server status');
   console.log('');
-  console.log('  EMBEDDINGS (Semantic Search):');
+  console.log('  EMBEDDINGS:');
   console.log('    supertag embed config          Configure embedding provider');
   console.log('    supertag embed generate        Generate node embeddings');
-  console.log('    supertag embed search <query>  Semantic search');
   console.log('    supertag embed stats           Show embedding statistics');
+  console.log('    supertag search --semantic     Semantic search (use search command)');
   console.log('');
   console.log('  CONFIG:');
   console.log('    supertag config --show         Show configuration');
@@ -231,10 +223,16 @@ program.on('--help', () => {
   console.log('  supertag create todo "Buy groceries" --status active --duedate 2025-12-31');
   console.log('');
   console.log('  # Search for nodes');
-  console.log('  supertag query search "meeting notes"');
+  console.log('  supertag search "meeting notes"');
   console.log('');
-  console.log('  # Show today\'s day page');
-  console.log('  supertag show tagged day --limit 1');
+  console.log('  # Semantic search');
+  console.log('  supertag search "project ideas" --semantic');
+  console.log('');
+  console.log('  # Find nodes by tag');
+  console.log('  supertag search "meeting" --tag day');
+  console.log('');
+  console.log('  # Show node details');
+  console.log('  supertag nodes show <node-id>');
   console.log('');
   console.log('  # Index latest Tana export');
   console.log('  supertag sync index');

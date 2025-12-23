@@ -4,8 +4,11 @@
  * Commands for managing vector embeddings:
  * - embed config: Configure embedding provider
  * - embed generate: Generate embeddings for nodes
- * - embed search: Semantic search
  * - embed stats: Show embedding statistics
+ * - embed filter-stats: Show content filter stats
+ * - embed maintain: Database maintenance
+ *
+ * Note: embed search was removed in v1.0.0 - use 'supertag search --semantic' instead.
  *
  * Uses resona/LanceDB for vector storage (no sqlite-vec extension needed).
  */
@@ -353,191 +356,8 @@ export function createEmbedCommand(): Command {
     }
   }
 
-  /**
-   * embed search - Semantic search (uses TanaEmbeddingService with resona/LanceDB)
-   */
-  embed
-    .command("search <query>")
-    .description("Semantic search across embedded nodes")
-    .option("-w, --workspace <alias>", "Workspace to search (default: default workspace)")
-    .option("-k, --limit <n>", "Number of results (default: 10)", "10")
-    .option("-t, --threshold <n>", "Minimum similarity threshold")
-    .option("-f, --format <fmt>", "Output format: table, json", "table")
-    .option("-s, --show", "Show full node contents (fields, children, tags)")
-    .option("-d, --depth <n>", "Child traversal depth when using --show (default: 0)", "0")
-    .option("-a, --ancestor", "Show nearest ancestor with supertag (enabled by default)")
-    .option("--no-ancestor", "Disable ancestor resolution")
-    .action(async (query, options) => {
-      const wsContext = getWorkspaceContext(options.workspace);
-
-      // Get embedding config from ConfigManager
-      const configManager = ConfigManager.getInstance();
-      const embeddingConfig = configManager.getEmbeddingConfig();
-
-      const k = parseInt(options.limit);
-      const threshold = options.threshold
-        ? parseFloat(options.threshold)
-        : undefined;
-      const depth = parseInt(options.depth);
-      // ancestor is true by default (--no-ancestor disables it)
-      const includeAncestor = options.ancestor !== false;
-
-      // Only show status in non-JSON mode
-      if (options.format !== "json") {
-        console.log(`🔍 Searching: "${query}" [${wsContext.alias}]`);
-        console.log("");
-      }
-
-      // Check if databases exist
-      if (!existsSync(wsContext.dbPath)) {
-        console.log(`❌ Database not found: ${wsContext.dbPath}`);
-        console.log("");
-        console.log("Run 'supertag sync' first to index the workspace.");
-        return;
-      }
-
-      const lanceDbPath = wsContext.dbPath.replace(/\.db$/, ".lance");
-      if (!existsSync(lanceDbPath)) {
-        console.log(`❌ No embeddings found for workspace "${wsContext.alias}".`);
-        console.log("");
-        console.log("Run 'supertag embed generate' first to create embeddings.");
-        return;
-      }
-
-      // Create TanaEmbeddingService for search
-      const { TanaEmbeddingService } = await import("../embeddings/tana-embedding-service");
-      const embeddingService = new TanaEmbeddingService(lanceDbPath, {
-        model: embeddingConfig.model,
-        endpoint: embeddingConfig.endpoint,
-      });
-
-      // Open SQLite database for node enrichment (names, tags, ancestor resolution)
-      const db = new Database(wsContext.dbPath);
-
-      try {
-        // Over-fetch to account for filtering/deduplication losses
-        const overfetchLimit = getOverfetchLimit(k);
-        const rawResults = await embeddingService.search(query, overfetchLimit);
-
-        // Apply threshold filter if specified
-        const thresholdedResults = threshold
-          ? rawResults.filter(r => r.similarity >= threshold)
-          : rawResults;
-
-        // Filter out reference-syntax text nodes, deduplicate, and trim to requested limit
-        const results = filterAndDeduplicateResults(db, thresholdedResults, k);
-
-        if (results.length === 0) {
-          if (options.format === "json") {
-            console.log("[]");
-          } else {
-            console.log("No results found");
-          }
-          return;
-        }
-
-        if (options.format === "json") {
-          // Get node data for JSON output
-          const enriched = results.map((r) => {
-            let result: Record<string, unknown>;
-            if (options.show && depth > 0) {
-              // Full node contents with depth
-              const contents = getNodeContentsWithDepth(db, r.nodeId, 0, depth);
-              result = {
-                ...contents,
-                distance: r.distance,
-                similarity: r.similarity,
-              };
-            } else if (options.show) {
-              // Full node contents without depth
-              const contents = getNodeContents(db, r.nodeId);
-              result = {
-                ...contents,
-                distance: r.distance,
-                similarity: r.similarity,
-              };
-            } else {
-              // Basic info only (already enriched)
-              result = {
-                nodeId: r.nodeId,
-                name: r.name,
-                tags: r.tags,
-                distance: r.distance,
-                similarity: r.similarity,
-              };
-            }
-
-            // Add ancestor info if enabled
-            if (includeAncestor) {
-              const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-              if (ancestorResult && ancestorResult.depth > 0) {
-                result.ancestor = ancestorResult.ancestor;
-                result.pathFromAncestor = ancestorResult.path;
-                result.depthFromAncestor = ancestorResult.depth;
-              }
-            }
-
-            return result;
-          });
-          console.log(JSON.stringify(enriched, null, 2));
-        } else if (options.show) {
-          // Rich output with full node contents
-          console.log(`Results (${results.length}):`);
-          console.log("");
-          for (let i = 0; i < results.length; i++) {
-            const r = results[i];
-            const similarity = (r.similarity * 100).toFixed(1);
-
-            console.log(`━━━ Result ${i + 1} ━━━  ${similarity}% similar`);
-
-            // Show ancestor context if available
-            if (includeAncestor) {
-              const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-              if (ancestorResult && ancestorResult.depth > 0) {
-                const tagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-                console.log(`📂 Context: ${ancestorResult.ancestor.name} ${tagStr}`);
-                console.log(`   Path: ${ancestorResult.path.join(" → ")}`);
-              }
-            }
-
-            if (depth > 0) {
-              const output = formatNodeWithDepth(db, r.nodeId, 0, depth, "");
-              if (output) {
-                console.log(output);
-              }
-            } else {
-              const contents = getNodeContents(db, r.nodeId);
-              if (contents) {
-                console.log(formatNodeOutput(contents));
-              }
-            }
-            console.log("");
-          }
-        } else {
-          // Table format (default) - uses enriched name directly
-          console.log("Results:");
-          console.log("");
-          for (const r of results) {
-            const similarity = (r.similarity * 100).toFixed(1);
-            const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
-            console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
-            console.log(`        ID: ${r.nodeId}`);
-
-            // Show ancestor context if available
-            if (includeAncestor) {
-              const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-              if (ancestorResult && ancestorResult.depth > 0) {
-                const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-                console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
-              }
-            }
-          }
-        }
-      } finally {
-        embeddingService.close();
-        db.close();
-      }
-    });
+  // Note: embed search command removed in v1.0.0
+  // Use 'supertag search <query> --semantic' instead
 
   /**
    * embed stats - Show embedding statistics (uses TanaEmbeddingService with resona/LanceDB)

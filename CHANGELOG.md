@@ -5,11 +5,28 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2025-12-23
+
+### BREAKING CHANGES
+
+This is a major version release with significant CLI restructuring. Legacy commands have been removed.
+
+**Removed Commands** (use new equivalents):
+- `supertag query search` → use `supertag search`
+- `supertag query tagged` → use `supertag search --tag`
+- `supertag query stats` → use `supertag stats --db`
+- `supertag query top-tags` → use `supertag tags top`
+- `supertag query refs` → use `supertag nodes refs`
+- `supertag query recent` → use `supertag nodes recent`
+- `supertag show node` → use `supertag nodes show`
+- `supertag show tagged` → use `supertag search --tag --show`
+- `supertag embed search` → use `supertag search --semantic`
+- `supertag embed stats` → use `supertag stats --embed`
+- `supertag embed filter-stats` → use `supertag stats --filter`
 
 ### Added
 
-#### CLI Harmonization Phase 1 - New Unified Commands
+#### CLI Harmonization - New Unified Commands
 
 New commands following the `object action` pattern for consistency and discoverability:
 
@@ -19,43 +36,62 @@ New commands following the `object action` pattern for consistency and discovera
   - `--tag <name>` flag for filtering by supertag
   - `--show` flag for full node content display
   - `--depth <n>` for child traversal with --show
-  - Replaces: `query search`, `embed search`, `query tagged`
 
 - **`supertag nodes show|refs|recent`** - Node operations
   - `nodes show <id>` - Display node contents with depth traversal
   - `nodes refs <id>` - Show references to a node
   - `nodes recent` - Recently updated nodes
-  - Replaces: `show node`, `query refs`, `query recent`
 
 - **`supertag tags list|top|show`** - Supertag operations
   - `tags list` - List all supertags
   - `tags top` - Most used supertags
   - `tags show <name>` - Show tag schema
-  - Replaces: `query top-tags`, `show tagged`, `schema show`
 
 - **`supertag stats`** - Unified statistics
   - `--db` - Database statistics only
   - `--embed` - Embedding statistics only
   - `--filter` - Content filter breakdown
-  - Replaces: `query stats`, `embed stats`, `embed filter-stats`
+
+#### Webhook Server RESTful API (T-4)
+
+New RESTful endpoints with consistent API design:
+
+- **POST /search** - Unified search with `type` parameter
+  - `type=fts` - Full-text search (default)
+  - `type=semantic` - Vector similarity search
+  - `type=tagged` - Search by supertag
+
+- **GET /stats** - Unified statistics with `type` parameter
+  - `type=all` - All statistics (default)
+  - `type=db` - Database stats only
+  - `type=embed` - Embedding stats only
+  - `type=filter` - Content filter stats
+
+- **RESTful /nodes endpoints**
+  - `GET /nodes/:id` - Get node by ID with optional depth
+  - `GET /nodes/:id/refs` - Get node references
+  - `GET /nodes/recent` - Recently created nodes
+  - `POST /nodes/find` - Find nodes by pattern/tag
+
+- **RESTful /tags endpoints**
+  - `GET /tags` - List all supertags
+  - `GET /tags/top` - Top supertags by usage
+  - `GET /tags/:name` - Get tag schema details
+
+**Deprecated webhook endpoints** (still functional, marked for removal):
+- `POST /semantic-search` → use `POST /search` with `type=semantic`
+- `GET /embed-stats` → use `GET /stats?type=embed`
+- `POST /refs` → use `GET /nodes/:id/refs`
+- `POST /nodes` → use `POST /nodes/find`
+- `POST /tags` → use `GET /tags` or `GET /tags/top`
 
 ### Changed
 
-- Help text updated to show new command structure with legacy deprecation notices
+- Help text updated to show new command structure
+- Webhook server /help endpoint updated with complete API documentation
+- All tests updated for new command structure (457 tests passing)
 - Demo scripts updated to use new commands
 - README updated with new command examples
-
-### Deprecated
-
-The following commands will be removed in a future release:
-- `supertag query search` → use `supertag search`
-- `supertag query tagged` → use `supertag search --tag`
-- `supertag query stats` → use `supertag stats --db`
-- `supertag query top-tags` → use `supertag tags top`
-- `supertag show node` → use `supertag nodes show`
-- `supertag show tagged` → use `supertag search --tag --show`
-- `supertag embed search` → use `supertag search --semantic`
-- `supertag embed stats` → use `supertag stats --embed`
 
 ## [0.13.4] - 2025-12-21
 

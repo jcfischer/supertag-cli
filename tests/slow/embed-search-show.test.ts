@@ -1,10 +1,12 @@
 /**
- * TDD Test Suite for embed search --show and --depth flags
+ * TDD Test Suite for semantic search --show and --depth flags
  *
  * Tests the CLI integration between semantic search and node display.
  * Requires embeddings to be generated first.
  *
  * NOTE: These tests are skipped in CI if no database exists.
+ *
+ * Updated in v1.0.0: Tests now use 'search --semantic' instead of 'embed search'
  */
 
 import { describe, test, expect } from "bun:test";
@@ -17,11 +19,11 @@ const DB_EXISTS = existsSync(DB_PATH);
 // Skip all tests in this file if database doesn't exist (CI environment)
 const testOrSkip = DB_EXISTS ? test : test.skip;
 
-describe("embed search --show integration", () => {
+describe("search --semantic --show integration", () => {
 
   testOrSkip("--show flag returns full node contents in JSON", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--show", "--format", "json"],
+      ["bun", "run", "./src/index.ts", "search", "project", "--semantic", "--limit", "1", "--show", "--json"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -32,7 +34,7 @@ describe("embed search --show integration", () => {
     clearTimeout(timeout);
 
     // Skip test if no embeddings configured or process killed
-    if (output.includes("Embeddings not configured") || proc.signalCode) {
+    if (output.includes("Embeddings not configured") || output.includes("No embeddings found") || proc.signalCode) {
       console.log("Skipping test: embeddings not configured");
       return;
     }
@@ -64,7 +66,7 @@ describe("embed search --show integration", () => {
 
   testOrSkip("without --show flag returns minimal info in JSON", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--format", "json"],
+      ["bun", "run", "./src/index.ts", "search", "project", "--semantic", "--limit", "1", "--json"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -75,7 +77,7 @@ describe("embed search --show integration", () => {
     clearTimeout(timeout);
 
     // Skip test if no embeddings configured or process killed
-    if (output.includes("Embeddings not configured") || proc.signalCode) {
+    if (output.includes("Embeddings not configured") || output.includes("No embeddings found") || proc.signalCode) {
       console.log("Skipping test: embeddings not configured");
       return;
     }
@@ -106,7 +108,7 @@ describe("embed search --show integration", () => {
 
   testOrSkip("--show with --depth includes child nodes", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "project", "--limit", "1", "--show", "--depth", "1", "--format", "json"],
+      ["bun", "run", "./src/index.ts", "search", "project", "--semantic", "--limit", "1", "--show", "--depth", "1", "--json"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -117,7 +119,7 @@ describe("embed search --show integration", () => {
     clearTimeout(timeout);
 
     // Skip test if no embeddings configured or process killed
-    if (output.includes("Embeddings not configured") || proc.signalCode) {
+    if (output.includes("Embeddings not configured") || output.includes("No embeddings found") || proc.signalCode) {
       console.log("Skipping test: embeddings not configured");
       return;
     }
@@ -152,7 +154,7 @@ describe("embed search --show integration", () => {
 
   testOrSkip("--show in table format displays rich output", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "meeting", "--limit", "2", "--show"],
+      ["bun", "run", "./src/index.ts", "search", "meeting", "--semantic", "--limit", "2", "--show"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -164,7 +166,7 @@ describe("embed search --show integration", () => {
     clearTimeout(timeout);
 
     // Skip test if no embeddings configured, database error, or process killed/timed out
-    if (output.includes("Embeddings not configured") || proc.exitCode !== 0 || stderr.includes("SQLiteError") || proc.signalCode) {
+    if (output.includes("Embeddings not configured") || output.includes("No embeddings found") || proc.exitCode !== 0 || stderr.includes("SQLiteError") || proc.signalCode) {
       console.log("Skipping test: embeddings not configured or database error");
       return;
     }
@@ -182,7 +184,7 @@ describe("embed search --show integration", () => {
 
   testOrSkip("default format shows table output", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "test", "--limit", "2"],
+      ["bun", "run", "./src/index.ts", "search", "test", "--semantic", "--limit", "2"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -191,7 +193,7 @@ describe("embed search --show integration", () => {
     await proc.exited;
 
     // Skip test if no embeddings configured or database error
-    if (output.includes("Embeddings not configured") || proc.exitCode !== 0 || stderr.includes("SQLiteError")) {
+    if (output.includes("Embeddings not configured") || output.includes("No embeddings found") || proc.exitCode !== 0 || stderr.includes("SQLiteError")) {
       console.log("Skipping test: embeddings not configured or database error");
       return;
     }
@@ -208,10 +210,10 @@ describe("embed search --show integration", () => {
   });
 });
 
-describe("embed search flag validation", () => {
+describe("search --semantic flag validation", () => {
   testOrSkip("--depth without --show is accepted (has no effect)", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "test", "--limit", "1", "--depth", "1"],
+      ["bun", "run", "./src/index.ts", "search", "test", "--semantic", "--limit", "1", "--depth", "1"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -231,7 +233,7 @@ describe("embed search flag validation", () => {
 
   testOrSkip("--show flag is recognized", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", "./src/index.ts", "embed", "search", "--help"],
+      ["bun", "run", "./src/index.ts", "search", "--help"],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -240,5 +242,6 @@ describe("embed search flag validation", () => {
 
     expect(output).toContain("--show");
     expect(output).toContain("--depth");
+    expect(output).toContain("--semantic");
   });
 });

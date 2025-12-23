@@ -10,6 +10,8 @@ import cors from "@fastify/cors";
 import { TanaQueryEngine, type SearchResult } from "../query/tana-query-engine";
 import { TanaPasteConverter } from "../converters/tana-paste";
 import { semanticSearch, type SemanticSearchResult, type SemanticSearchResultItem } from "../mcp/tools/semantic-search";
+import { getNodeContents, getNodeContentsWithDepth, formatNodeOutput } from "../commands/show";
+import { SchemaRegistry } from "../schema/registry";
 import type { SemanticSearchInput } from "../mcp/schemas";
 import { Database } from "bun:sqlite";
 import { ConfigManager } from "../config/manager";
@@ -126,6 +128,7 @@ export class TanaWebhookServer {
       const defaultWs = this.config.defaultWorkspace;
 
       const endpoints = [
+        // System endpoints
         {
           method: "GET",
           path: "/health",
@@ -150,63 +153,133 @@ export class TanaWebhookServer {
           response: "Tana Paste format (or JSON if format=json) with all endpoint documentation",
           example: "GET http://localhost:3000/help?format=json",
         },
+
+        // Search (unified endpoint)
         {
           method: "POST",
           path: "/search",
-          description: "Full-text search on node names",
-          payload: '{"query": string (required), "workspace": string (optional), "limit": number (optional, default: 10)}',
-          response: "Tana Paste format with search results",
-          example: 'POST http://localhost:3000/search\nBody: {"query": "meeting notes", "workspace": "main", "limit": 5}',
+          description: "Unified search endpoint supporting full-text, semantic, and tagged search",
+          payload: '{"query": string (required), "type": "fts"|"semantic"|"tagged" (optional, default: "fts"), "tag": string (required if type=tagged), "workspace": string (optional), "limit": number (optional, default: 10), "format": "tana"|"json" (optional)}',
+          response: "Tana Paste format (or JSON) with search results",
+          example: 'POST http://localhost:3000/search\nBody: {"query": "meeting notes", "type": "semantic", "limit": 5}',
+          notes: "type=semantic requires embeddings to be generated first",
         },
+
+        // Stats (unified endpoint)
         {
           method: "GET",
           path: "/stats",
-          description: "Database statistics (nodes, supertags, fields, references)",
-          payload: "Query param: workspace (optional)",
-          response: "Tana Paste format with statistics",
-          example: "GET http://localhost:3000/stats?workspace=main",
+          description: "Unified statistics endpoint with type filtering",
+          payload: 'Query params: workspace (optional), type=all|db|embed|filter (optional, default: all), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with statistics",
+          example: "GET http://localhost:3000/stats?type=db&format=json",
+        },
+
+        // Nodes (RESTful)
+        {
+          method: "GET",
+          path: "/nodes/:id",
+          description: "Get node by ID with optional depth for child expansion",
+          payload: 'Query params: workspace (optional), depth (optional, default: 0), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with node contents",
+          example: "GET http://localhost:3000/nodes/abc123?depth=2&format=json",
+        },
+        {
+          method: "GET",
+          path: "/nodes/:id/refs",
+          description: "Get inbound and outbound references for a node",
+          payload: 'Query params: workspace (optional), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with reference graph",
+          example: "GET http://localhost:3000/nodes/abc123/refs",
+        },
+        {
+          method: "GET",
+          path: "/nodes/recent",
+          description: "Get recently created nodes",
+          payload: 'Query params: workspace (optional), limit (optional, default: 10), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with recent nodes",
+          example: "GET http://localhost:3000/nodes/recent?limit=20",
         },
         {
           method: "POST",
-          path: "/tags",
-          description: "Get top supertags by usage count",
-          payload: '{"workspace": string (optional), "limit": number (optional, default: 10)}',
-          response: "Tana Paste format with top supertags",
-          example: 'POST http://localhost:3000/tags\nBody: {"workspace": "work", "limit": 20}',
-        },
-        {
-          method: "POST",
-          path: "/nodes",
+          path: "/nodes/find",
           description: "Find nodes by pattern or tag",
           payload: '{"workspace": string (optional), "pattern": string (optional, SQL LIKE pattern), "tag": string (optional, supertag name), "limit": number (optional, default: 10)}',
           response: "Tana Paste format with matching nodes",
-          example: 'POST http://localhost:3000/nodes\nBody: {"workspace": "main", "pattern": "%project%", "tag": "todo", "limit": 15}',
+          example: 'POST http://localhost:3000/nodes/find\nBody: {"pattern": "%project%", "tag": "todo"}',
+        },
+
+        // Tags (RESTful)
+        {
+          method: "GET",
+          path: "/tags",
+          description: "List all supertags with node counts",
+          payload: 'Query params: workspace (optional), limit (optional, default: 50), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with supertags list",
+          example: "GET http://localhost:3000/tags?limit=100&format=json",
         },
         {
-          method: "POST",
-          path: "/refs",
-          description: "Get reference graph for a specific node (inbound and outbound)",
-          payload: '{"nodeId": string (required), "workspace": string (optional)}',
-          response: "Tana Paste format with reference graph",
-          example: 'POST http://localhost:3000/refs\nBody: {"nodeId": "NODE123", "workspace": "main"}',
+          method: "GET",
+          path: "/tags/top",
+          description: "Get top supertags by usage count",
+          payload: 'Query params: workspace (optional), limit (optional, default: 20), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with top supertags",
+          example: "GET http://localhost:3000/tags/top?limit=10",
         },
+        {
+          method: "GET",
+          path: "/tags/:name",
+          description: "Get supertag schema details (fields, color, etc.)",
+          payload: 'Query params: workspace (optional), format=tana|json (optional)',
+          response: "Tana Paste format (or JSON) with tag schema",
+          example: "GET http://localhost:3000/tags/todo?format=json",
+        },
+
+        // Legacy endpoints (deprecated, use new unified endpoints above)
         {
           method: "POST",
           path: "/semantic-search",
-          description: "Semantic similarity search using vector embeddings (requires embeddings to be generated)",
-          payload: '{"query": string (required), "workspace": string (optional), "limit": number (optional, default: 10), "includeContents": boolean (optional, default: false), "includeAncestor": boolean (optional, default: true), "format": "tana" | "json" (optional, default: "tana")}',
-          response: "Tana Paste format (or JSON if format=json) with semantically similar nodes ranked by similarity score",
-          example: 'POST http://localhost:3000/semantic-search\nBody: {"query": "machine learning concepts", "workspace": "main", "limit": 5}',
-          notes: "Requires embeddings: run 'supertag embed config' and 'supertag embed generate' first",
+          description: "[DEPRECATED] Use POST /search with type=semantic instead",
+          payload: '{"query": string, ...}',
+          response: "Same as /search with type=semantic",
+          example: "Use POST /search instead",
+          notes: "Will be removed in future version",
         },
         {
           method: "GET",
           path: "/embed-stats",
-          description: "Embedding configuration and statistics",
-          payload: 'Query params: workspace (optional), format=tana|json (optional, default: tana)',
-          response: "Tana Paste format (or JSON) with embedding provider, model, and coverage stats",
-          example: "GET http://localhost:3000/embed-stats?workspace=main&format=json",
-          notes: "Shows embedding setup status and coverage percentage",
+          description: "[DEPRECATED] Use GET /stats?type=embed instead",
+          payload: "Query params: workspace, format",
+          response: "Same as /stats with type=embed",
+          example: "Use GET /stats?type=embed instead",
+          notes: "Will be removed in future version",
+        },
+        {
+          method: "POST",
+          path: "/refs",
+          description: "[DEPRECATED] Use GET /nodes/:id/refs instead",
+          payload: '{"nodeId": string, "workspace": string}',
+          response: "Same as /nodes/:id/refs",
+          example: "Use GET /nodes/{nodeId}/refs instead",
+          notes: "Will be removed in future version",
+        },
+        {
+          method: "POST",
+          path: "/nodes",
+          description: "[DEPRECATED] Use POST /nodes/find instead",
+          payload: '{"pattern": string, "tag": string, ...}',
+          response: "Same as /nodes/find",
+          example: "Use POST /nodes/find instead",
+          notes: "Will be removed in future version",
+        },
+        {
+          method: "POST",
+          path: "/tags",
+          description: "[DEPRECATED] Use GET /tags or GET /tags/top instead",
+          payload: '{"limit": number, ...}',
+          response: "Same as GET /tags",
+          example: "Use GET /tags instead",
+          notes: "Will be removed in future version",
         },
       ];
 
@@ -286,11 +359,30 @@ export class TanaWebhookServer {
       };
     });
 
-    // Search endpoint
+    // Unified Search endpoint (T-4.1 - CLI Harmonization)
+    // Supports type: 'fts' (default), 'semantic', or 'tagged'
     this.fastify.post<{
-      Body: { query: string; workspace?: string; limit?: number };
+      Body: {
+        query: string;
+        workspace?: string;
+        limit?: number;
+        type?: 'fts' | 'semantic' | 'tagged';
+        tag?: string;
+        format?: 'tana' | 'json';
+        includeContents?: boolean;
+        includeAncestor?: boolean;
+      };
     }>("/search", async (request, reply) => {
-      const { query, workspace, limit } = request.body;
+      const {
+        query,
+        workspace,
+        limit = 10,
+        type = 'fts',
+        tag,
+        format = 'tana',
+        includeContents = false,
+        includeAncestor = true,
+      } = request.body;
 
       if (!query) {
         reply.status(400);
@@ -298,17 +390,80 @@ export class TanaWebhookServer {
       }
 
       try {
-        const { engine } = this.getQueryEngine(workspace);
+        const { engine, alias, dbPath } = this.getQueryEngine(workspace);
 
-        // Ensure FTS index exists
+        // Handle different search types
+        if (type === 'semantic') {
+          // Semantic search using embeddings
+          const results = await semanticSearch({
+            query,
+            workspace: alias,
+            limit,
+            includeContents,
+            includeAncestor,
+          });
+
+          if (format === 'json') {
+            return results;
+          }
+
+          const tana = this.convertSemanticResultsToTana(results);
+          reply.header("Content-Type", "text/plain");
+          return tana;
+        }
+
+        if (type === 'tagged') {
+          // Search by tag
+          if (!tag) {
+            reply.status(400);
+            return { error: "tag parameter required for type=tagged search" };
+          }
+
+          const results = await engine.findNodes({
+            supertag: tag,
+            namePattern: `%${query}%`,
+            limit,
+          });
+
+          const tanaNodes = results.map((node) => ({
+            name: node.name || "(unnamed)",
+            "Node ID": node.id,
+            ...(node.created && {
+              Created: new Date(node.created).toLocaleDateString(),
+            }),
+          }));
+
+          if (format === 'json') {
+            return { results: tanaNodes, count: tanaNodes.length };
+          }
+
+          const tana = this.converter.jsonToTana({
+            name: `Tagged Search: #${tag} containing "${query}"`,
+            children: tanaNodes,
+          });
+
+          reply.header("Content-Type", "text/plain");
+          return tana;
+        }
+
+        // Default: Full-text search (FTS)
         const hasFTS = await engine.hasFTSIndex();
         if (!hasFTS) {
           await engine.initializeFTS();
         }
 
-        const results = await engine.searchNodes(query, {
-          limit: limit || 10,
-        });
+        const results = await engine.searchNodes(query, { limit });
+
+        if (format === 'json') {
+          return {
+            results: results.map(r => ({
+              id: r.id,
+              name: r.name,
+              rank: r.rank,
+            })),
+            count: results.length,
+          };
+        }
 
         // Convert to Tana Paste format matching semantic search output
         const tana = this.convertSearchResultsToTana(query, results);
@@ -321,24 +476,165 @@ export class TanaWebhookServer {
       }
     });
 
-    // Stats endpoint
+    // Unified Stats endpoint (T-4.3 - CLI Harmonization)
+    // Supports type: 'all' (default), 'db', 'embed', or 'filter'
     this.fastify.get<{
-      Querystring: { workspace?: string };
+      Querystring: {
+        workspace?: string;
+        type?: 'all' | 'db' | 'embed' | 'filter';
+        format?: 'tana' | 'json';
+      };
     }>("/stats", async (request, reply) => {
-      try {
-        const { engine, alias } = this.getQueryEngine(request.query.workspace);
-        const stats = await engine.getStatistics();
+      const { workspace, type = 'all', format = 'tana' } = request.query;
 
-        const tanaNode = {
-          name: `Database Statistics (${alias})`,
-          "Workspace": alias,
-          "Total Nodes": stats.totalNodes.toLocaleString(),
-          "Total Supertags": stats.totalSupertags.toLocaleString(),
-          "Total Fields": stats.totalFields.toLocaleString(),
-          "Total References": stats.totalReferences.toLocaleString(),
+      try {
+        const { engine, alias, dbPath } = this.getQueryEngine(workspace);
+
+        // Collect stats based on type
+        const result: Record<string, unknown> = {
+          workspace: alias,
         };
 
-        const tana = this.converter.jsonToTana(tanaNode);
+        // Database stats
+        if (type === 'all' || type === 'db') {
+          const stats = await engine.getStatistics();
+          result.database = {
+            totalNodes: stats.totalNodes,
+            totalSupertags: stats.totalSupertags,
+            totalFields: stats.totalFields,
+            totalReferences: stats.totalReferences,
+          };
+        }
+
+        // Embedding stats
+        if (type === 'all' || type === 'embed') {
+          const lanceDbPath = dbPath.replace(/\.db$/, ".lance");
+          if (existsSync(lanceDbPath)) {
+            const configManager = ConfigManager.getInstance();
+            const embeddingConfig = configManager.getEmbeddingConfig();
+
+            const embeddingService = new TanaEmbeddingService(lanceDbPath, {
+              model: embeddingConfig.model,
+              endpoint: embeddingConfig.endpoint,
+            });
+
+            try {
+              const embedStats = await embeddingService.getStats();
+              const db = new Database(dbPath, { readonly: true });
+              try {
+                const totalNodes = withDbRetrySync(
+                  () => db.query("SELECT COUNT(*) as count FROM nodes").get() as { count: number },
+                  "stats total nodes"
+                );
+
+                const coverage = totalNodes.count > 0
+                  ? ((embedStats.totalEmbeddings / totalNodes.count) * 100)
+                  : 0;
+
+                result.embeddings = {
+                  model: embeddingConfig.model,
+                  dimensions: embedStats.dimensions || 0,
+                  totalEmbeddings: embedStats.totalEmbeddings,
+                  coverage: Math.round(coverage * 10) / 10,
+                };
+              } finally {
+                db.close();
+              }
+            } finally {
+              embeddingService.close();
+            }
+          } else {
+            result.embeddings = {
+              configured: true,
+              generated: false,
+              message: "Run 'supertag embed generate' to create embeddings",
+            };
+          }
+        }
+
+        // Filter stats (for embedding content filtering)
+        if (type === 'all' || type === 'filter') {
+          const db = new Database(dbPath, { readonly: true });
+          try {
+            const totalNodes = withDbRetrySync(
+              () => db.query("SELECT COUNT(*) as count FROM nodes WHERE node_type IS NULL OR node_type != 'trash'").get() as { count: number },
+              "stats filter total"
+            );
+
+            const entities = withDbRetrySync(
+              () => db.query("SELECT COUNT(*) as count FROM nodes WHERE json_extract(raw_data, '$.props._flags') % 2 = 1").get() as { count: number },
+              "stats filter entities"
+            );
+
+            result.filter = {
+              totalNodes: totalNodes.count,
+              entities: entities.count,
+              entityPercentage: Math.round((entities.count / totalNodes.count) * 1000) / 10,
+            };
+          } finally {
+            db.close();
+          }
+        }
+
+        if (format === 'json') {
+          return result;
+        }
+
+        // Convert to Tana Paste format
+        const children: Record<string, unknown>[] = [];
+
+        if (result.database) {
+          const dbStats = result.database as Record<string, number>;
+          children.push({
+            name: "Database",
+            children: [
+              { name: `Nodes:: ${dbStats.totalNodes.toLocaleString()}` },
+              { name: `Supertags:: ${dbStats.totalSupertags.toLocaleString()}` },
+              { name: `Fields:: ${dbStats.totalFields.toLocaleString()}` },
+              { name: `References:: ${dbStats.totalReferences.toLocaleString()}` },
+            ],
+          });
+        }
+
+        if (result.embeddings) {
+          const embedStats = result.embeddings as Record<string, unknown>;
+          if (embedStats.generated === false) {
+            children.push({
+              name: "Embeddings",
+              children: [
+                { name: "Status:: Not Generated" },
+                { name: `Message:: ${embedStats.message}` },
+              ],
+            });
+          } else {
+            children.push({
+              name: "Embeddings",
+              children: [
+                { name: `Model:: ${embedStats.model}` },
+                { name: `Dimensions:: ${embedStats.dimensions}` },
+                { name: `Total:: ${(embedStats.totalEmbeddings as number).toLocaleString()}` },
+                { name: `Coverage:: ${embedStats.coverage}%` },
+              ],
+            });
+          }
+        }
+
+        if (result.filter) {
+          const filterStats = result.filter as Record<string, number>;
+          children.push({
+            name: "Content Filter",
+            children: [
+              { name: `Total Nodes:: ${filterStats.totalNodes.toLocaleString()}` },
+              { name: `Entities:: ${filterStats.entities.toLocaleString()}` },
+              { name: `Entity Rate:: ${filterStats.entityPercentage}%` },
+            ],
+          });
+        }
+
+        const tana = this.converter.jsonToTana({
+          name: `Statistics (${alias})`,
+          children,
+        });
 
         reply.header("Content-Type", "text/plain");
         return tana;
@@ -348,7 +644,148 @@ export class TanaWebhookServer {
       }
     });
 
-    // Tags endpoint
+    // RESTful Tags endpoints (T-4.4 - CLI Harmonization)
+
+    // GET /tags - List all tags
+    this.fastify.get<{
+      Querystring: { workspace?: string; limit?: number; format?: 'tana' | 'json' };
+    }>("/tags", async (request, reply) => {
+      const { workspace, limit = 50, format = 'tana' } = request.query;
+
+      try {
+        const { engine, alias } = this.getQueryEngine(workspace);
+        const tags = await engine.getTopSupertags(limit);
+
+        if (format === 'json') {
+          return {
+            tags: tags.map(tag => ({
+              name: tag.tagName,
+              id: tag.tagId,
+              count: tag.count,
+            })),
+            count: tags.length,
+          };
+        }
+
+        const tanaNodes = tags.map((tag) => ({
+          name: tag.tagName,
+          "Tag ID": tag.tagId,
+          Count: tag.count.toString(),
+        }));
+
+        const tana = this.converter.jsonToTana({
+          name: `Supertags (${alias})`,
+          children: tanaNodes,
+        });
+
+        reply.header("Content-Type", "text/plain");
+        return tana;
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // GET /tags/top - Top tags by usage
+    this.fastify.get<{
+      Querystring: { workspace?: string; limit?: number; format?: 'tana' | 'json' };
+    }>("/tags/top", async (request, reply) => {
+      const { workspace, limit = 20, format = 'tana' } = request.query;
+
+      try {
+        const { engine, alias } = this.getQueryEngine(workspace);
+        const tags = await engine.getTopTagsByUsage(limit);
+
+        if (format === 'json') {
+          return {
+            tags: tags.map(tag => ({
+              name: tag.tagName,
+              id: tag.tagId,
+              count: tag.count,
+            })),
+            count: tags.length,
+          };
+        }
+
+        const tanaNodes = tags.map((tag, i) => ({
+          name: `${i + 1}. #${tag.tagName}`,
+          Count: tag.count.toString(),
+        }));
+
+        const tana = this.converter.jsonToTana({
+          name: `Top ${tags.length} Supertags (${alias})`,
+          children: tanaNodes,
+        });
+
+        reply.header("Content-Type", "text/plain");
+        return tana;
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // GET /tags/:name - Show specific tag details
+    this.fastify.get<{
+      Params: { name: string };
+      Querystring: { workspace?: string; format?: 'tana' | 'json' };
+    }>("/tags/:name", async (request, reply) => {
+      const { name: tagname } = request.params;
+      const { workspace, format = 'tana' } = request.query;
+
+      try {
+        const { alias, dbPath } = this.getQueryEngine(workspace);
+
+        // Get schema path from workspace context
+        const config = ConfigManager.getInstance().getConfig();
+        const schemaPath = dbPath.replace(/tana-index\.db$/, 'schema.json');
+
+        // Load schema registry
+        const registry = new SchemaRegistry(schemaPath);
+        await registry.load();
+
+        // Find the tag
+        const tag = registry.findTagByName(tagname);
+
+        if (!tag) {
+          reply.status(404);
+          return { error: `Supertag not found: ${tagname}` };
+        }
+
+        if (format === 'json') {
+          return tag;
+        }
+
+        const children: Array<{ name: string; children?: Array<{ name: string }> }> = [
+          { name: `ID:: ${tag.id}` },
+          { name: `Color:: ${tag.color || "(none)"}` },
+        ];
+
+        if (tag.fields && tag.fields.length > 0) {
+          children.push({
+            name: `Fields (${tag.fields.length})`,
+            children: tag.fields.map(field => ({
+              name: `${field.name} (${field.id})`,
+            })),
+          });
+        } else {
+          children.push({ name: "Fields:: (none)" });
+        }
+
+        const tana = this.converter.jsonToTana({
+          name: `🏷️ ${tag.name}`,
+          children,
+        });
+
+        reply.header("Content-Type", "text/plain");
+        return tana;
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // Legacy POST /tags - kept for backward compatibility
     this.fastify.post<{
       Body: { workspace?: string; limit?: number };
     }>("/tags", async (request, reply) => {
@@ -377,7 +814,203 @@ export class TanaWebhookServer {
       }
     });
 
-    // Nodes endpoint - find nodes by criteria
+    // RESTful Nodes endpoints (T-4.2 - CLI Harmonization)
+
+    // GET /nodes/recent - Recently updated nodes
+    this.fastify.get<{
+      Querystring: { workspace?: string; limit?: number; format?: 'tana' | 'json' };
+    }>("/nodes/recent", async (request, reply) => {
+      const { workspace, limit = 10, format = 'tana' } = request.query;
+
+      try {
+        const { engine, alias, dbPath } = this.getQueryEngine(workspace);
+        const db = new Database(dbPath, { readonly: true });
+
+        try {
+          const results = withDbRetrySync(
+            () => db.query(`
+              SELECT id, name, created
+              FROM nodes
+              WHERE node_type IS NULL OR node_type != 'trash'
+              ORDER BY created DESC
+              LIMIT ?
+            `).all(limit) as Array<{ id: string; name: string | null; created: number | null }>,
+            "nodes/recent"
+          );
+
+          if (format === 'json') {
+            return {
+              results: results.map(r => ({
+                id: r.id,
+                name: r.name || "(unnamed)",
+                created: r.created ? new Date(r.created).toISOString() : null,
+              })),
+              count: results.length,
+            };
+          }
+
+          const tanaNodes = results.map((node) => ({
+            name: node.name || "(unnamed)",
+            "Node ID": node.id,
+            ...(node.created && {
+              Created: new Date(node.created).toLocaleDateString(),
+            }),
+          }));
+
+          const tana = this.converter.jsonToTana({
+            name: `Recent Nodes (${alias})`,
+            children: tanaNodes,
+          });
+
+          reply.header("Content-Type", "text/plain");
+          return tana;
+        } finally {
+          db.close();
+        }
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // GET /nodes/:id/refs - Get node references
+    this.fastify.get<{
+      Params: { id: string };
+      Querystring: { workspace?: string; format?: 'tana' | 'json' };
+    }>("/nodes/:id/refs", async (request, reply) => {
+      const { id: nodeId } = request.params;
+      const { workspace, format = 'tana' } = request.query;
+
+      try {
+        const { engine } = this.getQueryEngine(workspace);
+        const graph = await engine.getReferenceGraph(nodeId, 1);
+
+        if (format === 'json') {
+          return {
+            nodeId,
+            nodeName: graph.node.name,
+            outbound: graph.outbound.map(ref => ({
+              nodeId: ref.reference.toNode,
+              name: ref.node?.name,
+              type: ref.reference.referenceType,
+            })),
+            inbound: graph.inbound.map(ref => ({
+              nodeId: ref.reference.fromNode,
+              name: ref.node?.name,
+              type: ref.reference.referenceType,
+            })),
+          };
+        }
+
+        const outboundNodes = graph.outbound.map((ref) => ({
+          name: ref.node?.name || ref.reference.toNode,
+          Type: ref.reference.referenceType,
+        }));
+
+        const inboundNodes = graph.inbound.map((ref) => ({
+          name: ref.node?.name || ref.reference.fromNode,
+          Type: ref.reference.referenceType,
+        }));
+
+        const tanaNode = {
+          name: `References for: ${graph.node.name || nodeId}`,
+          children: [
+            {
+              name: "Outbound References",
+              children: outboundNodes,
+            },
+            {
+              name: "Inbound References",
+              children: inboundNodes,
+            },
+          ],
+        };
+
+        const tana = this.converter.jsonToTana(tanaNode);
+
+        reply.header("Content-Type", "text/plain");
+        return tana;
+      } catch (error) {
+        const errorMessage = (error as Error).message;
+        reply.status(errorMessage.includes("Workspace") ? 400 : 404);
+        return { error: errorMessage };
+      }
+    });
+
+    // GET /nodes/:id - Show node by ID
+    this.fastify.get<{
+      Params: { id: string };
+      Querystring: { workspace?: string; depth?: number; format?: 'tana' | 'json' };
+    }>("/nodes/:id", async (request, reply) => {
+      const { id: nodeId } = request.params;
+      const { workspace, depth = 0, format = 'tana' } = request.query;
+
+      try {
+        const { dbPath } = this.getQueryEngine(workspace);
+        const db = new Database(dbPath, { readonly: true });
+
+        try {
+          const contents = depth > 0
+            ? getNodeContentsWithDepth(db, nodeId, 0, depth)
+            : getNodeContents(db, nodeId);
+
+          if (!contents) {
+            reply.status(404);
+            return { error: `Node not found: ${nodeId}` };
+          }
+
+          if (format === 'json') {
+            return contents;
+          }
+
+          const tana = formatNodeOutput(contents);
+          reply.header("Content-Type", "text/plain");
+          return tana;
+        } finally {
+          db.close();
+        }
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // POST /nodes/find - Find nodes by criteria (legacy compatibility)
+    this.fastify.post<{
+      Body: { workspace?: string; pattern?: string; tag?: string; limit?: number };
+    }>("/nodes/find", async (request, reply) => {
+      const { workspace, pattern, tag, limit } = request.body || {};
+
+      try {
+        const { engine, alias } = this.getQueryEngine(workspace);
+        const results = await engine.findNodes({
+          namePattern: pattern,
+          supertag: tag,
+          limit: limit || 10,
+        });
+
+        const tanaNodes = results.map((node) => ({
+          name: node.name || "(unnamed)",
+          "Node ID": node.id,
+          ...(node.created && {
+            Created: new Date(node.created).toLocaleDateString(),
+          }),
+        }));
+
+        const tana = this.converter.jsonToTana({
+          name: `Query Results (${alias})`,
+          children: tanaNodes,
+        });
+
+        reply.header("Content-Type", "text/plain");
+        return tana;
+      } catch (error) {
+        reply.status(400);
+        return { error: (error as Error).message };
+      }
+    });
+
+    // Legacy POST /nodes - deprecated, use POST /nodes/find or GET endpoints
     this.fastify.post<{
       Body: { workspace?: string; pattern?: string; tag?: string; limit?: number };
     }>("/nodes", async (request, reply) => {

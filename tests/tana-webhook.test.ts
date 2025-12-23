@@ -260,9 +260,11 @@ describe("TanaWebhookServer - Stats Endpoint", () => {
     expect(response.headers.get("content-type")).toContain("text/plain");
 
     const tana = await response.text();
-    expect(tana).toContain("- Database Statistics");
-    expect(tana).toContain("Total Nodes::");
-    expect(tana).toContain("Total Supertags::");
+    // Updated for unified /stats endpoint (T-4.3 CLI Harmonization)
+    expect(tana).toContain("- Statistics");
+    expect(tana).toContain("- Database");
+    expect(tana).toContain("Nodes::");
+    expect(tana).toContain("Supertags::");
   });
 });
 

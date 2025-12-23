@@ -1,10 +1,13 @@
 /**
- * Show Command Group - Display full contents of Tana nodes
+ * Node Display Helpers
  *
- * Consolidates all tana-show functionality into main tana CLI
+ * Helper functions for displaying Tana node contents.
+ * Used by nodes.ts, embed.ts, and other commands.
+ *
+ * Note: Legacy show commands removed in v1.0.0 - use harmonized commands:
+ * - supertag nodes show <id>
+ * - supertag search <query> --tag <tag>
  */
-
-import { Command } from "commander";
 import { existsSync } from "fs";
 import { Database } from "bun:sqlite";
 import { getDatabasePath, resolveWorkspace } from "../config/paths";
@@ -375,153 +378,7 @@ export function formatNodeWithDepth(
   return lines.join("\n");
 }
 
-export function registerShowCommands(program: Command): void {
-  const show = program
-    .command("show")
-    .description("Display full contents of Tana nodes");
-
-  show
-    .command("node <node-id>")
-    .description("Show contents of a specific node by ID")
-    .option("-w, --workspace <alias>", "Workspace alias or nodeid")
-    .option("--db-path <path>", "Database path (overrides workspace)")
-    .option("-d, --depth <n>", "Traverse children to depth N (0 = no traversal)", "0")
-    .option("--json", "Output as JSON", false)
-    .action((nodeId, options) => {
-      const dbPath = resolveDbPath(options);
-      if (!checkDb(dbPath)) process.exit(1);
-
-      const db = new Database(dbPath);
-      const depth = parseInt(options.depth);
-
-      if (depth > 0) {
-        // Use depth traversal
-        if (options.json) {
-          // JSON output with depth
-          const contents = getNodeContentsWithDepth(db, nodeId, 0, depth);
-          db.close();
-
-          if (!contents) {
-            console.error(`❌ Node not found: ${nodeId}`);
-            process.exit(1);
-          }
-
-          console.log(JSON.stringify(contents, null, 2));
-        } else {
-          // Text output with depth
-          const output = formatNodeWithDepth(db, nodeId, 0, depth);
-          db.close();
-
-          if (!output) {
-            console.error(`❌ Node not found: ${nodeId}`);
-            process.exit(1);
-          }
-
-          console.log(output);
-        }
-      } else {
-        // Original behavior (no depth traversal)
-        const contents = getNodeContents(db, nodeId);
-        db.close();
-
-        if (!contents) {
-          console.error(`❌ Node not found: ${nodeId}`);
-          process.exit(1);
-        }
-
-        if (options.json) {
-          console.log(JSON.stringify(contents, null, 2));
-        } else {
-          console.log(formatNodeOutput(contents));
-        }
-      }
-    });
-
-  show
-    .command("tagged <tagname>")
-    .description("Show contents of nodes with a specific tag")
-    .option("-w, --workspace <alias>", "Workspace alias or nodeid")
-    .option("--db-path <path>", "Database path (overrides workspace)")
-    .option("--limit <n>", "Number of nodes to show", "1")
-    .option("--json", "Output as JSON", false)
-    .option("-i, --case-insensitive", "Case-insensitive tag matching", false)
-    .action((tagname, options) => {
-      const dbPath = resolveDbPath(options);
-      if (!checkDb(dbPath)) process.exit(1);
-
-      const db = new Database(dbPath);
-      const limit = parseInt(options.limit);
-
-      let nodeIds = withDbRetrySync(
-        () => db
-          .query(
-            `
-          SELECT DISTINCT ta.data_node_id as id
-          FROM tag_applications ta
-          JOIN nodes n ON n.id = ta.data_node_id
-          WHERE ta.tag_name = ?
-          ORDER BY n.created DESC
-          LIMIT ?
-        `
-          )
-          .all(tagname, limit) as Array<{ id: string }>,
-        "show tagged query"
-      );
-
-      if (nodeIds.length === 0 && options.caseInsensitive) {
-        const alternates = [
-          tagname.toLowerCase(),
-          tagname.charAt(0).toUpperCase() + tagname.slice(1).toLowerCase(),
-          tagname.toUpperCase(),
-        ];
-        for (const alt of alternates) {
-          if (alt === tagname) continue;
-          nodeIds = withDbRetrySync(
-            () => db
-              .query(
-                `
-              SELECT DISTINCT ta.data_node_id as id
-              FROM tag_applications ta
-              JOIN nodes n ON n.id = ta.data_node_id
-              WHERE ta.tag_name = ?
-              ORDER BY n.created DESC
-              LIMIT ?
-            `
-              )
-              .all(alt, limit) as Array<{ id: string }>,
-            "show tagged case-insensitive query"
-          );
-          if (nodeIds.length > 0) {
-            tagname = alt;
-            break;
-          }
-        }
-      }
-
-      if (nodeIds.length === 0) {
-        console.error(`❌ No nodes found with tag "#${tagname}"`);
-        db.close();
-        process.exit(1);
-      }
-
-      const allContents: NodeContents[] = [];
-      for (const { id } of nodeIds) {
-        const contents = getNodeContents(db, id);
-        if (contents) {
-          allContents.push(contents);
-        }
-      }
-
-      db.close();
-
-      if (options.json) {
-        console.log(JSON.stringify(allContents, null, 2));
-      } else {
-        console.log(`\n🏷️  Nodes tagged with #${tagname} (${allContents.length}):\n`);
-        for (const contents of allContents) {
-          console.log(formatNodeOutput(contents));
-          console.log();
-        }
-      }
-    });
-}
+// Note: Legacy registerShowCommands removed in v1.0.0
+// Use harmonized commands instead:
+// - supertag nodes show <id> (replaces show node)
+// - supertag search <query> --tag <tag> (replaces show tagged)
