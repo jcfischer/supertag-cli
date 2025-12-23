@@ -90,3 +90,35 @@ describe("search command help", () => {
     expect(help).toContain("search");
   });
 });
+
+// ============================================================================
+// Output formatting tests (T-2.2)
+// ============================================================================
+
+describe("search output formatting", () => {
+  let cmd: Command;
+
+  beforeEach(() => {
+    cmd = createSearchCommand();
+  });
+
+  it("should have --pretty option", () => {
+    const options = cmd.options.map(o => o.long);
+    expect(options).toContain("--pretty");
+  });
+
+  it("should have --no-pretty option for forcing Unix output", () => {
+    const optionFlags = cmd.options.map(o => o.flags);
+    expect(optionFlags.some(f => f.includes("--pretty"))).toBe(true);
+  });
+
+  it("should have --human-dates option", () => {
+    const options = cmd.options.map(o => o.long);
+    expect(options).toContain("--human-dates");
+  });
+
+  it("should have --verbose option", () => {
+    const options = cmd.options.map(o => o.long);
+    expect(options).toContain("--verbose");
+  });
+});

@@ -29,6 +29,13 @@ import {
   formatNodeOutput,
   formatNodeWithDepth,
 } from "./show";
+import {
+  tsv,
+  EMOJI,
+  header,
+  formatDateISO,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
 import type { StandardOptions } from "../types";
 
 interface NodeShowOptions extends StandardOptions {
@@ -71,6 +78,7 @@ export function createNodesCommand(): Command {
 
     const db = new Database(dbPath);
     const depth = options.depth ? parseInt(String(options.depth)) : 0;
+    const outputOpts = resolveOutputOptions(options);
 
     try {
       if (depth > 0) {
@@ -98,8 +106,27 @@ export function createNodesCommand(): Command {
 
         if (options.json) {
           console.log(formatJsonOutput(contents));
-        } else {
+        } else if (outputOpts.pretty) {
           console.log(formatNodeOutput(contents));
+        } else {
+          // Unix mode: YAML-like record format
+          console.log("---");
+          console.log(`id: ${contents.id}`);
+          console.log(`name: ${contents.name}`);
+          if (contents.tags.length > 0) {
+            console.log(`tags: ${contents.tags.join(", ")}`);
+          }
+          if (contents.created) {
+            console.log(`created: ${formatDateISO(contents.created)}`);
+          }
+          if (contents.fields.length > 0) {
+            for (const field of contents.fields) {
+              console.log(`${field.fieldName}: ${field.value}`);
+            }
+          }
+          if (contents.children.length > 0) {
+            console.log(`children: ${contents.children.length}`);
+          }
         }
       }
     } finally {
@@ -121,14 +148,15 @@ export function createNodesCommand(): Command {
     }
 
     const engine = new TanaQueryEngine(dbPath);
+    const outputOpts = resolveOutputOptions(options);
 
     try {
       const graph = await engine.getReferenceGraph(nodeId, 1);
 
       if (options.json) {
         console.log(formatJsonOutput(graph));
-      } else {
-        console.log(`\n🔗 References for: ${graph.node.name || nodeId}\n`);
+      } else if (outputOpts.pretty) {
+        console.log(`\n${header(EMOJI.link, `References for: ${graph.node.name || nodeId}`)}:\n`);
 
         console.log(`📤 Outbound references (${graph.outbound.length}):`);
         graph.outbound.forEach((ref) => {
@@ -141,6 +169,15 @@ export function createNodesCommand(): Command {
           console.log(`  ← ${ref.node?.name || ref.reference.fromNode}`);
           console.log(`     Type: ${ref.reference.referenceType}`);
         });
+      } else {
+        // Unix mode: TSV output
+        // Format: direction\tfrom_id\tto_id\ttype\tname
+        for (const ref of graph.outbound) {
+          console.log(tsv("out", nodeId, ref.reference.toNode, ref.reference.referenceType, ref.node?.name || ""));
+        }
+        for (const ref of graph.inbound) {
+          console.log(tsv("in", ref.reference.fromNode, nodeId, ref.reference.referenceType, ref.node?.name || ""));
+        }
       }
     } catch (error) {
       console.error(`❌ Error: ${(error as Error).message}`);
@@ -170,14 +207,15 @@ export function createNodesCommand(): Command {
     const engine = new TanaQueryEngine(dbPath);
     const limit = options.limit ? parseInt(String(options.limit)) : 10;
     const dateRange = parseDateRangeOptions(options);
+    const outputOpts = resolveOutputOptions(options);
 
     try {
       const results = await engine.findRecentlyUpdated(limit, dateRange);
 
       if (options.json) {
         console.log(formatJsonOutput(results));
-      } else {
-        console.log(`\n⏱️  Recently updated (${results.length}):\n`);
+      } else if (outputOpts.pretty) {
+        console.log(`\n${header(EMOJI.recent, `Recently updated (${results.length})`)}:\n`);
         results.forEach((node, i) => {
           console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
           console.log(`   ID: ${node.id}`);
@@ -186,6 +224,13 @@ export function createNodesCommand(): Command {
           }
           console.log();
         });
+      } else {
+        // Unix mode: TSV output
+        // Format: id\tname\tupdated
+        for (const node of results) {
+          const updated = node.updated ? formatDateISO(new Date(node.updated)) : "";
+          console.log(tsv(node.id, node.name || "", updated));
+        }
       }
     } finally {
       engine.close();

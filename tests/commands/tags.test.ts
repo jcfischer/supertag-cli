@@ -106,3 +106,56 @@ describe("tags show subcommand", () => {
     expect(options).toContain("--json");
   });
 });
+
+// ============================================================================
+// Output formatting tests (T-2.1)
+// ============================================================================
+
+describe("tags top output formatting", () => {
+  let topCmd: Command;
+
+  beforeEach(() => {
+    const cmd = createTagsCommand();
+    topCmd = cmd.commands.find(c => c.name() === "top")!;
+  });
+
+  it("should have --pretty option", () => {
+    const options = topCmd.options.map(o => o.long);
+    expect(options).toContain("--pretty");
+  });
+
+  it("should have --no-pretty option for forcing Unix output", () => {
+    const optionFlags = topCmd.options.map(o => o.flags);
+    // Commander handles --no-pretty automatically when --pretty is defined
+    expect(optionFlags.some(f => f.includes("--pretty"))).toBe(true);
+  });
+
+  it("should have --human-dates option", () => {
+    const options = topCmd.options.map(o => o.long);
+    expect(options).toContain("--human-dates");
+  });
+
+  it("should have --verbose option", () => {
+    const options = topCmd.options.map(o => o.long);
+    expect(options).toContain("--verbose");
+  });
+});
+
+describe("tags list output formatting", () => {
+  let listCmd: Command;
+
+  beforeEach(() => {
+    const cmd = createTagsCommand();
+    listCmd = cmd.commands.find(c => c.name() === "list")!;
+  });
+
+  it("should have --pretty option", () => {
+    const options = listCmd.options.map(o => o.long);
+    expect(options).toContain("--pretty");
+  });
+
+  it("should have --verbose option", () => {
+    const options = listCmd.options.map(o => o.long);
+    expect(options).toContain("--verbose");
+  });
+});

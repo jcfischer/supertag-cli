@@ -400,6 +400,13 @@ export interface StandardOptions {
   show?: boolean;
   /** Child traversal depth (-d, --depth) */
   depth?: number;
+  // Output formatting options (T-2.1)
+  /** Human-friendly output with emojis and tables */
+  pretty?: boolean;
+  /** Use human-readable date format instead of ISO */
+  humanDates?: boolean;
+  /** Include technical details (IDs, timing, etc.) */
+  verbose?: boolean;
 }
 
 /**

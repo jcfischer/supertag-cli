@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="300" viewBox="0 0 680 300">
+  <defs>
+    <linearGradient id="titlebar6" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8E8"/>
+      <stop offset="100%" style="stop-color:#D0D0D0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect width="680" height="300" rx="8" ry="8" fill="#1E1E1E"/>
+
+  <!-- Title bar -->
+  <rect width="680" height="28" rx="8" ry="8" fill="url(#titlebar6)"/>
+  <rect y="20" width="680" height="8" fill="url(#titlebar6)"/>
+
+  <!-- Traffic lights -->
+  <circle cx="18" cy="14" r="6" fill="#FF5F56"/>
+  <circle cx="38" cy="14" r="6" fill="#FFBD2E"/>
+  <circle cx="58" cy="14" r="6" fill="#27CA40"/>
+
+  <!-- Title -->
+  <text x="340" y="18" font-family="SF Pro, -apple-system, sans-serif" font-size="13" fill="#4D4D4D" text-anchor="middle">Terminal</text>
+
+  <!-- Search command -->
+  <text x="16" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00FF00">$</text>
+  <text x="30" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> supertag search </text>
+  <text x="174" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">""</text>
+  <text x="190" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> --tag </text>
+  <text x="250" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">todo</text>
+  <text x="290" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> --show --limit 2</text>
+
+  <!-- Result 1 -->
+  <text x="16" y="90" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#27CA40">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+  <text x="16" y="114" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">#todo</text>
+  <text x="80" y="114" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">Review pull request #42</text>
+  <text x="16" y="138" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  Status:</text>
+  <text x="100" y="138" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">active</text>
+  <text x="16" y="158" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  Due:</text>
+  <text x="100" y="158" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">2025-12-24</text>
+  <text x="16" y="178" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  Assigned:</text>
+  <text x="100" y="178" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">@sarah</text>
+
+  <!-- Result 2 -->
+  <text x="16" y="206" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#27CA40">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+  <text x="16" y="230" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">#todo</text>
+  <text x="80" y="230" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">Write documentation for API v2</text>
+  <text x="16" y="254" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  Status:</text>
+  <text x="100" y="254" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">pending</text>
+  <text x="16" y="274" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  Project:</text>
+  <text x="100" y="274" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">API Refresh</text>
+</svg>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="280" viewBox="0 0 680 280">
+  <defs>
+    <linearGradient id="titlebar7" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8E8"/>
+      <stop offset="100%" style="stop-color:#D0D0D0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect width="680" height="280" rx="8" ry="8" fill="#1E1E1E"/>
+
+  <!-- Title bar -->
+  <rect width="680" height="28" rx="8" ry="8" fill="url(#titlebar7)"/>
+  <rect y="20" width="680" height="8" fill="url(#titlebar7)"/>
+
+  <!-- Traffic lights -->
+  <circle cx="18" cy="14" r="6" fill="#FF5F56"/>
+  <circle cx="38" cy="14" r="6" fill="#FFBD2E"/>
+  <circle cx="58" cy="14" r="6" fill="#27CA40"/>
+
+  <!-- Title -->
+  <text x="340" y="18" font-family="SF Pro, -apple-system, sans-serif" font-size="13" fill="#4D4D4D" text-anchor="middle">Terminal</text>
+
+  <!-- Command -->
+  <text x="16" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00FF00">$</text>
+  <text x="30" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> supertag tags top --limit 10</text>
+
+  <text x="16" y="84" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Top supertags by usage:</text>
+
+  <!-- Tag list -->
+  <text x="16" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Rank</text>
+  <text x="80" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Tag</text>
+  <text x="200" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Count</text>
+
+  <text x="16" y="136" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">1</text>
+  <text x="80" y="136" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">todo</text>
+  <text x="200" y="136" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">2,847</text>
+
+  <text x="16" y="156" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">2</text>
+  <text x="80" y="156" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">meeting</text>
+  <text x="200" y="156" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">1,234</text>
+
+  <text x="16" y="176" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">3</text>
+  <text x="80" y="176" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">contact</text>
+  <text x="200" y="176" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">892</text>
+
+  <text x="16" y="196" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">4</text>
+  <text x="80" y="196" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">project</text>
+  <text x="200" y="196" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">567</text>
+
+  <text x="16" y="216" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">5</text>
+  <text x="80" y="216" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">note</text>
+  <text x="200" y="216" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">445</text>
+
+  <text x="16" y="252" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">... and 127 more supertags</text>
+</svg>

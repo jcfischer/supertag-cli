@@ -26,6 +26,13 @@ import {
   addStandardOptions,
   formatJsonOutput,
 } from "./helpers";
+import {
+  tsv,
+  EMOJI,
+  header,
+  formatNumber,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
 import { getFilterStats } from "../embeddings/content-filter";
 import type { StandardOptions, StatsType } from "../types";
 
@@ -65,6 +72,8 @@ export function createStatsCommand(): Command {
 
     const results: Record<string, unknown> = {};
 
+    const outputOpts = resolveOutputOptions(options);
+
     // Database stats
     if (showDb) {
       const engine = new TanaQueryEngine(dbPath);
@@ -73,11 +82,20 @@ export function createStatsCommand(): Command {
         results.database = dbStats;
 
         if (!options.json) {
-          console.log(`\n📊 Database Statistics [${wsContext.alias}]:\n`);
-          console.log(`   Total Nodes: ${dbStats.totalNodes.toLocaleString()}`);
-          console.log(`   Total Supertags: ${dbStats.totalSupertags.toLocaleString()}`);
-          console.log(`   Total Fields: ${dbStats.totalFields.toLocaleString()}`);
-          console.log(`   Total References: ${dbStats.totalReferences.toLocaleString()}`);
+          if (outputOpts.pretty) {
+            // Pretty mode: emoji header, formatted numbers
+            console.log(`\n${header(EMOJI.stats, `Database Statistics [${wsContext.alias}]`)}:\n`);
+            console.log(`   Total Nodes: ${formatNumber(dbStats.totalNodes, true)}`);
+            console.log(`   Total Supertags: ${formatNumber(dbStats.totalSupertags, true)}`);
+            console.log(`   Total Fields: ${formatNumber(dbStats.totalFields, true)}`);
+            console.log(`   Total References: ${formatNumber(dbStats.totalReferences, true)}`);
+          } else {
+            // Unix mode: TSV key-value output
+            console.log(tsv("nodes", dbStats.totalNodes));
+            console.log(tsv("supertags", dbStats.totalSupertags));
+            console.log(tsv("fields", dbStats.totalFields));
+            console.log(tsv("references", dbStats.totalReferences));
+          }
         }
       } finally {
         engine.close();
@@ -94,11 +112,17 @@ export function createStatsCommand(): Command {
         results.embeddings = { status: "not_generated", totalEmbeddings: 0 };
 
         if (!options.json) {
-          if (showDb) console.log("");
-          console.log(`📊 Embedding Statistics [${wsContext.alias}]:\n`);
-          console.log("   Status: No embeddings generated yet");
-          console.log("");
-          console.log("   Run 'supertag embed generate' to create embeddings.");
+          if (outputOpts.pretty) {
+            if (showDb) console.log("");
+            console.log(`${header(EMOJI.embeddings, `Embedding Statistics [${wsContext.alias}]`)}:\n`);
+            console.log("   Status: No embeddings generated yet");
+            console.log("");
+            console.log("   Run 'supertag embed generate' to create embeddings.");
+          } else {
+            // Unix mode: status only
+            console.log(tsv("embeddings_status", "not_generated"));
+            console.log(tsv("embeddings_count", 0));
+          }
         }
       } else {
         const { TanaEmbeddingService } = await import("../embeddings/tana-embedding-service");
@@ -131,23 +155,31 @@ export function createStatsCommand(): Command {
           };
 
           if (!options.json) {
-            const { getModelDimensionsFromResona } = await import("../embeddings/embed-config-new");
-            const dimensions = getModelDimensionsFromResona(embeddingConfig.model);
+            if (outputOpts.pretty) {
+              const { getModelDimensionsFromResona } = await import("../embeddings/embed-config-new");
+              const dimensions = getModelDimensionsFromResona(embeddingConfig.model);
 
-            if (showDb) console.log("");
-            console.log(`📊 Embedding Statistics [${wsContext.alias}]:\n`);
-            console.log(`   Storage: LanceDB (via resona)`);
-            console.log(`   Model: ${embeddingConfig.model}`);
-            console.log(`   Dimensions: ${dimensions || "auto-detect"}`);
-            console.log(`   Total: ${embedStats.totalEmbeddings.toLocaleString()}`);
-            console.log(`   Coverage: ${embedStats.totalEmbeddings}/${nodeCount.count} (${coverage}%)`);
-            console.log("");
-            console.log("   Database Health:");
-            console.log(`     Version: ${diagnostics.version}`);
-            console.log(`     Rows: ${diagnostics.totalRows.toLocaleString()}`);
-            if (diagnostics.index) {
-              const indexHealth = diagnostics.index.needsRebuild ? "⚠️  needs rebuild" : "✓ healthy";
-              console.log(`     Index: ${indexHealth}`);
+              if (showDb) console.log("");
+              console.log(`${header(EMOJI.embeddings, `Embedding Statistics [${wsContext.alias}]`)}:\n`);
+              console.log(`   Storage: LanceDB (via resona)`);
+              console.log(`   Model: ${embeddingConfig.model}`);
+              console.log(`   Dimensions: ${dimensions || "auto-detect"}`);
+              console.log(`   Total: ${formatNumber(embedStats.totalEmbeddings, true)}`);
+              console.log(`   Coverage: ${embedStats.totalEmbeddings}/${nodeCount.count} (${coverage}%)`);
+              console.log("");
+              console.log("   Database Health:");
+              console.log(`     Version: ${diagnostics.version}`);
+              console.log(`     Rows: ${formatNumber(diagnostics.totalRows, true)}`);
+              if (diagnostics.index) {
+                const indexHealth = diagnostics.index.needsRebuild ? "⚠️  needs rebuild" : "✓ healthy";
+                console.log(`     Index: ${indexHealth}`);
+              }
+            } else {
+              // Unix mode: TSV key-value output
+              console.log(tsv("embeddings_status", "ready"));
+              console.log(tsv("embeddings_model", embeddingConfig.model));
+              console.log(tsv("embeddings_count", embedStats.totalEmbeddings));
+              console.log(tsv("embeddings_coverage", coverage));
             }
           }
         } finally {
@@ -165,29 +197,39 @@ export function createStatsCommand(): Command {
         results.filter = filterStats;
 
         if (!options.json) {
-          if (showDb || showEmbed) console.log("");
-          console.log(`📋 Content Filter Statistics [${wsContext.alias}]:\n`);
-          console.log(`   Total named nodes: ${filterStats.totalNamed.toLocaleString()}`);
-          console.log(`   After default filters: ${filterStats.withDefaultFilters.toLocaleString()}`);
-          console.log(`   Reduction: ${filterStats.reduction}`);
-          console.log("");
-          console.log("   Default filters applied:");
-          console.log("     - Minimum length: 15 characters");
-          console.log("     - Exclude timestamp artifacts");
-          console.log("     - Exclude system docTypes");
-          console.log("");
-          console.log("   Entity Detection:");
-          console.log(`     Tagged items: ${filterStats.entityStats.entitiesTagged.toLocaleString()}`);
-          console.log(`     Library items: ${filterStats.entityStats.entitiesLibrary.toLocaleString()}`);
-          console.log(`     Total entities: ${filterStats.entityStats.totalEntities.toLocaleString()} (${filterStats.entityStats.entityPercentage})`);
-          console.log("");
-          console.log("   Nodes by docType:");
-          for (const { docType, count } of filterStats.byDocType.slice(0, 10)) {
-            const label = docType || "(no docType)";
-            console.log(`     ${label.padEnd(20)} ${count.toLocaleString().padStart(10)}`);
-          }
-          if (filterStats.byDocType.length > 10) {
-            console.log(`     ... and ${filterStats.byDocType.length - 10} more`);
+          if (outputOpts.pretty) {
+            if (showDb || showEmbed) console.log("");
+            console.log(`📋 Content Filter Statistics [${wsContext.alias}]:\n`);
+            console.log(`   Total named nodes: ${formatNumber(filterStats.totalNamed, true)}`);
+            console.log(`   After default filters: ${formatNumber(filterStats.withDefaultFilters, true)}`);
+            console.log(`   Reduction: ${filterStats.reduction}`);
+            console.log("");
+            console.log("   Default filters applied:");
+            console.log("     - Minimum length: 15 characters");
+            console.log("     - Exclude timestamp artifacts");
+            console.log("     - Exclude system docTypes");
+            console.log("");
+            console.log("   Entity Detection:");
+            console.log(`     Tagged items: ${formatNumber(filterStats.entityStats.entitiesTagged, true)}`);
+            console.log(`     Library items: ${formatNumber(filterStats.entityStats.entitiesLibrary, true)}`);
+            console.log(`     Total entities: ${formatNumber(filterStats.entityStats.totalEntities, true)} (${filterStats.entityStats.entityPercentage})`);
+            console.log("");
+            console.log("   Nodes by docType:");
+            for (const { docType, count } of filterStats.byDocType.slice(0, 10)) {
+              const label = docType || "(no docType)";
+              console.log(`     ${label.padEnd(20)} ${formatNumber(count, true).padStart(10)}`);
+            }
+            if (filterStats.byDocType.length > 10) {
+              console.log(`     ... and ${filterStats.byDocType.length - 10} more`);
+            }
+          } else {
+            // Unix mode: TSV key-value output
+            console.log(tsv("filter_total_named", filterStats.totalNamed));
+            console.log(tsv("filter_after_default", filterStats.withDefaultFilters));
+            console.log(tsv("filter_reduction", filterStats.reduction));
+            console.log(tsv("filter_entities_tagged", filterStats.entityStats.entitiesTagged));
+            console.log(tsv("filter_entities_library", filterStats.entityStats.entitiesLibrary));
+            console.log(tsv("filter_entities_total", filterStats.entityStats.totalEntities));
           }
         }
       } finally {
@@ -198,7 +240,7 @@ export function createStatsCommand(): Command {
     // JSON output
     if (options.json) {
       console.log(formatJsonOutput(results));
-    } else {
+    } else if (outputOpts.pretty) {
       console.log("");
     }
   });

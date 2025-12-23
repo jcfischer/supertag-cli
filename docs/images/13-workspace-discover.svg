@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="260" viewBox="0 0 680 260">
+  <defs>
+    <linearGradient id="titlebar13" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8E8"/>
+      <stop offset="100%" style="stop-color:#D0D0D0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect width="680" height="260" rx="8" ry="8" fill="#1E1E1E"/>
+
+  <!-- Title bar -->
+  <rect width="680" height="28" rx="8" ry="8" fill="url(#titlebar13)"/>
+  <rect y="20" width="680" height="8" fill="url(#titlebar13)"/>
+
+  <!-- Traffic lights -->
+  <circle cx="18" cy="14" r="6" fill="#FF5F56"/>
+  <circle cx="38" cy="14" r="6" fill="#FFBD2E"/>
+  <circle cx="58" cy="14" r="6" fill="#27CA40"/>
+
+  <!-- Title -->
+  <text x="340" y="18" font-family="SF Pro, -apple-system, sans-serif" font-size="13" fill="#4D4D4D" text-anchor="middle">Terminal</text>
+
+  <!-- Command -->
+  <text x="16" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00FF00">$</text>
+  <text x="30" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> supertag workspace list</text>
+
+  <text x="16" y="84" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Configured workspaces:</text>
+
+  <!-- Workspace table -->
+  <text x="16" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Alias</text>
+  <text x="130" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">ID</text>
+  <text x="280" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Status</text>
+  <text x="380" y="112" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">Nodes</text>
+
+  <text x="16" y="140" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">main</text>
+  <text x="130" y="140" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">abc123xyz</text>
+  <text x="280" y="140" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#27CA40">indexed</text>
+  <text x="380" y="140" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">42,156</text>
+  <text x="460" y="140" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">(default)</text>
+
+  <text x="16" y="164" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">work</text>
+  <text x="130" y="164" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">def456uvw</text>
+  <text x="280" y="164" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#27CA40">indexed</text>
+  <text x="380" y="164" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">18,932</text>
+
+  <text x="16" y="188" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">archive</text>
+  <text x="130" y="188" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00BFFF">ghi789rst</text>
+  <text x="280" y="188" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">pending</text>
+  <text x="380" y="188" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF">5,421</text>
+
+  <!-- Query example -->
+  <text x="16" y="224" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#00FF00">$</text>
+  <text x="30" y="224" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> supertag search </text>
+  <text x="174" y="224" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">"quarterly report"</text>
+  <text x="340" y="224" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFFFFF"> -w </text>
+  <text x="376" y="224" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FFBD2E">work</text>
+</svg>

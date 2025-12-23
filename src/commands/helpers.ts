@@ -85,6 +85,12 @@ export function addStandardOptions(
   cmd.option("-l, --limit <n>", "Limit results", defaultLimit);
   cmd.option("--json", "Output as JSON", false);
 
+  // Output formatting options (T-2.1)
+  cmd.option("--pretty", "Human-friendly output with formatting");
+  cmd.option("--no-pretty", "Force Unix output (overrides config)");
+  cmd.option("--human-dates", "Human-readable date format");
+  cmd.option("--verbose", "Include technical details");
+
   // Optional db-path (usually included for backward compatibility)
   if (includeDbPath) {
     cmd.option("--db-path <path>", "Database path (overrides workspace)");

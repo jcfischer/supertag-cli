@@ -25,6 +25,15 @@ import {
   formatJsonOutput,
 } from "./helpers";
 import type { StandardOptions } from "../types";
+import {
+  tsv,
+  EMOJI,
+  header,
+  table,
+  formatNumber,
+  tip,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
 
 /**
  * Create the tags command group
@@ -82,18 +91,45 @@ export function createTagsCommand(): Command {
 
     const engine = new TanaQueryEngine(dbPath);
     const limit = options.limit ? parseInt(String(options.limit)) : 20;
+    const outputOpts = resolveOutputOptions(options);
 
     try {
       const topTags = await engine.getTopTagsByUsage(limit);
 
       if (options.json) {
         console.log(formatJsonOutput(topTags));
-      } else {
-        console.log(`\n🏷️  Top ${topTags.length} supertags by usage:\n`);
-        topTags.forEach((tag, i) => {
-          console.log(`${i + 1}. #${tag.tagName} (${tag.count} nodes)`);
+      } else if (outputOpts.pretty) {
+        // Pretty mode: emojis, table formatting
+        console.log(`\n${header(EMOJI.tags, `Top ${topTags.length} supertags by usage`)}\n`);
+        const headers = outputOpts.verbose
+          ? ['Rank', 'Tag', 'Count', 'ID']
+          : ['Rank', 'Tag', 'Count'];
+        const rows = topTags.map((tag, i) => {
+          const row = [
+            String(i + 1),
+            `#${tag.tagName}`,
+            formatNumber(tag.count, true),
+          ];
+          if (outputOpts.verbose) {
+            row.push(tag.tagId);
+          }
+          return row;
         });
-        console.log();
+        const align = outputOpts.verbose
+          ? ['right', 'left', 'right', 'left'] as const
+          : ['right', 'left', 'right'] as const;
+        console.log(table(headers, rows, { align: [...align] }));
+        console.log(tip("Use 'search --tag <name>' to find nodes with a tag"));
+      } else {
+        // Unix mode: TSV output, pipe-friendly
+        // Format: tagName\tcount (or with --verbose: tagId\ttagName\tcount)
+        for (const tag of topTags) {
+          if (outputOpts.verbose) {
+            console.log(tsv(tag.tagId, tag.tagName, tag.count));
+          } else {
+            console.log(tsv(tag.tagName, tag.count));
+          }
+        }
       }
     } finally {
       engine.close();

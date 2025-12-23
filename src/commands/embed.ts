@@ -23,6 +23,13 @@ import {
 import type { WorkspaceContext } from "../types";
 import { ConfigManager } from "../config/manager";
 import {
+  tsv,
+  EMOJI,
+  header,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
+import { addStandardOptions } from "./helpers";
+import {
   buildContentFilterQuery,
   getFilterableNodeCount,
   getFilterStats,
@@ -59,20 +66,54 @@ export function createEmbedCommand(): Command {
   /**
    * embed config - Configure embedding model (uses ConfigManager, not database)
    */
-  embed
+  const configCmd = embed
     .command("config")
     .description("Configure embedding model for semantic search")
     .option("-s, --show", "Show current configuration")
     .option("-m, --model <model>", "Model name (e.g., mxbai-embed-large)")
-    .option("-e, --endpoint <url>", "Custom Ollama endpoint URL")
-    .action(async (options) => {
+    .option("-e, --endpoint <url>", "Custom Ollama endpoint URL");
+
+  addStandardOptions(configCmd, { defaultLimit: "1" });
+
+  configCmd.action(async (options: { show?: boolean; model?: string; endpoint?: string; pretty?: boolean; json?: boolean }) => {
       const configManager = ConfigManager.getInstance();
+      const outputOpts = resolveOutputOptions(options);
 
       // Show current configuration
       if (options.show || (!options.model && !options.endpoint)) {
-        const { formatEmbeddingConfigDisplay } = await import("../embeddings/embed-config-new");
+        const { getModelDimensionsFromResona } = await import("../embeddings/embed-config-new");
         const embeddingConfig = configManager.getEmbeddingConfig();
-        console.log(formatEmbeddingConfigDisplay(embeddingConfig));
+
+        if (options.json) {
+          console.log(JSON.stringify(embeddingConfig || { status: "not_configured" }, null, 2));
+          return;
+        }
+
+        if (!embeddingConfig) {
+          if (outputOpts.pretty) {
+            const { formatEmbeddingConfigDisplay } = await import("../embeddings/embed-config-new");
+            console.log(formatEmbeddingConfigDisplay(embeddingConfig));
+          } else {
+            console.log(tsv("status", "not_configured"));
+          }
+          return;
+        }
+
+        const dimensions = getModelDimensionsFromResona(embeddingConfig.model);
+
+        if (outputOpts.pretty) {
+          console.log(`\n${header(EMOJI.embeddings, "Embedding Configuration")}:\n`);
+          console.log(`   Model: ${embeddingConfig.model}`);
+          console.log(`   Dimensions: ${dimensions || "auto-detect"}`);
+          console.log(`   Endpoint: ${embeddingConfig.endpoint || "http://localhost:11434"}`);
+          console.log(`   Storage: LanceDB (via resona)`);
+          console.log("");
+        } else {
+          // Unix mode: TSV key-value output
+          console.log(tsv("model", embeddingConfig.model));
+          console.log(tsv("dimensions", dimensions || "auto"));
+          console.log(tsv("endpoint", embeddingConfig.endpoint || "http://localhost:11434"));
+        }
         return;
       }
 

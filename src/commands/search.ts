@@ -29,6 +29,15 @@ import {
   parseDateRangeOptions,
 } from "./helpers";
 import {
+  tsv,
+  EMOJI,
+  header,
+  table,
+  formatDateISO,
+  tip,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
+import {
   getNodeContents,
   getNodeContentsWithDepth,
   formatNodeOutput,
@@ -135,6 +144,8 @@ async function handleFtsSearch(
   const limit = options.limit ? parseInt(String(options.limit)) : 20;
   const depth = options.depth ? parseInt(String(options.depth)) : 0;
   const includeAncestor = options.ancestor !== false && !options.raw;
+  const outputOpts = resolveOutputOptions(options);
+  const startTime = performance.now();
 
   try {
     // Ensure FTS index exists
@@ -149,6 +160,7 @@ async function handleFtsSearch(
       limit,
       ...dateRange,
     });
+    const searchTime = performance.now() - startTime;
 
     if (options.json) {
       // JSON output
@@ -222,25 +234,56 @@ async function handleFtsSearch(
         console.log();
       }
     } else {
-      // Standard output
-      console.log(`\n🔍 Search results for "${query}" (${results.length}):\n`);
-      results.forEach((result, i) => {
-        const tags = options.raw ? [] : engine.getNodeTags(result.id);
-        const tagStr = tags.length > 0 ? ` #${tags.join(" #")}` : "";
+      if (outputOpts.pretty) {
+        // Pretty mode: emoji header, result list
+        const headerText = outputOpts.verbose
+          ? `Search results for "${query}" (${results.length}) in ${searchTime.toFixed(0)}ms`
+          : `Search results for "${query}" (${results.length})`;
+        console.log(`\n${header(EMOJI.search, headerText)}:\n`);
+        results.forEach((result, i) => {
+          const tags = options.raw ? [] : engine.getNodeTags(result.id);
+          const tagStr = tags.length > 0 ? ` #${tags.join(" #")}` : "";
 
-        console.log(`${i + 1}. ${result.name || "(unnamed)"}${tagStr}`);
-        console.log(`   ID: ${result.id}`);
-        console.log(`   Rank: ${result.rank.toFixed(2)}`);
+          console.log(`${i + 1}. ${result.name || "(unnamed)"}${tagStr}`);
+          console.log(`   ID: ${result.id}`);
+          console.log(`   Rank: ${result.rank.toFixed(2)}`);
 
-        if (includeAncestor) {
-          const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-          if (ancestorResult && ancestorResult.depth > 0) {
-            const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-            console.log(`   📂 ${ancestorResult.ancestor.name} ${ancestorTags}`);
+          if (includeAncestor) {
+            const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
+            if (ancestorResult && ancestorResult.depth > 0) {
+              const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
+              console.log(`   📂 ${ancestorResult.ancestor.name} ${ancestorTags}`);
+            }
           }
+          console.log();
+        });
+        if (outputOpts.verbose) {
+          console.log(`Query time: ${searchTime.toFixed(1)}ms`);
         }
-        console.log();
-      });
+        // Show tip in pretty mode (not when --show is used)
+        console.log(tip("Use --show for full node content"));
+      } else {
+        // Unix mode: TSV output, pipe-friendly
+        // Format: id\tname\ttags\trank\tancestor_name
+        for (const result of results) {
+          const tags = options.raw ? [] : engine.getNodeTags(result.id);
+          const tagStr = tags.join(",");
+          let ancestorName = "";
+
+          if (includeAncestor) {
+            const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
+            if (ancestorResult && ancestorResult.depth > 0) {
+              ancestorName = ancestorResult.ancestor.name;
+            }
+          }
+
+          console.log(tsv(result.id, result.name || "", tagStr, result.rank.toFixed(2), ancestorName));
+        }
+        // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
+        if (outputOpts.verbose) {
+          console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
+        }
+      }
     }
   } finally {
     engine.close();
@@ -259,6 +302,8 @@ async function handleSemanticSearch(
   const embeddingConfig = configManager.getEmbeddingConfig();
   const config = configManager.getConfig();
   const wsContext = resolveWorkspace(options.workspace, config);
+  const outputOpts = resolveOutputOptions(options);
+  const startTime = performance.now();
 
   const limit = options.limit ? parseInt(String(options.limit)) : 10;
   const depth = options.depth ? parseInt(String(options.depth)) : 0;
@@ -294,6 +339,7 @@ async function handleSemanticSearch(
     const overfetchLimit = getOverfetchLimit(limit);
     const rawResults = await embeddingService.search(query, overfetchLimit);
     const results = filterAndDeduplicateResults(db, rawResults, limit);
+    const searchTime = performance.now() - startTime;
 
     if (results.length === 0) {
       if (options.json) {
@@ -374,20 +420,53 @@ async function handleSemanticSearch(
         console.log("");
       }
     } else {
-      console.log("Results:");
-      console.log("");
-      for (const r of results) {
-        const similarity = (r.similarity * 100).toFixed(1);
-        const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
-        console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
-        console.log(`        ID: ${r.nodeId}`);
+      if (outputOpts.pretty) {
+        // Pretty mode: results list with similarity percentage
+        const headerText = outputOpts.verbose
+          ? `Results (${results.length}) in ${searchTime.toFixed(0)}ms`
+          : `Results (${results.length})`;
+        console.log(headerText);
+        console.log("");
+        for (const r of results) {
+          const similarity = (r.similarity * 100).toFixed(1);
+          const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
+          console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
+          console.log(`        ID: ${r.nodeId}`);
 
-        if (includeAncestor) {
-          const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-          if (ancestorResult && ancestorResult.depth > 0) {
-            const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-            console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
+          if (includeAncestor) {
+            const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
+            if (ancestorResult && ancestorResult.depth > 0) {
+              const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
+              console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
+            }
           }
+        }
+        if (outputOpts.verbose) {
+          console.log("");
+          console.log(`Query time: ${searchTime.toFixed(1)}ms`);
+        }
+        // Show tip in pretty mode (not when --show is used)
+        console.log(tip("Use --show for full node content"));
+      } else {
+        // Unix mode: TSV output, pipe-friendly
+        // Format: similarity\tid\tname\ttags\tancestor_name
+        for (const r of results) {
+          const similarity = r.similarity.toFixed(3);
+          const tagStr = r.tags ? r.tags.join(",") : "";
+          let ancestorName = "";
+
+          if (includeAncestor) {
+            const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
+            if (ancestorResult && ancestorResult.depth > 0) {
+              ancestorName = ancestorResult.ancestor.name;
+            }
+          }
+
+          console.log(tsv(similarity, r.nodeId, r.name, tagStr, ancestorName));
+        }
+        // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
+        if (outputOpts.verbose) {
+          console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
         }
       }
     }
@@ -479,15 +558,32 @@ async function handleTaggedSearch(
         console.log();
       }
     } else {
-      console.log(`\n🏷️  Nodes tagged with #${tagname} (${results.length}):\n`);
-      results.forEach((node, i) => {
-        console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
-        console.log(`   ID: ${node.id}`);
-        if (node.created) {
-          console.log(`   Created: ${new Date(node.created).toLocaleDateString()}`);
+      const outputOpts = resolveOutputOptions(options);
+
+      if (outputOpts.pretty) {
+        // Pretty mode: emoji header, result list
+        console.log(`\n${header(EMOJI.tags, `Nodes tagged with #${tagname} (${results.length})`)}:\n`);
+        results.forEach((node, i) => {
+          console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
+          console.log(`   ID: ${node.id}`);
+          if (node.created) {
+            const dateStr = outputOpts.humanDates
+              ? new Date(node.created).toLocaleDateString()
+              : formatDateISO(node.created);
+            console.log(`   Created: ${dateStr}`);
+          }
+          console.log();
+        });
+        // Show tip in pretty mode (not when --show is used)
+        console.log(tip("Use --show for full node content"));
+      } else {
+        // Unix mode: TSV output, pipe-friendly
+        // Format: id\tname\tcreated
+        for (const node of results) {
+          const created = node.created ? formatDateISO(node.created) : "";
+          console.log(tsv(node.id, node.name || "", created));
         }
-        console.log();
-      });
+      }
     }
   } finally {
     engine.close();

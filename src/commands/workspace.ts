@@ -19,6 +19,13 @@ import {
   getWorkspaceExportDir,
 } from '../config/paths';
 import { existsSync } from 'fs';
+import {
+  tsv,
+  EMOJI,
+  header,
+} from '../utils/format';
+import { resolveOutputOptions } from '../utils/output-options';
+import { addStandardOptions } from './helpers';
 
 /**
  * Create the workspace command group
@@ -28,39 +35,70 @@ export function createWorkspaceCommand(): Command {
     .description('Manage Tana workspaces');
 
   // List all workspaces
-  workspace
+  const listCmd = workspace
     .command('list')
-    .description('List all configured workspaces')
-    .action(() => {
+    .description('List all configured workspaces');
+
+  addStandardOptions(listCmd, { defaultLimit: "100" });
+
+  listCmd.action((options: { pretty?: boolean; json?: boolean }) => {
       const config = getConfig();
       const workspaces = config.getAllWorkspaces();
       const defaultWs = config.getDefaultWorkspace();
+      const outputOpts = resolveOutputOptions(options);
 
       if (Object.keys(workspaces).length === 0) {
-        console.log('No workspaces configured.');
-        console.log('\nDiscover workspaces automatically:');
-        console.log('  supertag-export discover --add');
-        console.log('\nOr add manually:');
-        console.log('  tana workspace add <rootFileId> --alias <name>');
+        if (outputOpts.pretty) {
+          console.log('No workspaces configured.');
+          console.log('\nDiscover workspaces automatically:');
+          console.log('  supertag-export discover --add');
+          console.log('\nOr add manually:');
+          console.log('  tana workspace add <rootFileId> --alias <name>');
+        }
         return;
       }
 
-      console.log('Configured workspaces:\n');
-      for (const [alias, ws] of Object.entries(workspaces)) {
-        const isDefault = alias === defaultWs ? ' (default)' : '';
-        const status = ws.enabled ? '✓' : '○';
-        const name = ws.name ? ` "${ws.name}"` : '';
-        console.log(`  ${status} ${alias}${name}${isDefault}`);
-        console.log(`      rootFileId: ${ws.rootFileId}`);
-        if (ws.nodeid) {
-          console.log(`      nodeid: ${ws.nodeid}`);
-        }
+      if (options.json) {
+        const result = Object.entries(workspaces).map(([alias, ws]) => ({
+          alias,
+          rootFileId: ws.rootFileId,
+          name: ws.name,
+          enabled: ws.enabled,
+          isDefault: alias === defaultWs,
+          dbExists: existsSync(getWorkspaceDatabasePath(alias)),
+        }));
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
 
-        // Check if database exists
-        const dbPath = getWorkspaceDatabasePath(alias);
-        const dbExists = existsSync(dbPath);
-        console.log(`      database: ${dbExists ? 'exists' : 'not synced'}`);
-        console.log('');
+      if (outputOpts.pretty) {
+        // Pretty mode: emoji header, detailed output
+        console.log(`\n${header(EMOJI.workspace, 'Configured workspaces')}:\n`);
+        for (const [alias, ws] of Object.entries(workspaces)) {
+          const isDefault = alias === defaultWs ? ' (default)' : '';
+          const status = ws.enabled ? '✓' : '○';
+          const name = ws.name ? ` "${ws.name}"` : '';
+          console.log(`  ${status} ${alias}${name}${isDefault}`);
+          console.log(`      rootFileId: ${ws.rootFileId}`);
+          if (ws.nodeid) {
+            console.log(`      nodeid: ${ws.nodeid}`);
+          }
+
+          // Check if database exists
+          const dbPath = getWorkspaceDatabasePath(alias);
+          const dbExists = existsSync(dbPath);
+          console.log(`      database: ${dbExists ? 'exists' : 'not synced'}`);
+          console.log('');
+        }
+      } else {
+        // Unix mode: TSV output
+        // Format: alias\trootFileId\tenabled\tdefault\tdb_exists
+        for (const [alias, ws] of Object.entries(workspaces)) {
+          const isDefault = alias === defaultWs ? "yes" : "no";
+          const dbExists = existsSync(getWorkspaceDatabasePath(alias)) ? "yes" : "no";
+          const enabled = ws.enabled ? "yes" : "no";
+          console.log(tsv(alias, ws.rootFileId, enabled, isDefault, dbExists));
+        }
       }
     });
 

@@ -10,6 +10,13 @@ import { TanaWebhookServer } from "../server/tana-webhook-server";
 import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync } from "fs";
 import { resolveWorkspace, getEnabledWorkspaces, PID_FILE, SERVER_CONFIG_FILE, ensureAllDirs, getWorkspaceDatabasePath } from "../config/paths";
 import { ConfigManager } from "../config/manager";
+import {
+  tsv,
+  EMOJI,
+  header,
+} from "../utils/format";
+import { resolveOutputOptions } from "../utils/output-options";
+import { addStandardOptions } from "./helpers";
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_HOST = "localhost";
@@ -220,12 +227,23 @@ export function registerServerCommands(program: Command): void {
       }
     });
 
-  server
+  const statusCmd = server
     .command("status")
-    .description("Check server status")
-    .action(async () => {
+    .description("Check server status");
+
+  addStandardOptions(statusCmd, { defaultLimit: "1" });
+
+  statusCmd.action(async (options: { pretty?: boolean; json?: boolean }) => {
+      const outputOpts = resolveOutputOptions(options);
+
       if (!existsSync(PID_FILE)) {
-        console.log(`❌ Server is not running`);
+        if (options.json) {
+          console.log(JSON.stringify({ status: "stopped" }));
+        } else if (outputOpts.pretty) {
+          console.log(`${EMOJI.serverStopped} Server is not running`);
+        } else {
+          console.log(tsv("status", "stopped"));
+        }
         process.exit(1);
       }
 
@@ -239,33 +257,55 @@ export function registerServerCommands(program: Command): void {
           config = JSON.parse(readFileSync(CONFIG_FILE, "utf-8"));
         }
 
-        console.log(`✅ Server is running`);
-        console.log(`   PID: ${pid}`);
-        if (config) {
-          console.log(`   Address: http://${config.host}:${config.port}`);
-          if (config.workspaces) {
-            const workspaceList = Object.keys(config.workspaces).join(", ");
-            console.log(`   Workspaces: ${workspaceList}`);
-            console.log(`   Default: ${config.defaultWorkspace}`);
+        if (options.json) {
+          const result: Record<string, unknown> = { status: "running", pid };
+          if (config) {
+            result.address = `http://${config.host}:${config.port}`;
+            result.workspaces = config.workspaces ? Object.keys(config.workspaces) : [];
+            result.defaultWorkspace = config.defaultWorkspace;
           }
-        }
-
-        if (config) {
-          try {
-            const response = await fetch(`http://${config.host}:${config.port}/health`);
-            if (response.ok) {
-              const data = await response.json() as { status: string; workspaces?: string[] };
-              console.log(`   Health: ${data.status}`);
-              if (data.workspaces) {
-                console.log(`   Active workspaces: ${data.workspaces.join(", ")}`);
-              }
+          console.log(JSON.stringify(result, null, 2));
+        } else if (outputOpts.pretty) {
+          console.log(`${EMOJI.serverRunning} Server is running`);
+          console.log(`   PID: ${pid}`);
+          if (config) {
+            console.log(`   Address: http://${config.host}:${config.port}`);
+            if (config.workspaces) {
+              const workspaceList = Object.keys(config.workspaces).join(", ");
+              console.log(`   Workspaces: ${workspaceList}`);
+              console.log(`   Default: ${config.defaultWorkspace}`);
             }
-          } catch (e) {
-            console.log(`   Health: unreachable`);
           }
+
+          if (config) {
+            try {
+              const response = await fetch(`http://${config.host}:${config.port}/health`);
+              if (response.ok) {
+                const data = await response.json() as { status: string; workspaces?: string[] };
+                console.log(`   Health: ${data.status}`);
+                if (data.workspaces) {
+                  console.log(`   Active workspaces: ${data.workspaces.join(", ")}`);
+                }
+              }
+            } catch (e) {
+              console.log(`   Health: unreachable`);
+            }
+          }
+        } else {
+          // Unix mode: TSV output
+          // Format: status\tpid\tport\tworkspaces
+          const port = config?.port || 0;
+          const workspaces = config?.workspaces ? Object.keys(config.workspaces).join(",") : "";
+          console.log(tsv("running", pid, port, workspaces));
         }
       } catch (error) {
-        console.log(`❌ Server is not running (stale PID file)`);
+        if (options.json) {
+          console.log(JSON.stringify({ status: "stopped", stale_pid: pid }));
+        } else if (outputOpts.pretty) {
+          console.log(`${EMOJI.serverStopped} Server is not running (stale PID file)`);
+        } else {
+          console.log(tsv("status", "stopped"));
+        }
         unlinkSync(PID_FILE);
         if (existsSync(CONFIG_FILE)) {
           unlinkSync(CONFIG_FILE);

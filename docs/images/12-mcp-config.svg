@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="220" viewBox="0 0 680 220">
+  <defs>
+    <linearGradient id="titlebar12" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8E8"/>
+      <stop offset="100%" style="stop-color:#D0D0D0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect width="680" height="220" rx="8" ry="8" fill="#1E1E1E"/>
+
+  <!-- Title bar -->
+  <rect width="680" height="28" rx="8" ry="8" fill="url(#titlebar12)"/>
+  <rect y="20" width="680" height="8" fill="url(#titlebar12)"/>
+
+  <!-- Traffic lights -->
+  <circle cx="18" cy="14" r="6" fill="#FF5F56"/>
+  <circle cx="38" cy="14" r="6" fill="#FFBD2E"/>
+  <circle cx="58" cy="14" r="6" fill="#27CA40"/>
+
+  <!-- Title -->
+  <text x="340" y="18" font-family="SF Pro, -apple-system, sans-serif" font-size="13" fill="#4D4D4D" text-anchor="middle">~/.claude/mcp.json</text>
+
+  <!-- JSON content -->
+  <text x="16" y="56" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">{</text>
+  <text x="16" y="80" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">  "mcpServers"</text>
+  <text x="148" y="80" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">: {</text>
+  <text x="16" y="104" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">    "supertag"</text>
+  <text x="122" y="104" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">: {</text>
+  <text x="16" y="128" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#FF6B6B">      "command"</text>
+  <text x="122" y="128" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">: </text>
+  <text x="138" y="128" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#27CA40">"/path/to/supertag-mcp"</text>
+  <text x="16" y="152" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">    }</text>
+  <text x="16" y="176" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">  }</text>
+  <text x="16" y="200" font-family="SF Mono, Menlo, monospace" font-size="13" fill="#888888">}</text>
+</svg>

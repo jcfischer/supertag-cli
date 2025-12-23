@@ -15,6 +15,8 @@
 
 **Downloads**: [GitHub Releases](https://github.com/jcfischer/supertag-cli/releases) (macOS ARM64/Intel, Linux x64, Windows x64)
 
+**New to Supertag?** Check out the [Visual Getting Started Guide](./docs/GETTING-STARTED.md) with step-by-step screenshots.
+
 ---
 
 ## Quick Start
@@ -130,6 +132,52 @@ supertag search "meeting" -w work
 
 See [Workspaces Documentation](./docs/workspaces.md) for details.
 
+### OUTPUT - Display Formatting
+
+Commands support multiple output formats for different use cases:
+
+```bash
+# Default: Unix-style TSV (pipe-friendly)
+supertag search "meeting"              # id\tname\ttags\trank
+supertag tags top                      # tagname\tcount
+
+# Pretty mode: Human-friendly with emojis
+supertag search "meeting" --pretty     # Formatted list with headers
+supertag tags top --pretty             # Table with alignment
+
+# JSON mode: Structured data
+supertag search "meeting" --json       # Full JSON output
+
+# Verbose mode: Additional details
+supertag search "meeting" --verbose    # Adds timing info
+supertag tags top --verbose            # Adds tag IDs
+```
+
+**Output Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--pretty` | Human-friendly output with emojis and formatting |
+| `--no-pretty` | Force Unix TSV output (overrides config) |
+| `--json` | Structured JSON output |
+| `--verbose` | Include technical details (timing, IDs) |
+| `--human-dates` | Localized date format (Dec 23, 2025) |
+
+**Configuration:**
+
+Set defaults in `~/.config/supertag/config.json`:
+
+```json
+{
+  "output": {
+    "pretty": true,
+    "humanDates": false
+  }
+}
+```
+
+**Precedence:** CLI flags > Config file > Built-in defaults
+
 ---
 
 ## Installation
@@ -162,6 +210,7 @@ bun install
 
 | Document | Description |
 |----------|-------------|
+| [Getting Started](./docs/GETTING-STARTED.md) | Visual guide with step-by-step screenshots |
 | [MCP Integration](./docs/mcp.md) | AI tool setup (Claude, ChatGPT, Cursor, etc.) |
 | [Embeddings](./docs/embeddings.md) | Semantic search configuration |
 | [Webhook Server](./docs/WEBHOOK-SERVER.md) | HTTP API reference |
