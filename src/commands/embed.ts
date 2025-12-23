@@ -44,7 +44,7 @@ import {
   type NodeContents,
 } from "./show";
 import { findMeaningfulAncestor } from "../embeddings/ancestor-resolution";
-import { batchContextualizeNodes } from "../embeddings/contextualize";
+import { batchContextualizeNodes, contextualizeNodesWithFields } from "../embeddings/contextualize";
 import { filterAndDeduplicateResults, getOverfetchLimit } from "../embeddings/search-filter";
 import { existsSync } from "node:fs";
 
@@ -167,6 +167,7 @@ export function createEmbedCommand(): Command {
     .option("--include-all", "Include all nodes (bypass content filters)")
     .option("--include-timestamps", "Include timestamp-like nodes")
     .option("--include-system", "Include system docTypes (tuple, metanode, etc.)")
+    .option("--include-fields", "Include field values in embedding context")
     .option("-v, --verbose", "Verbose output")
     .option("--lance-batch-size <n>", "LanceDB write batch size (default: 5000)")
     .action(async (options) => {
@@ -317,7 +318,9 @@ export function createEmbedCommand(): Command {
 
       // Contextualize nodes - add ancestor context for better embeddings
       console.log("   Contextualizing nodes...");
-      const contextualizedNodes = batchContextualizeNodes(db, nodes);
+      const contextualizedNodes = options.includeFields
+        ? contextualizeNodesWithFields(db, nodes, { includeFields: true })
+        : batchContextualizeNodes(db, nodes);
 
       // Count how many have ancestor context
       const withAncestor = contextualizedNodes.filter(n => n.ancestorId !== null).length;
@@ -325,6 +328,9 @@ export function createEmbedCommand(): Command {
       console.log(`   With ancestor context: ${withAncestor.toLocaleString()}`);
       console.log(`   With own tag: ${withOwnTag.toLocaleString()}`);
       console.log(`   No context: ${(nodes.length - withAncestor - withOwnTag).toLocaleString()}`);
+      if (options.includeFields) {
+        console.log(`   Field enrichment: enabled`);
+      }
       console.log("");
 
       // Create TanaEmbeddingService (uses resona/LanceDB)

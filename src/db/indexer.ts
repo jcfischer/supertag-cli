@@ -32,6 +32,10 @@ import { TanaExportParser } from "../parsers/tana-export";
 import { nodes, supertags, fields, references, fieldNames } from "./schema";
 import type { Node, Supertag, Field, Reference, FieldName } from "./schema";
 import { withDbRetrySync } from "./retry";
+import { migrateFieldValuesSchema, clearFieldValues, migrateSupertagMetadataSchema, clearSupertagMetadata } from "./migrate";
+import { extractFieldValuesFromNodes, insertFieldValues } from "./field-values";
+import { extractSupertagMetadata } from "./supertag-metadata";
+import type { NodeDump } from "../types/tana-dump";
 
 export interface IndexResult {
   nodesIndexed: number;
@@ -40,6 +44,9 @@ export interface IndexResult {
   referencesIndexed: number;
   tagApplicationsIndexed: number;
   fieldNamesIndexed: number;
+  fieldValuesIndexed: number;
+  supertagFieldsExtracted: number;
+  supertagParentsExtracted: number;
   durationMs: number;
   nodesAdded?: number;
   nodesDeleted?: number;
@@ -185,6 +192,12 @@ export class TanaIndexer {
     `);
 
     this.sqlite.run(`CREATE INDEX IF NOT EXISTS idx_node_checksums_last_seen ON node_checksums(last_seen)`);
+
+    // Create field values schema (T-3.1: migrate during initializeSchema)
+    migrateFieldValuesSchema(this.sqlite);
+
+    // Create supertag metadata schema (T-2.4: migrate during initializeSchema)
+    migrateSupertagMetadataSchema(this.sqlite);
   }
 
   /**
@@ -208,18 +221,12 @@ export class TanaIndexer {
   }
 
   /**
-   * Check if vec_embeddings virtual table exists (requires sqlite-vec to be loaded)
+   * Check if vec_embeddings virtual table exists
+   * @deprecated sqlite-vec is no longer used - embeddings now use resona/LanceDB
    */
   private hasVecEmbeddingsTable(): boolean {
-    try {
-      const result = this.sqlite
-        .query("SELECT name FROM sqlite_master WHERE type='table' AND name='vec_embeddings'")
-        .get() as { name: string } | null;
-      return result !== null;
-    } catch {
-      // If query fails, vec_embeddings doesn't exist or sqlite-vec not loaded
-      return false;
-    }
+    // sqlite-vec is no longer used - always return false
+    return false;
   }
 
   /**
@@ -399,6 +406,20 @@ export class TanaIndexer {
         fieldNamesCount++;
       }
 
+      // T-3.2 & T-3.3: Clear and extract field values (pass parentMap for O(1) lookup)
+      clearFieldValues(this.sqlite);
+      const fieldValues = extractFieldValuesFromNodes(graph.nodes as Map<string, NodeDump>, this.sqlite, { parentMap });
+      const getCreatedTimestamp = (parentId: string): number | null => {
+        const parentNode = graph.nodes.get(parentId);
+        return parentNode?.props?.created ?? null;
+      };
+      insertFieldValues(this.sqlite, fieldValues, getCreatedTimestamp);
+      const fieldValuesCount = fieldValues.length;
+
+      // T-2.4: Clear and extract supertag metadata (fields and inheritance)
+      clearSupertagMetadata(this.sqlite);
+      const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+
       // Update sync metadata
       this.sqlite.run(
         "INSERT OR REPLACE INTO sync_metadata (id, last_export_file, last_sync_timestamp, total_nodes) VALUES (1, ?, ?, ?)",
@@ -419,6 +440,9 @@ export class TanaIndexer {
         referencesIndexed: graph.inlineRefs.length,
         tagApplicationsIndexed: graph.tagApplications.length,
         fieldNamesIndexed: fieldNamesCount,
+        fieldValuesIndexed: fieldValuesCount,
+        supertagFieldsExtracted: supertagMetadataResult.fieldsExtracted,
+        supertagParentsExtracted: supertagMetadataResult.parentsExtracted,
         durationMs,
       };
     } catch (error) {
@@ -670,6 +694,20 @@ export class TanaIndexer {
         fieldNamesCount++;
       }
 
+      // STEP 5.5: T-3.2 & T-3.3 - Clear and rebuild field_values
+      clearFieldValues(this.sqlite);
+      const fieldValues = extractFieldValuesFromNodes(graph.nodes as Map<string, NodeDump>, this.sqlite, { parentMap });
+      const getCreatedTimestamp = (parentId: string): number | null => {
+        const parentNode = graph.nodes.get(parentId);
+        return parentNode?.props?.created ?? null;
+      };
+      insertFieldValues(this.sqlite, fieldValues, getCreatedTimestamp);
+      const fieldValuesCount = fieldValues.length;
+
+      // STEP 5.6: T-2.4 - Clear and rebuild supertag metadata
+      clearSupertagMetadata(this.sqlite);
+      const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+
       // STEP 6: Update sync metadata
       this.sqlite.run(
         "INSERT OR REPLACE INTO sync_metadata (id, last_export_file, last_sync_timestamp, total_nodes) VALUES (1, ?, ?, ?)",
@@ -691,6 +729,9 @@ export class TanaIndexer {
         referencesIndexed: graph.inlineRefs.length,
         tagApplicationsIndexed: graph.tagApplications.length,
         fieldNamesIndexed: fieldNamesCount,
+        fieldValuesIndexed: fieldValuesCount,
+        supertagFieldsExtracted: supertagMetadataResult.fieldsExtracted,
+        supertagParentsExtracted: supertagMetadataResult.parentsExtracted,
         durationMs,
       };
     } catch (error) {

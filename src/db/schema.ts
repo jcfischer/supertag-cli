@@ -101,9 +101,95 @@ export const fieldNames = sqliteTable(
   })
 );
 
+/**
+ * Field Values table - Stores extracted text-based field values
+ * Links field values to their parent nodes and field definitions
+ */
+export const fieldValues = sqliteTable(
+  "field_values",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tupleId: text("tuple_id").notNull(), // The tuple node containing this field
+    parentId: text("parent_id").notNull(), // Parent node the field belongs to
+    fieldDefId: text("field_def_id").notNull(), // Field definition ID (_sourceId)
+    fieldName: text("field_name").notNull(), // Human-readable field name
+    valueNodeId: text("value_node_id").notNull(), // Node containing value text
+    valueText: text("value_text").notNull(), // Actual text content
+    valueOrder: integer("value_order").default(0), // Order for multi-value fields
+    created: integer("created"), // Timestamp from parent node
+  },
+  (table) => ({
+    parentIdx: index("idx_field_values_parent").on(table.parentId),
+    fieldNameIdx: index("idx_field_values_field_name").on(table.fieldName),
+    fieldDefIdx: index("idx_field_values_field_def").on(table.fieldDefId),
+    createdIdx: index("idx_field_values_created").on(table.created),
+  })
+);
+
+/**
+ * Field Exclusions table - Fields to skip during indexing
+ * Used to filter out system fields that shouldn't be indexed
+ */
+export const fieldExclusions = sqliteTable("field_exclusions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  fieldName: text("field_name").notNull().unique(),
+  reason: text("reason"),
+});
+
+/**
+ * Supertag Fields table - Field definitions for each supertag
+ * Extracted from tagDef tuple children during indexing
+ */
+export const supertagFields = sqliteTable(
+  "supertag_fields",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tagId: text("tag_id").notNull(), // tagDef node ID
+    tagName: text("tag_name").notNull(), // Human-readable tag name
+    fieldName: text("field_name").notNull(), // Field label (from tuple's first child)
+    fieldLabelId: text("field_label_id").notNull(), // Node ID of the field label
+    fieldOrder: integer("field_order").default(0), // Position in tagDef children
+  },
+  (table) => ({
+    tagIdx: index("idx_supertag_fields_tag").on(table.tagId),
+    nameIdx: index("idx_supertag_fields_name").on(table.tagName),
+    // Unique constraint: tag_id + field_name
+    uniqueTagField: index("idx_supertag_fields_unique").on(
+      table.tagId,
+      table.fieldName
+    ),
+  })
+);
+
+/**
+ * Supertag Parents table - Direct inheritance relationships
+ * Extracted from metaNode SYS_A13 tuples during indexing
+ */
+export const supertagParents = sqliteTable(
+  "supertag_parents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    childTagId: text("child_tag_id").notNull(), // Child tagDef node ID
+    parentTagId: text("parent_tag_id").notNull(), // Parent tagDef node ID
+  },
+  (table) => ({
+    childIdx: index("idx_supertag_parents_child").on(table.childTagId),
+    parentIdx: index("idx_supertag_parents_parent").on(table.parentTagId),
+    // Unique constraint: child_tag_id + parent_tag_id
+    uniqueRelation: index("idx_supertag_parents_unique").on(
+      table.childTagId,
+      table.parentTagId
+    ),
+  })
+);
+
 // Export type inference for use in queries
 export type Node = typeof nodes.$inferSelect;
 export type Supertag = typeof supertags.$inferSelect;
 export type Field = typeof fields.$inferSelect;
 export type Reference = typeof references.$inferSelect;
 export type FieldName = typeof fieldNames.$inferSelect;
+export type FieldValue = typeof fieldValues.$inferSelect;
+export type FieldExclusion = typeof fieldExclusions.$inferSelect;
+export type SupertagFieldRow = typeof supertagFields.$inferSelect;
+export type SupertagParentRow = typeof supertagParents.$inferSelect;

@@ -91,6 +91,26 @@ Based on Tana developer insights from Odin Urdland:
 - `src/types/tana-dump.ts` - Zod schema with `_flags` and `.passthrough()` to preserve props
 - `tests/entity-detection.test.ts` - Comprehensive entity detection tests
 
+### Field/Tuple Structures
+
+Tana stores field values in tuple nodes. There are **two patterns**:
+
+1. **Standard Field Tuples** (extracted ✅):
+   - Parent → Tuple → [Label, Value1, Value2, ...]
+   - May or may not have `_sourceId`
+   - Up to 50 children
+
+2. **Mega-Tuple Flat Structure** (not extracted ❌):
+   - Single tuple with 50-1000+ children
+   - Field labels: `"  - FieldName:"` (indentation in name)
+   - Values: `"    - Value text"` (more indentation)
+   - Labels and values are siblings, not parent-child
+   - Used by daily briefings/AI features
+
+**Key insight**: The `_sourceId` field is often missing on valid tuples. The `isFieldTuple()` function handles both cases.
+
+**See**: `docs/TANA-FIELD-STRUCTURES.md` for full technical documentation.
+
 ### Content Filtering for Embeddings
 When generating embeddings, content is filtered to focus on meaningful nodes:
 

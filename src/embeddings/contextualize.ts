@@ -118,3 +118,57 @@ function formatTagName(tag: string): string {
   // Capitalize first letter
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
+
+/**
+ * Options for contextualizing nodes with fields
+ */
+export interface ContextualizeWithFieldsOptions {
+  /** Include field values in context text */
+  includeFields?: boolean;
+}
+
+/**
+ * Contextualize nodes with optional field value enrichment
+ *
+ * This function combines ancestor context with field values to create
+ * rich embedding text. When includeFields is true, field values are
+ * appended in the format: [FieldName]: value
+ *
+ * @param db - Database connection
+ * @param nodes - Array of nodes with id and name
+ * @param options - Options including whether to include fields
+ * @returns Array of contextualized nodes with field values
+ */
+export function contextualizeNodesWithFields(
+  db: Database,
+  nodes: Array<{ id: string; name: string }>,
+  options: ContextualizeWithFieldsOptions = {}
+): ContextualizedNode[] {
+  const { includeFields = false } = options;
+
+  // First, get basic contextualized nodes
+  const contextualizedNodes = batchContextualizeNodes(db, nodes);
+
+  // If not including fields, return as-is
+  if (!includeFields) {
+    return contextualizedNodes;
+  }
+
+  // Import and use context-builder for field enrichment
+  const { batchEnrichWithFields } = require("./context-builder");
+
+  // Prepare nodes for field enrichment
+  const nodesForEnrichment = contextualizedNodes.map((node) => ({
+    nodeId: node.nodeId,
+    contextText: node.contextText,
+  }));
+
+  // Enrich with field values
+  const enrichedNodes = batchEnrichWithFields(db, nodesForEnrichment);
+
+  // Merge back into ContextualizedNode structure
+  return contextualizedNodes.map((node, index) => ({
+    ...node,
+    contextText: enrichedNodes[index].contextText,
+  }));
+}

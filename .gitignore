@@ -18,14 +18,14 @@ logs/
 *.tmp
 *.temp
 
-# Compiled binaries
-tana
-tana-daily
-supertag
-supertag-*
-export/tana-export
-export/supertag-export
-export/supertag-export-*
+# Compiled binaries (root level only)
+/tana
+/tana-daily
+/supertag
+/supertag-*
+/export/tana-export
+/export/supertag-export
+/export/supertag-export-*
 
 # Build output
 dist/
@@ -35,9 +35,9 @@ dist/
 *.so
 *.exe
 
-# MCP server binaries
-supertag-mcp
-supertag-mcp-*
+# MCP server binaries (root level only)
+/supertag-mcp
+/supertag-mcp-*
 
 # macOS
 .DS_Store

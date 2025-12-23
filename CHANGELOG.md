@@ -5,6 +5,16 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Supertag Parent Extraction** - Fixed extraction of parent supertag relationships
+  - SYS_A13 inheritance marker is now correctly detected as raw string (not node ID)
+  - Parent relationships now properly stored in `supertag_parents` table
+  - `supertag tags inheritance <tag>` now shows complete inheritance tree
+  - Tag names resolved from nodes table for tagDefs without fields
+
 ## [1.0.2] - 2025-12-23
 
 ### Added

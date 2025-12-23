@@ -152,6 +152,51 @@ export const syncSchema = z.object({
 });
 export type SyncInput = z.infer<typeof syncSchema>;
 
+// tana_field_values
+export const fieldValuesSchema = z.object({
+  mode: z
+    .enum(['list', 'query', 'search'])
+    .describe('Operation mode: "list" shows available fields, "query" gets values for a field, "search" does FTS'),
+  fieldName: z
+    .string()
+    .optional()
+    .describe('Field name to query (required for "query" mode, optional filter for "search" mode)'),
+  query: z
+    .string()
+    .optional()
+    .describe('Search query for FTS (required for "search" mode)'),
+  workspace: workspaceSchema,
+  limit: limitSchema,
+  offset: z
+    .number()
+    .min(0)
+    .default(0)
+    .describe('Offset for pagination'),
+  ...dateRangeSchema,
+});
+export type FieldValuesInput = z.infer<typeof fieldValuesSchema>;
+
+// tana_supertag_info
+export const supertagInfoSchema = z.object({
+  tagname: z.string().min(1).describe('Supertag name to query (e.g., "todo", "meeting", "contact")'),
+  mode: z
+    .enum(['fields', 'inheritance', 'full'])
+    .default('fields')
+    .describe('Query mode: "fields" for field definitions, "inheritance" for parent relationships, "full" for both'),
+  includeInherited: z
+    .boolean()
+    .default(false)
+    .describe('Include inherited fields from parent tags (only applies to "fields" and "full" modes)'),
+  includeAncestors: z
+    .boolean()
+    .default(false)
+    .describe('Include full ancestor chain with depth info (only applies to "inheritance" mode)'),
+  workspace: workspaceSchema,
+  // Internal: for testing only, not exposed in MCP schema
+  _dbPath: z.string().optional(),
+});
+export type SupertagInfoInput = z.infer<typeof supertagInfoSchema>;
+
 // tana_semantic_search
 export const semanticSearchSchema = z.object({
   query: z.string().min(1).describe('Natural language search query for semantic similarity matching'),

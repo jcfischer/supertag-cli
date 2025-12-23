@@ -48,6 +48,7 @@ import type { StandardOptions, SearchType } from "../types";
 interface SearchOptions extends StandardOptions {
   semantic?: boolean;
   tag?: string;
+  field?: string;
   ancestor?: boolean;
   raw?: boolean;
   createdAfter?: string;
@@ -67,6 +68,7 @@ export function createSearchCommand(): Command {
     .argument("[query]", "Search query (required for FTS/semantic)")
     .option("--semantic", "Use semantic (vector) search instead of FTS")
     .option("-t, --tag <tagname>", "Find nodes with a specific supertag")
+    .option("-f, --field <filter>", "Filter by field value (e.g., 'Location=Zurich' or 'Location~Zur')")
     .option("-a, --ancestor", "Show nearest ancestor with supertag (default: true)")
     .option("--no-ancestor", "Disable ancestor resolution")
     .option("--raw", "Return raw results without enrichment")
@@ -477,6 +479,86 @@ async function handleSemanticSearch(
 }
 
 /**
+ * Parse field filter string (e.g., "Location=Zurich" or "Location~Zur")
+ * Returns { fieldName, operator, value } or null if invalid
+ */
+function parseFieldFilter(filter: string): { fieldName: string; operator: "=" | "~"; value: string } | null {
+  // Check for exact match (=)
+  const exactMatch = filter.match(/^([^=~]+)=(.+)$/);
+  if (exactMatch) {
+    return { fieldName: exactMatch[1], operator: "=", value: exactMatch[2] };
+  }
+
+  // Check for partial match (~)
+  const partialMatch = filter.match(/^([^=~]+)~(.+)$/);
+  if (partialMatch) {
+    return { fieldName: partialMatch[1], operator: "~", value: partialMatch[2] };
+  }
+
+  return null;
+}
+
+/**
+ * Query nodes with tag and field value filter
+ */
+async function queryNodesWithFieldFilter(
+  db: Database,
+  tagname: string,
+  fieldFilter: { fieldName: string; operator: "=" | "~"; value: string },
+  options: { limit?: number; createdAfter?: number; createdBefore?: number }
+): Promise<Array<{ id: string; name: string; created?: number }>> {
+  const { fieldName, operator, value } = fieldFilter;
+  const { limit = 20, createdAfter, createdBefore } = options;
+
+  // Build the SQL query to join nodes, tag_applications, and field_values
+  let sql = `
+    SELECT DISTINCT n.id, n.name, n.created
+    FROM nodes n
+    JOIN tag_applications ta ON n.id = ta.node_id
+    JOIN field_values fv ON n.id = fv.node_id
+    WHERE ta.tag_name = ?
+      AND fv.field_name = ?
+  `;
+
+  const params: Array<string | number> = [tagname, fieldName];
+
+  // Add value filter based on operator
+  if (operator === "=") {
+    sql += ` AND fv.field_value = ?`;
+    params.push(value);
+  } else {
+    // Partial match with LIKE
+    sql += ` AND fv.field_value LIKE ?`;
+    params.push(`%${value}%`);
+  }
+
+  // Add date filters if provided
+  if (createdAfter) {
+    sql += ` AND n.created >= ?`;
+    params.push(createdAfter);
+  }
+  if (createdBefore) {
+    sql += ` AND n.created <= ?`;
+    params.push(createdBefore);
+  }
+
+  sql += ` ORDER BY n.created DESC LIMIT ?`;
+  params.push(limit);
+
+  const results = db.query(sql).all(...params) as Array<{
+    id: string;
+    name: string;
+    created: number | null;
+  }>;
+
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    created: r.created ?? undefined,
+  }));
+}
+
+/**
  * Handle tag-based search
  */
 async function handleTaggedSearch(
@@ -489,15 +571,34 @@ async function handleTaggedSearch(
   const depth = options.depth ? parseInt(String(options.depth)) : 0;
   const dateRange = parseDateRangeOptions(options);
 
-  try {
-    let results = await engine.findNodesByTag(tagname, {
-      limit,
-      orderBy: "created",
-      ...dateRange,
-    });
+  // Parse field filter if provided
+  const fieldFilter = options.field ? parseFieldFilter(options.field) : null;
+  if (options.field && !fieldFilter) {
+    console.error(`❌ Invalid field filter format: ${options.field}`);
+    console.error("   Use: 'FieldName=value' for exact match or 'FieldName~value' for partial match");
+    process.exit(1);
+  }
 
-    // Try case variations if no results
-    if (results.length === 0) {
+  try {
+    // If we have a field filter, we need to query with field values
+    let results: Array<{ id: string; name: string; created?: number }>;
+
+    if (fieldFilter) {
+      // Query nodes with field value filter
+      results = await queryNodesWithFieldFilter(engine.rawDb, tagname, fieldFilter, {
+        limit,
+        ...dateRange,
+      });
+    } else {
+      results = await engine.findNodesByTag(tagname, {
+        limit,
+        orderBy: "created",
+        ...dateRange,
+      });
+    }
+
+    // Try case variations if no results (only when no field filter)
+    if (results.length === 0 && !fieldFilter) {
       const alternates = [
         tagname.toLowerCase(),
         tagname.charAt(0).toUpperCase() + tagname.slice(1).toLowerCase(),

@@ -30,6 +30,7 @@ import { createSearchCommand } from './commands/search';
 import { createNodesCommand } from './commands/nodes';
 import { createTagsCommand } from './commands/tags';
 import { createStatsCommand } from './commands/stats';
+import { createFieldsCommand } from './commands/fields';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -147,6 +148,7 @@ program.addCommand(createSearchCommand());    // supertag search <query> [--sema
 program.addCommand(createNodesCommand());     // supertag nodes show|refs|recent
 program.addCommand(createTagsCommand());      // supertag tags list|top|show
 program.addCommand(createStatsCommand());     // supertag stats [--db] [--embed] [--filter]
+program.addCommand(createFieldsCommand());    // supertag fields list|values|search
 
 /**
  * Help text with examples
@@ -180,6 +182,11 @@ program.on('--help', () => {
   console.log('    supertag stats --db            Database stats only');
   console.log('    supertag stats --embed         Embedding stats only');
   console.log('    supertag stats --filter        Filter breakdown');
+  console.log('');
+  console.log('  FIELDS:');
+  console.log('    supertag fields list           List all field names');
+  console.log('    supertag fields values <name>  Get values for a field');
+  console.log('    supertag fields search <query> Search in field values');
   console.log('');
   console.log('  EXPORT (Separate Tool):');
   console.log('    supertag-export login          First-time login setup');

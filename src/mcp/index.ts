@@ -26,6 +26,8 @@ import { showNode } from './tools/node.js';
 import { create } from './tools/create.js';
 import { sync } from './tools/sync.js';
 import { semanticSearch } from './tools/semantic-search.js';
+import { fieldValues } from './tools/field-values.js';
+import { supertagInfo } from './tools/supertag-info.js';
 import { VERSION } from '../version.js';
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
@@ -130,6 +132,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Semantic similarity search on Tana nodes using vector embeddings. Finds conceptually related content even without exact keyword matches. Returns nodes ranked by similarity score (0-1). By default, includes ancestor context: when a match is a nested fragment, shows the containing project/meeting/etc with supertag. Use includeContents=true for full node details (fields, children, tags), includeAncestor=false to disable ancestor resolution. Requires embeddings to be generated first (supertag embed generate).',
         inputSchema: schemas.zodToJsonSchema(schemas.semanticSearchSchema),
       },
+      {
+        name: 'tana_field_values',
+        description:
+          'Query text-based field values from Tana nodes. Use mode="list" to discover available fields, mode="query" to get values for a specific field (e.g., "Gestern war gut weil"), or mode="search" for full-text search across all field values. Useful for querying structured data like journal entries, project notes, or any field-based content.',
+        inputSchema: schemas.zodToJsonSchema(schemas.fieldValuesSchema),
+      },
+      {
+        name: 'tana_supertag_info',
+        description:
+          'Query supertag inheritance and fields. Use mode="fields" to get field definitions (with includeInherited=true for inherited fields), mode="inheritance" to get parent relationships (with includeAncestors=true for full ancestry chain), or mode="full" for both fields and inheritance. Useful for understanding supertag structure and validating field names.',
+        inputSchema: schemas.zodToJsonSchema(schemas.supertagInfoSchema),
+      },
     ],
   };
 });
@@ -181,6 +195,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_semantic_search': {
         const validated = schemas.semanticSearchSchema.parse(args);
         result = await semanticSearch(validated);
+        break;
+      }
+      case 'tana_field_values': {
+        const validated = schemas.fieldValuesSchema.parse(args);
+        result = await fieldValues(validated);
+        break;
+      }
+      case 'tana_supertag_info': {
+        const validated = schemas.supertagInfoSchema.parse(args);
+        result = await supertagInfo(validated);
         break;
       }
       default:

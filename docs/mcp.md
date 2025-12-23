@@ -17,6 +17,7 @@ The `supertag-mcp` binary runs locally on your machine as a subprocess - no serv
 | `tana_tagged` | Find nodes by supertag | "Find all my todos" |
 | `tana_stats` | Database statistics | "How many nodes in my Tana?" |
 | `tana_supertags` | List all supertags | "What supertags do I have?" |
+| `tana_supertag_info` | Query supertag inheritance and fields | "What fields does the meeting tag have?" |
 | `tana_node` | Get node contents with depth | "Show node abc123 with children" |
 | `tana_create` | Create new nodes with references | "Create a todo linked to node abc123" |
 | `tana_sync` | Trigger reindex or status | "Reindex my Tana database" |
