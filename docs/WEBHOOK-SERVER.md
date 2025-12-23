@@ -397,16 +397,54 @@ This format can be directly copied and pasted into Tana, where it will be automa
 
 ### Using Webhooks in Tana
 
-1. Start the webhook server (daemon mode recommended)
-2. In Tana, create a command node that calls the webhook
-3. Use the response as Tana Paste input
+Tana's **Make API request** command allows you to call the webhook server directly from within Tana. The results are automatically inserted as structured nodes.
 
-**Example Tana Command:**
-```
-/webhook http://localhost:3100/search?query=template
-```
+#### Setting Up a Semantic Search Command
 
-The response will be automatically inserted as structured Tana nodes.
+1. Start the webhook server: `supertag server start --daemon`
+2. In Tana, create a new **Command** node
+3. Configure the **Make API request** action with these settings:
+
+![Tana Command Configuration](images/tana-command-semantic-search.png)
+
+| Setting | Value |
+|---------|-------|
+| **URL** | `http://localhost:3100/semantic-search` |
+| **API method** | `POST` |
+| **Payload** | `{"query": "${sys:context}", "limit": 10, "includeContents": true, "includeAncestor": true, "format": "tana", "workspace": "books"}` |
+| **Headers** | `Content-Type: application/json` |
+| **Parse result** | `Tana Paste` |
+| **Insert output strategy** | `as child` |
+| **Avoid using proxy** | `checked` |
+
+#### Payload Parameters Explained
+
+- **`${sys:context}`** - Tana variable that passes the selected text or node content as the search query
+- **`limit`** - Maximum number of results to return
+- **`includeContents`** - Include full node contents (fields, children) in results
+- **`includeAncestor`** - Include parent context for nested matches
+- **`format`** - Use `"tana"` for Tana Paste format (required for direct insertion)
+- **`workspace`** - Target workspace (use `"main"` for default, or your workspace alias)
+
+#### Using the Command
+
+1. Select text in Tana or position cursor in a node
+2. Trigger the command (via command palette or keyboard shortcut)
+3. Results appear as child nodes with similarity scores, node IDs, and tags
+
+#### Other Endpoint Examples
+
+**Full-text search command:**
+```json
+{"query": "${sys:context}", "limit": 10}
+```
+URL: `http://localhost:3100/search`
+
+**Find tagged nodes:**
+```json
+{"tag": "project", "limit": 20}
+```
+URL: `http://localhost:3100/nodes`
 
 ## Architecture
 
