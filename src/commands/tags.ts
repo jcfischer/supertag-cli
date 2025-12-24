@@ -37,7 +37,7 @@ import { resolveOutputOptions } from "../utils/output-options";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
 import { VisualizationService } from "../visualization/service";
 import { render, supportedFormats, isFormatSupported } from "../visualization/renderers";
-import type { VisualizationFormat, MermaidRenderOptions, DOTRenderOptions } from "../visualization/types";
+import type { VisualizationFormat, MermaidRenderOptions, DOTRenderOptions, HTMLRenderOptions } from "../visualization/types";
 import { writeFileSync } from "fs";
 
 interface TagsMetadataOptions extends StandardOptions {
@@ -57,7 +57,9 @@ interface VisualizeOptions extends StandardOptions {
   open?: boolean;
   direction?: string;
   showFields?: boolean;
+  showInherited?: boolean;
   colors?: boolean;
+  theme?: string;
 }
 
 /**
@@ -479,7 +481,7 @@ export function createTagsCommand(): Command {
   const visualizeCmd = tags
     .command("visualize")
     .description("Visualize supertag inheritance graph")
-    .option("--format <format>", "Output format (mermaid, dot, json)", "mermaid")
+    .option("--format <format>", "Output format (mermaid, dot, json, html)", "mermaid")
     .option("--root <tag>", "Root tag to start from (show subtree only)")
     .option("--depth <n>", "Maximum depth to traverse", parseInt)
     .option("--min-usage <n>", "Minimum usage count to include", parseInt)
@@ -487,8 +489,10 @@ export function createTagsCommand(): Command {
     .option("--output <file>", "Write output to file instead of stdout")
     .option("--open", "Open output file after writing (requires --output)")
     .option("--direction <dir>", "Graph direction: BT, TB, LR, RL (default: BT)")
-    .option("--show-fields", "Show field counts in node labels")
-    .option("--colors", "Use tag colors in output (DOT format)");
+    .option("--show-fields", "Show field names and types in nodes (all formats)")
+    .option("--show-inherited", "Include inherited fields (all formats, requires --show-fields)")
+    .option("--colors", "Use tag colors in output (DOT and HTML format)")
+    .option("--theme <theme>", "Color theme: light, dark (HTML format)", "light");
 
   addStandardOptions(visualizeCmd, { defaultLimit: "1000" });
 
@@ -511,37 +515,61 @@ export function createTagsCommand(): Command {
 
       // Get visualization data
       const vizService = new VisualizationService(db);
-      let data = vizService.getData({
+      const vizOptions = {
         minUsageCount: options.minUsage,
         includeOrphans: options.orphans,
-      });
+      };
 
-      // Filter to subtree if --root specified
-      if (options.root) {
-        const subtree = vizService.getSubtree(options.root, options.depth);
-        if (subtree) {
+      // Use getDataWithFields when --show-fields is used (all formats)
+      let data;
+      if (options.showFields) {
+        if (options.root) {
+          const subtree = vizService.getSubtreeWithFields(options.root, options.depth);
+          if (!subtree) {
+            console.error(`❌ Root tag not found: ${options.root}`);
+            process.exit(1);
+          }
           data = subtree;
         } else {
-          console.error(`❌ Root tag not found: ${options.root}`);
-          process.exit(1);
+          data = vizService.getDataWithFields(vizOptions);
+        }
+      } else {
+        data = vizService.getData(vizOptions);
+        // Filter to subtree if --root specified
+        if (options.root) {
+          const subtree = vizService.getSubtree(options.root, options.depth);
+          if (!subtree) {
+            console.error(`❌ Root tag not found: ${options.root}`);
+            process.exit(1);
+          }
+          data = subtree;
         }
       }
 
       // Build format-specific render options
       const direction = options.direction || "BT";
-      let renderOptions: MermaidRenderOptions | DOTRenderOptions;
+      let renderOptions: MermaidRenderOptions | DOTRenderOptions | HTMLRenderOptions;
 
       if (format === "mermaid") {
         renderOptions = {
           direction: direction as "BT" | "TB" | "LR" | "RL",
-          showFieldCount: options.showFields || false,
+          showFields: options.showFields || false,
+          showInheritedFields: options.showInherited || false,
         } as MermaidRenderOptions;
       } else if (format === "dot") {
         renderOptions = {
           rankdir: direction as "BT" | "TB" | "LR" | "RL",
-          showFieldCount: options.showFields || false,
+          showFields: options.showFields || false,
+          showInheritedFields: options.showInherited || false,
           useColors: options.colors || false,
         } as DOTRenderOptions;
+      } else if (format === "html") {
+        renderOptions = {
+          direction: direction as "TB" | "BT" | "LR" | "RL",
+          showFields: options.showFields || false,
+          showInheritedFields: options.showInherited || false,
+          theme: (options.theme === "dark" ? "dark" : "light") as "light" | "dark",
+        } as HTMLRenderOptions;
       } else {
         renderOptions = {};
       }

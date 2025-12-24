@@ -7,16 +7,19 @@
 export { renderMermaid } from "./mermaid";
 export { renderDOT } from "./dot";
 export { renderJSON } from "./json";
+export { renderHTML } from "./html";
 
 import { renderMermaid } from "./mermaid";
 import { renderDOT } from "./dot";
 import { renderJSON } from "./json";
+import { renderHTML } from "./html";
 import type {
   VisualizationData,
   VisualizationFormat,
   MermaidRenderOptions,
   DOTRenderOptions,
   JSONRenderOptions,
+  HTMLRenderOptions,
 } from "../types";
 
 /**
@@ -31,7 +34,7 @@ export const renderers: Record<VisualizationFormat, RenderFunction | null> = {
   mermaid: renderMermaid as RenderFunction,
   dot: renderDOT as RenderFunction,
   json: renderJSON as RenderFunction,
-  html: null,  // Phase 2
+  html: renderHTML as RenderFunction,
   "3d": null,  // Phase 3
   svg: null,   // Via DOT + graphviz
   pdf: null,   // Via DOT + graphviz
@@ -40,7 +43,7 @@ export const renderers: Record<VisualizationFormat, RenderFunction | null> = {
 /**
  * Supported formats (those with implemented renderers)
  */
-export const supportedFormats: VisualizationFormat[] = ["mermaid", "dot", "json"];
+export const supportedFormats: VisualizationFormat[] = ["mermaid", "dot", "json", "html"];
 
 /**
  * Get renderer for a format.
@@ -69,7 +72,7 @@ export function isFormatSupported(format: string): format is VisualizationFormat
 export function render(
   format: VisualizationFormat,
   data: VisualizationData,
-  options?: MermaidRenderOptions | DOTRenderOptions | JSONRenderOptions
+  options?: MermaidRenderOptions | DOTRenderOptions | JSONRenderOptions | HTMLRenderOptions
 ): string {
   const renderer = getRenderer(format);
 

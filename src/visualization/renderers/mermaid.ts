@@ -27,6 +27,24 @@ function escapeLabel(label: string): string {
 }
 
 /**
+ * Format field for display in Mermaid node
+ */
+function formatField(field: { name: string; dataType?: string; inherited: boolean; originTag?: string }, showInherited: boolean): string | null {
+  if (field.inherited && !showInherited) {
+    return null;
+  }
+
+  let text = escapeLabel(field.name);
+  if (field.dataType) {
+    text += `: ${escapeLabel(field.dataType)}`;
+  }
+  if (field.inherited && field.originTag) {
+    text += ` (${escapeLabel(field.originTag)})`;
+  }
+  return text;
+}
+
+/**
  * Render visualization data as Mermaid flowchart.
  *
  * @param data - Visualization data to render
@@ -39,7 +57,8 @@ export function renderMermaid(
 ): string {
   const {
     direction = "BT",
-    showFieldCount = false,
+    showFields = false,
+    showInheritedFields = false,
     showUsageCount = false,
   } = options;
 
@@ -59,17 +78,23 @@ export function renderMermaid(
     const id = sanitizeId(node.id);
     let label = `#${escapeLabel(node.name)}`;
 
-    // Add optional info
-    const extras: string[] = [];
-    if (showFieldCount) {
-      extras.push(`${node.fieldCount} fields`);
-    }
-    if (showUsageCount && node.usageCount > 0) {
-      extras.push(`${node.usageCount} uses`);
+    // Add field details if available and requested
+    if (showFields && node.fields && node.fields.length > 0) {
+      const fieldLines = node.fields
+        .map(f => formatField(f, showInheritedFields))
+        .filter((f): f is string => f !== null);
+
+      if (fieldLines.length > 0) {
+        label += `<br/>---<br/>${fieldLines.join("<br/>")}`;
+      }
+    } else if (showFields) {
+      // Fallback to field count if no field details available
+      label += `<br/>(${node.fieldCount} fields)`;
     }
 
-    if (extras.length > 0) {
-      label += `<br/>${extras.join(", ")}`;
+    // Add usage count if requested
+    if (showUsageCount && node.usageCount > 0) {
+      label += `<br/>${node.usageCount} uses`;
     }
 
     lines.push(`    ${id}["${label}"]`);

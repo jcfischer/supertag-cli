@@ -25,6 +25,24 @@ function escapeLabel(label: string): string {
 }
 
 /**
+ * Format field for display in DOT node
+ */
+function formatField(field: { name: string; dataType?: string; inherited: boolean; originTag?: string }, showInherited: boolean): string | null {
+  if (field.inherited && !showInherited) {
+    return null;
+  }
+
+  let text = escapeLabel(field.name);
+  if (field.dataType) {
+    text += `: ${escapeLabel(field.dataType)}`;
+  }
+  if (field.inherited && field.originTag) {
+    text += ` (${escapeLabel(field.originTag)})`;
+  }
+  return text;
+}
+
+/**
  * Render visualization data as Graphviz DOT.
  *
  * @param data - Visualization data to render
@@ -37,7 +55,8 @@ export function renderDOT(
 ): string {
   const {
     rankdir = "BT",
-    showFieldCount = false,
+    showFields = false,
+    showInheritedFields = false,
     useColors = false,
   } = options;
 
@@ -63,7 +82,17 @@ export function renderDOT(
     const id = sanitizeId(node.id);
     let label = `#${escapeLabel(node.name)}`;
 
-    if (showFieldCount) {
+    // Add field details if available and requested
+    if (showFields && node.fields && node.fields.length > 0) {
+      const fieldLines = node.fields
+        .map(f => formatField(f, showInheritedFields))
+        .filter((f): f is string => f !== null);
+
+      if (fieldLines.length > 0) {
+        label += `\\n---\\n${fieldLines.join("\\n")}`;
+      }
+    } else if (showFields) {
+      // Fallback to field count if no field details available
       label += `\\n(${node.fieldCount} fields)`;
     }
 

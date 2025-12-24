@@ -64,11 +64,24 @@ describe("tags visualize command", () => {
       )
     `);
 
-    // Insert test data
+    db.run(`
+      CREATE TABLE nodes (
+        id TEXT PRIMARY KEY,
+        name TEXT
+      )
+    `);
+
+    // Insert test data - include nodes for metadata service fallback
     db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, color) VALUES
       ('tag_entity', 'entity', '#E8E8E8'),
       ('tag_person', 'person', '#B5D8FF'),
       ('tag_meeting', 'meeting', '#FFD700')
+    `);
+
+    db.run(`INSERT INTO nodes (id, name) VALUES
+      ('tag_entity', 'entity'),
+      ('tag_person', 'person'),
+      ('tag_meeting', 'meeting')
     `);
 
     db.run(`INSERT INTO supertag_parents (child_tag_id, parent_tag_id) VALUES
@@ -175,10 +188,12 @@ describe("tags visualize command", () => {
   });
 
   describe("display options", () => {
-    it("should support --show-fields to show field counts", async () => {
+    it("should support --show-fields to show field names", async () => {
       const result = await $`bun run src/index.ts tags visualize --show-fields --db-path ${testDbPath}`.text();
 
-      expect(result).toMatch(/person.*2 fields/);
+      // With --show-fields, should show actual field names (Email, Phone for person tag)
+      expect(result).toContain("Email");
+      expect(result).toContain("Phone");
     });
 
     it("should support --colors for dot format", async () => {

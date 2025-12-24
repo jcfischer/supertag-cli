@@ -28,11 +28,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mapping exported as `SYSTEM_FIELD_MARKERS` for extensibility
 
 - **Supertag Visualization** - New `tags visualize` command for inheritance graph visualization
-  - Three output formats: Mermaid (default), Graphviz DOT, and JSON
+  - Four output formats: Mermaid (default), Graphviz DOT, JSON, and **HTML (interactive)**
   - Filter options: `--root <tag>` for subtrees, `--orphans` to include isolated tags
-  - Display options: `--direction` (BT/TB/LR/RL), `--show-fields`, `--colors`
-  - Output to file with `--output <file>`
+  - Display options: `--direction` (BT/TB/LR/RL), `--show-fields`, `--show-inherited`, `--colors`, `--theme`
+  - Output to file with `--output <file>`, auto-open with `--open`
   - New documentation: `docs/visualization.md` with rendering instructions
+
+- **Interactive HTML Visualization** - Self-contained HTML files with UML-style class diagram nodes
+  - Pan & zoom navigation (mouse drag and scroll wheel)
+  - Click-to-highlight inheritance paths (ancestors and descendants)
+  - UML-style nodes showing tag name, fields (own and inherited), and usage count
+  - Light/dark theme support with `--theme` option
+  - Hierarchical layout with barycenter ordering to minimize edge crossings
+  - No external dependencies - works offline
+
+- **Field Details in All Formats** - `--show-fields` now shows actual field names in all visualization formats
+  - Previously only showed field counts in Mermaid/DOT; now shows field names and types
+  - `--show-inherited` displays inherited fields with their origin tag
+  - Consistent field display across Mermaid, DOT, JSON, and HTML formats
 
 ### Fixed
 

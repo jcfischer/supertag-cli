@@ -12,7 +12,9 @@ import type {
   VisualizationLink,
   VisualizationMetadata,
   VisualizationOptions,
+  VisualizationField,
 } from "./types";
+import { SupertagMetadataService } from "../services/supertag-metadata-service";
 
 interface TagRow {
   tag_id: string;
@@ -214,5 +216,56 @@ export class VisualizationService {
     `).get() as { max_depth: number | null };
 
     return result?.max_depth ?? 0;
+  }
+
+  /**
+   * Get visualization data with detailed field information for each node.
+   * Used for UML-style diagrams that show fields.
+   */
+  getDataWithFields(options: VisualizationOptions = {}): VisualizationData {
+    const data = this.getData(options);
+    return this.enrichNodesWithFields(data);
+  }
+
+  /**
+   * Get subtree with detailed field information for each node.
+   * Returns null if root tag not found.
+   */
+  getSubtreeWithFields(
+    rootTagName: string,
+    maxDepth?: number
+  ): VisualizationData | null {
+    const data = this.getSubtree(rootTagName, maxDepth);
+    if (!data) return null;
+    return this.enrichNodesWithFields(data);
+  }
+
+  /**
+   * Enrich visualization nodes with field details.
+   * Transforms InheritedField from SupertagMetadataService to VisualizationField.
+   */
+  private enrichNodesWithFields(data: VisualizationData): VisualizationData {
+    const metadataService = new SupertagMetadataService(this.db);
+
+    const enrichedNodes = data.nodes.map((node) => {
+      const inheritedFields = metadataService.getAllFields(node.id);
+
+      const fields: VisualizationField[] = inheritedFields.map((f) => ({
+        name: f.fieldName,
+        dataType: f.inferredDataType,
+        inherited: f.depth > 0,
+        originTag: f.depth > 0 ? f.originTagName : undefined,
+      }));
+
+      return {
+        ...node,
+        fields,
+      };
+    });
+
+    return {
+      ...data,
+      nodes: enrichedNodes,
+    };
   }
 }

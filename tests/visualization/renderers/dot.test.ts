@@ -75,13 +75,53 @@ describe("renderDOT", () => {
     expect(result).toContain('fillcolor="#FFD700"');
   });
 
-  it("should show field counts when enabled", () => {
-    const result = renderDOT(sampleData, { showFieldCount: true });
+  it("should show field count fallback when no field details available", () => {
+    const result = renderDOT(sampleData, { showFields: true });
 
-    // Node labels should include field count
+    // Node labels should include field count (fallback since no fields array)
     expect(result).toMatch(/person.*3 fields/);
     expect(result).toMatch(/meeting.*4 fields/);
     expect(result).toMatch(/entity.*0 fields/);
+  });
+
+  it("should show actual field names when fields array is available", () => {
+    const dataWithFields = {
+      ...sampleData,
+      nodes: sampleData.nodes.map(n => n.id === "tag_person" ? {
+        ...n,
+        fields: [
+          { name: "Name", dataType: "text", inherited: false },
+          { name: "Email", dataType: "text", inherited: false },
+          { name: "Company", dataType: "reference", inherited: true, originTag: "entity" },
+        ]
+      } : n),
+    };
+
+    const result = renderDOT(dataWithFields, { showFields: true });
+
+    // Should show own fields (Name, Email) but not inherited (Company) by default
+    expect(result).toContain("Name: text");
+    expect(result).toContain("Email: text");
+    expect(result).not.toContain("Company");
+  });
+
+  it("should show inherited fields when showInheritedFields is true", () => {
+    const dataWithFields = {
+      ...sampleData,
+      nodes: sampleData.nodes.map(n => n.id === "tag_person" ? {
+        ...n,
+        fields: [
+          { name: "Name", dataType: "text", inherited: false },
+          { name: "Company", dataType: "reference", inherited: true, originTag: "entity" },
+        ]
+      } : n),
+    };
+
+    const result = renderDOT(dataWithFields, { showFields: true, showInheritedFields: true });
+
+    // Should show both own and inherited fields
+    expect(result).toContain("Name: text");
+    expect(result).toContain("Company: reference (entity)");
   });
 
   it("should handle empty graph", () => {

@@ -223,3 +223,204 @@ describe("VisualizationOptions", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("VisualizationField", () => {
+  // Import will be added once implemented
+  const { VisualizationFieldSchema } = require("../../src/visualization/types");
+
+  it("should validate an own field (not inherited)", () => {
+    const field = {
+      name: "Title",
+      dataType: "text",
+      inherited: false,
+    };
+
+    const result = VisualizationFieldSchema.safeParse(field);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.name).toBe("Title");
+      expect(result.data.inherited).toBe(false);
+      expect(result.data.originTag).toBeUndefined();
+    }
+  });
+
+  it("should validate an inherited field with origin tag", () => {
+    const field = {
+      name: "Name",
+      dataType: "text",
+      inherited: true,
+      originTag: "entity",
+    };
+
+    const result = VisualizationFieldSchema.safeParse(field);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.inherited).toBe(true);
+      expect(result.data.originTag).toBe("entity");
+    }
+  });
+
+  it("should validate a field without dataType", () => {
+    const field = {
+      name: "Notes",
+      inherited: false,
+    };
+
+    const result = VisualizationFieldSchema.safeParse(field);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.dataType).toBeUndefined();
+    }
+  });
+
+  it("should validate various data types", () => {
+    const dataTypes = ["text", "date", "reference", "url", "number", "checkbox"];
+
+    for (const dataType of dataTypes) {
+      const field = {
+        name: "TestField",
+        dataType,
+        inherited: false,
+      };
+
+      const result = VisualizationFieldSchema.safeParse(field);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("should reject field with empty name", () => {
+    const invalid = {
+      name: "",
+      inherited: false,
+    };
+
+    const result = VisualizationFieldSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject field missing inherited flag", () => {
+    const invalid = {
+      name: "Title",
+      dataType: "text",
+    };
+
+    const result = VisualizationFieldSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("VisualizationNode with fields", () => {
+  it("should validate a node with empty fields array", () => {
+    const node = {
+      id: "abc123",
+      name: "meeting",
+      fieldCount: 0,
+      usageCount: 100,
+      isOrphan: false,
+      isLeaf: true,
+      fields: [],
+    };
+
+    const result = VisualizationNodeSchema.safeParse(node);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fields).toEqual([]);
+    }
+  });
+
+  it("should validate a node with own and inherited fields", () => {
+    const node = {
+      id: "def456",
+      name: "person",
+      fieldCount: 2,
+      usageCount: 804,
+      isOrphan: false,
+      isLeaf: true,
+      fields: [
+        { name: "Email", dataType: "text", inherited: false },
+        { name: "Name", dataType: "text", inherited: true, originTag: "entity" },
+      ],
+    };
+
+    const result = VisualizationNodeSchema.safeParse(node);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fields).toHaveLength(2);
+      expect(result.data.fields![0].inherited).toBe(false);
+      expect(result.data.fields![1].originTag).toBe("entity");
+    }
+  });
+
+  it("should validate a node without fields (backwards compatible)", () => {
+    const node = {
+      id: "ghi789",
+      name: "todo",
+      fieldCount: 3,
+      usageCount: 500,
+      isOrphan: true,
+      isLeaf: true,
+      // No fields property - backwards compatible
+    };
+
+    const result = VisualizationNodeSchema.safeParse(node);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fields).toBeUndefined();
+    }
+  });
+});
+
+describe("HTMLRenderOptions", () => {
+  const { HTMLRenderOptionsSchema } = require("../../src/visualization/types");
+
+  it("should validate default options (all optional)", () => {
+    const options = {};
+
+    const result = HTMLRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+  });
+
+  it("should validate complete options", () => {
+    const options = {
+      direction: "TB",
+      showFields: true,
+      showInheritedFields: true,
+      collapsibleFields: true,
+      theme: "dark",
+    };
+
+    const result = HTMLRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.direction).toBe("TB");
+      expect(result.data.showFields).toBe(true);
+      expect(result.data.theme).toBe("dark");
+    }
+  });
+
+  it("should reject invalid direction", () => {
+    const invalid = {
+      direction: "INVALID",
+    };
+
+    const result = HTMLRenderOptionsSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject invalid theme", () => {
+    const invalid = {
+      theme: "blue",
+    };
+
+    const result = HTMLRenderOptionsSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it("should validate all valid directions", () => {
+    for (const direction of ["TB", "BT", "LR", "RL"]) {
+      const options = { direction };
+      const result = HTMLRenderOptionsSchema.safeParse(options);
+      expect(result.success).toBe(true);
+    }
+  });
+});

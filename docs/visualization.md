@@ -84,6 +84,47 @@ Returns:
 }
 ```
 
+### HTML (Interactive)
+
+Self-contained interactive HTML file with UML-style class diagram nodes. Features:
+- **Pan & Zoom** - Drag to pan, scroll to zoom
+- **Click to Highlight** - Click a node to highlight its inheritance path
+- **UML-Style Nodes** - Shows tag name, fields (own and inherited), and usage count
+- **Dark/Light Theme** - Choose your preferred color scheme
+
+```bash
+# Basic HTML output
+supertag tags visualize --format html --output graph.html
+
+# With field details
+supertag tags visualize --format html --show-fields --output graph.html
+
+# Include inherited fields
+supertag tags visualize --format html --show-fields --show-inherited --output graph.html
+
+# Dark theme
+supertag tags visualize --format html --theme dark --output graph.html
+
+# Open in browser after generating
+supertag tags visualize --format html --output graph.html --open
+```
+
+UML-style node layout:
+```
+┌─────────────────────┐
+│ #meeting            │  ← Header with tag color
+├─────────────────────┤
+│ Title      : text   │  ← Own fields (normal)
+│ Date       : date   │
+│ Location   : text   │
+├─────────────────────┤
+│ Name       : text   │  ← Inherited (italic, gray)
+│   (from entity)     │
+├─────────────────────┤
+│         2,245 uses  │  ← Footer with stats
+└─────────────────────┘
+```
+
 ## Filtering Options
 
 ### Filter by Root Tag
@@ -129,22 +170,34 @@ supertag tags visualize --direction TD
 supertag tags visualize --format dot --direction LR
 ```
 
-### Show Field Counts
+### Show Field Details
 
-Display how many fields each tag defines:
+Display field names and types in each tag node (all formats):
 
 ```bash
+# Show own fields only
 supertag tags visualize --show-fields
+
+# Show own and inherited fields
+supertag tags visualize --show-fields --show-inherited
 ```
 
-Output: `#meeting (5 fields)`
+Example Mermaid output:
+```
+#meeting
+---
+Title: text
+Date: date
+Location: text (entity)  ← inherited, shown with --show-inherited
+```
 
-### Use Tag Colors (DOT only)
+### Use Tag Colors (DOT and HTML)
 
 Apply Tana's tag colors to the graph nodes:
 
 ```bash
 supertag tags visualize --format dot --colors
+supertag tags visualize --format html --colors
 ```
 
 ## Rendering to Images
@@ -287,14 +340,18 @@ Tag names with special characters are automatically escaped in both Mermaid and 
 supertag tags visualize [options]
 
 Options:
-  --format <format>    Output format: mermaid, dot, json (default: mermaid)
-  --root <tag>         Filter to subtree from this tag
-  --depth <n>          Maximum depth to traverse
-  --orphans            Include orphan tags (no parents or children)
-  --direction <dir>    Graph direction: BT, TB, LR, RL (default: BT)
-  --show-fields        Show field counts in node labels
-  --colors             Use tag colors (DOT format only)
-  --output <file>      Write to file instead of stdout
-  --json               Output as JSON (same as --format json)
-  -w, --workspace      Workspace alias
+  --format <format>      Output format: mermaid, dot, json, html (default: mermaid)
+  --root <tag>           Filter to subtree from this tag
+  --depth <n>            Maximum depth to traverse
+  --min-usage <n>        Minimum usage count to include
+  --orphans              Include orphan tags (no parents or children)
+  --direction <dir>      Graph direction: BT, TB, LR, RL (default: BT)
+  --show-fields          Show field names and types in nodes (all formats)
+  --show-inherited       Include inherited fields (all formats, requires --show-fields)
+  --colors               Use tag colors (DOT and HTML formats)
+  --theme <theme>        Color theme: light, dark (HTML format, default: light)
+  --output <file>        Write to file instead of stdout
+  --open                 Open output file after writing (requires --output)
+  --json                 Output as JSON (same as --format json)
+  -w, --workspace        Workspace alias
 ```
