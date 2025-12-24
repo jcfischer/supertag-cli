@@ -581,7 +581,7 @@ async function handleTaggedSearch(
 
   try {
     // If we have a field filter, we need to query with field values
-    let results: Array<{ id: string; name: string; created?: number }>;
+    let results: Array<{ id: string; name: string | null; created?: number | null }>;
 
     if (fieldFilter) {
       // Query nodes with field value filter

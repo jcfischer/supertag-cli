@@ -9,7 +9,7 @@
  * - Pagination
  */
 
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 
 export interface FieldValueResult {
   tupleId: string;
@@ -83,7 +83,7 @@ export function queryFieldValuesByFieldName(
     FROM field_values
     WHERE field_name = ?
   `;
-  const params: unknown[] = [fieldName];
+  const params: SQLQueryBindings[] = [fieldName];
 
   if (createdAfter !== undefined) {
     sql += " AND created >= ?";
@@ -132,7 +132,7 @@ export function queryFieldValuesFTS(
     JOIN field_values fv ON fts.rowid = fv.id
     WHERE field_values_fts MATCH ?
   `;
-  const params: unknown[] = [sanitizedQuery];
+  const params: SQLQueryBindings[] = [sanitizedQuery];
 
   if (fieldName) {
     sql += " AND fv.field_name = ?";
@@ -180,7 +180,7 @@ export function queryFieldValues(
       JOIN field_values fv ON fts.rowid = fv.id
       WHERE field_values_fts MATCH ?
     `;
-    const params: unknown[] = [sanitizedQuery];
+    const params: SQLQueryBindings[] = [sanitizedQuery];
 
     if (fieldName) {
       sql += " AND fv.field_name = ?";
@@ -217,7 +217,7 @@ export function queryFieldValues(
     FROM field_values
     WHERE 1=1
   `;
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (fieldName) {
     sql += " AND field_name = ?";
@@ -278,7 +278,4 @@ function sanitizeFTSQuery(query: string): string {
   return sanitized;
 }
 
-/**
- * Export types for use in other modules
- */
-export type { FieldValueResult, FieldNameCount, QueryOptions };
+// Types are already exported via export interface declarations above

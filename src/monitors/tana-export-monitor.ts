@@ -156,6 +156,9 @@ export class TanaExportWatcher extends EventEmitter {
         referencesIndexed: 0,
         tagApplicationsIndexed: 0,
         fieldNamesIndexed: 0,
+        fieldValuesIndexed: 0,
+        supertagFieldsExtracted: 0,
+        supertagParentsExtracted: 0,
         durationMs: 0,
       };
 

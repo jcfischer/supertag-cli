@@ -10,7 +10,7 @@
  * - tuple.children[1..n] = value nodes (extract text from these)
  */
 
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type { NodeDump } from "../types/tana-dump";
 import type { ExtractedFieldValue } from "../types/field-values";
 
@@ -397,7 +397,7 @@ export function getFieldValuesByName(
     FROM field_values
     WHERE field_name = ?
   `;
-  const params: unknown[] = [fieldName];
+  const params: SQLQueryBindings[] = [fieldName];
 
   if (createdAfter !== undefined) {
     sql += " AND created >= ?";
@@ -443,7 +443,7 @@ export function searchFieldValues(
     JOIN field_values fv ON fts.rowid = fv.id
     WHERE field_values_fts MATCH ?
   `;
-  const params: unknown[] = [query];
+  const params: SQLQueryBindings[] = [query];
 
   if (fieldName) {
     sql += " AND fv.field_name = ?";
