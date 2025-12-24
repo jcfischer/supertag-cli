@@ -41,6 +41,18 @@ describe("SupertagMetadataService", () => {
     db = new Database(dbPath);
     migrateSupertagMetadataSchema(db);
     migrateSchemaConsolidation(db);
+
+    // Create tag_applications table (used for usage counts)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS tag_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tuple_node_id TEXT NOT NULL,
+        data_node_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        tag_name TEXT NOT NULL
+      )
+    `);
+
     service = new SupertagMetadataService(db);
   });
 
@@ -322,9 +334,92 @@ describe("SupertagMetadataService", () => {
       expect(tagId).toBe("contact-tag");
     });
 
+    it("should prefer tag with most inheritance parents, then most fields when multiple tags have same name", () => {
+      // Insert duplicate tag names with different field counts and inheritance
+      // This simulates the real-world "todo" situation with 3 different tag IDs
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES
+          ('todo-small', 'todo', 'Date', 'td1', 0),
+          ('todo-large-fields', 'todo', 'Parent', 'td2', 0),
+          ('todo-large-fields', 'todo', 'Do Date', 'td3', 1),
+          ('todo-large-fields', 'todo', 'Vault', 'td4', 2),
+          ('todo-large-fields', 'todo', 'Focus', 'td5', 3),
+          ('todo-large-fields', 'todo', 'Extra', 'td8', 4),
+          ('todo-with-inheritance', 'todo', 'Status', 'td6', 0),
+          ('todo-with-inheritance', 'todo', 'Details', 'td7', 1)
+      `);
+
+      // Add inheritance: todo-with-inheritance has 2 parents, todo-large-fields has 1
+      db.run(`
+        INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
+        VALUES
+          ('todo-with-inheritance', 'parent-tag-1'),
+          ('todo-with-inheritance', 'parent-tag-2'),
+          ('todo-large-fields', 'parent-tag-3')
+      `);
+
+      // Should return the tag with most inheritance parents (todo-with-inheritance with 2 parents)
+      // even though todo-large-fields has more fields (5 vs 2)
+      const tagId = service.findTagIdByName("todo");
+      expect(tagId).toBe("todo-with-inheritance");
+    });
+
+    it("should use field count as tiebreaker when inheritance is equal", () => {
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES
+          ('task-few', 'task', 'Status', 'tf1', 0),
+          ('task-many', 'task', 'Status', 'tm1', 0),
+          ('task-many', 'task', 'Priority', 'tm2', 1),
+          ('task-many', 'task', 'Due', 'tm3', 2)
+      `);
+
+      // Both have 0 parents, so field count is the tiebreaker
+      const tagId = service.findTagIdByName("task");
+      expect(tagId).toBe("task-many");
+    });
+
     it("should return null for unknown tag name", () => {
       const tagId = service.findTagIdByName("unknown");
       expect(tagId).toBeNull();
+    });
+
+    it("should find all tags with same name via findAllTagsByName", () => {
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES
+          ('project-a', 'project', 'Status', 'pa1', 0),
+          ('project-b', 'project', 'Status', 'pb1', 0),
+          ('project-b', 'project', 'Priority', 'pb2', 1)
+      `);
+
+      const tags = service.findAllTagsByName("project");
+      expect(tags.length).toBe(2);
+      // Should be ordered by field count (since no inheritance)
+      expect(tags[0].tagId).toBe("project-b");
+      expect(tags[0].fieldCount).toBe(2);
+      expect(tags[1].tagId).toBe("project-a");
+      expect(tags[1].fieldCount).toBe(1);
+    });
+
+    it("should detect tag ID format via isTagId", () => {
+      expect(service.isTagId("fbAkgDqs3k")).toBe(true);
+      expect(service.isTagId("XREuzJk36V")).toBe(true);
+      expect(service.isTagId("uEWX7oeC5L")).toBe(true);
+      expect(service.isTagId("todo")).toBe(false);
+      expect(service.isTagId("meeting")).toBe(false);
+      expect(service.isTagId("short")).toBe(false);
+    });
+
+    it("should find tag name by ID via findTagById", () => {
+      const name = service.findTagById("contact-tag");
+      expect(name).toBe("contact");
+    });
+
+    it("should return null for unknown tag ID via findTagById", () => {
+      const name = service.findTagById("unknown-id-12345");
+      expect(name).toBeNull();
     });
 
     it("should validate existing field name", () => {

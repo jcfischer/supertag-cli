@@ -109,6 +109,64 @@ export function getTagDetailsFromDatabase(dbPath: string, tagName: string): TagD
 }
 
 /**
+ * Result of resolving a tag name to ID with duplicate detection
+ */
+interface TagResolutionResult {
+  tagId: string;
+  displayName: string;
+  hasDuplicates: boolean;
+}
+
+/**
+ * Resolve a tag name or ID to a tag ID, with duplicate detection and warning.
+ * Returns null if not found. Outputs warning to stderr if duplicates exist.
+ *
+ * @param service - SupertagMetadataService instance
+ * @param tagname - Tag name or ID to resolve
+ * @param commandName - Command name for disambiguation hint (e.g., "show", "fields")
+ */
+function resolveTagWithDuplicateWarning(
+  service: SupertagMetadataService,
+  tagname: string,
+  commandName: string
+): TagResolutionResult | null {
+  // Check if input looks like an ID (for direct disambiguation)
+  if (service.isTagId(tagname)) {
+    const foundName = service.findTagById(tagname);
+    if (foundName) {
+      return { tagId: tagname, displayName: foundName, hasDuplicates: false };
+    }
+    console.error(`❌ Supertag ID not found: ${tagname}`);
+    return null;
+  }
+
+  // Find by name - check for duplicates
+  const allTags = service.findAllTagsByName(tagname);
+
+  if (allTags.length === 0) {
+    console.error(`❌ Supertag not found: ${tagname}`);
+    console.error(`   Available tags can be listed with: supertag tags list`);
+    return null;
+  }
+
+  // Use the first (best) match
+  const tagId = allTags[0].tagId;
+
+  // Warn if there are duplicates
+  if (allTags.length > 1) {
+    console.error(`⚠️  Multiple supertags named "${tagname}" found. Using the one with most inheritance/fields.`);
+    console.error(`   To specify exactly which one, use the ID:\n`);
+    for (const tag of allTags) {
+      const marker = tag.tagId === tagId ? " ← (selected)" : "";
+      console.error(`   supertag tags ${commandName} ${tag.tagId}  # ${tag.usageCount} uses, ${tag.fieldCount} fields${marker}`);
+    }
+    console.error(`\n   💡 Tip: Rename duplicate tags in Tana to avoid confusion. Changes will be picked up on next export.\n`);
+  }
+
+  return { tagId, displayName: tagname, hasDuplicates: allTags.length > 1 };
+}
+
+/**
  * Create the tags command group
  */
 export function createTagsCommand(): Command {
@@ -217,37 +275,55 @@ export function createTagsCommand(): Command {
   addStandardOptions(showCmd, { defaultLimit: "1" });
 
   showCmd.action(async (tagname: string, options: StandardOptions) => {
-    // Load schema registry from cache
-    const registry = getSchemaRegistry(options.workspace);
-
-    // Find the tag
-    const tag = registry.findTagByName(tagname);
-
-    if (!tag) {
-      console.error(`❌ Supertag not found: ${tagname}`);
-      console.error(`   Available tags can be listed with: supertag tags list`);
+    const dbPath = resolveDbPath(options);
+    if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
     }
 
-    if (options.json) {
-      console.log(formatJsonOutput(tag));
-    } else {
-      console.log(`\n🏷️  ${tag.name}`);
-      console.log(`   ID: ${tag.id}`);
-      console.log(`   Color: ${tag.color || "(none)"}`);
+    const db = new Database(dbPath);
+    const service = new SupertagMetadataService(db);
 
-      if (tag.fields && tag.fields.length > 0) {
-        console.log(`\n   Fields (${tag.fields.length}):`);
-        tag.fields.forEach((field: { name: string; attributeId: string; dataType?: string }) => {
-          console.log(`   - ${field.name} (${field.attributeId})`);
-          if (field.dataType) {
-            console.log(`     Type: ${field.dataType}`);
-          }
-        });
-      } else {
-        console.log(`\n   No fields defined`);
+    try {
+      // Resolve tag with duplicate warning
+      const resolved = resolveTagWithDuplicateWarning(service, tagname, "show");
+      if (!resolved) {
+        process.exit(1);
       }
-      console.log();
+
+      // Load schema registry from cache
+      const registry = getSchemaRegistry(options.workspace);
+
+      // Find the tag by ID (after resolving with duplicate detection)
+      const tag = registry.getSupertagById(resolved.tagId) || registry.findTagByName(tagname);
+
+      if (!tag) {
+        console.error(`❌ Supertag not found: ${tagname}`);
+        console.error(`   Available tags can be listed with: supertag tags list`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(formatJsonOutput(tag));
+      } else {
+        console.log(`\n🏷️  ${tag.name}`);
+        console.log(`   ID: ${tag.id}`);
+        console.log(`   Color: ${tag.color || "(none)"}`);
+
+        if (tag.fields && tag.fields.length > 0) {
+          console.log(`\n   Fields (${tag.fields.length}):`);
+          tag.fields.forEach((field: { name: string; attributeId: string; dataType?: string }) => {
+            console.log(`   - ${field.name} (${field.attributeId})`);
+            if (field.dataType) {
+              console.log(`     Type: ${field.dataType}`);
+            }
+          });
+        } else {
+          console.log(`\n   No fields defined`);
+        }
+        console.log();
+      }
+    } finally {
+      db.close();
     }
   });
 
@@ -269,12 +345,12 @@ export function createTagsCommand(): Command {
     const service = new SupertagMetadataService(db);
 
     try {
-      // Find tag ID by name
-      const tagId = service.findTagIdByName(tagname);
-      if (!tagId) {
-        console.error(`❌ Supertag not found: ${tagname}`);
+      // Resolve tag with duplicate warning
+      const resolved = resolveTagWithDuplicateWarning(service, tagname, "inheritance");
+      if (!resolved) {
         process.exit(1);
       }
+      const { tagId, displayName } = resolved;
 
       if (options.json) {
         const chain = service.getInheritanceChain(tagId);
@@ -282,7 +358,7 @@ export function createTagsCommand(): Command {
       } else if (options.flat) {
         // Flattened list of ancestors with depth
         const ancestors = service.getAncestors(tagId);
-        console.log(`\n🏷️  ${tagname} inheritance:\n`);
+        console.log(`\n🏷️  ${displayName} inheritance:\n`);
         if (ancestors.length === 0) {
           console.log("   (no parent supertags)");
         } else {
@@ -296,7 +372,7 @@ export function createTagsCommand(): Command {
       } else {
         // Tree view
         const chain = service.getInheritanceChain(tagId);
-        console.log(`\n🏷️  ${tagname} inheritance:\n`);
+        console.log(`\n🏷️  ${displayName} inheritance:\n`);
         printInheritanceTree(chain, 0);
         console.log();
       }
@@ -325,12 +401,12 @@ export function createTagsCommand(): Command {
     const service = new SupertagMetadataService(db);
 
     try {
-      // Find tag ID by name
-      const tagId = service.findTagIdByName(tagname);
-      if (!tagId) {
-        console.error(`❌ Supertag not found: ${tagname}`);
+      // Resolve tag with duplicate warning
+      const resolved = resolveTagWithDuplicateWarning(service, tagname, "fields");
+      if (!resolved) {
         process.exit(1);
       }
+      const { tagId, displayName } = resolved;
 
       let fields: Array<{ fieldName: string; originTagName: string; depth: number }>;
 
@@ -360,10 +436,10 @@ export function createTagsCommand(): Command {
       }
 
       if (options.json) {
-        console.log(formatJsonOutput(fields));
+        console.log(formatJsonOutput({ tagId, tagName: displayName, fields }));
       } else {
         const modeLabel = options.all ? "all" : options.inherited ? "inherited" : "own";
-        console.log(`\n🏷️  ${tagname} fields (${modeLabel}):\n`);
+        console.log(`\n🏷️  ${displayName} (${tagId}) fields (${modeLabel}):\n`);
         if (fields.length === 0) {
           console.log("   (no fields)");
         } else {

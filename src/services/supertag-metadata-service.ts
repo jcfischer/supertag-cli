@@ -236,14 +236,90 @@ export class SupertagMetadataService {
 
   /**
    * Find tag ID by exact tag name.
+   * When multiple tags have the same name, prefers the one with:
+   * 1. Most inheritance parents (primary criteria)
+   * 2. Most fields (secondary criteria)
+   * This matches SchemaRegistry's shouldPreferSchema() logic.
    * Returns null if not found.
    */
   findTagIdByName(tagName: string): string | null {
+    // When multiple tags have the same name, prefer the one with most
+    // inheritance parents first, then most fields (matches SchemaRegistry)
     const result = this.db
-      .query(`SELECT DISTINCT tag_id FROM supertag_fields WHERE tag_name = ? LIMIT 1`)
-      .get(tagName) as { tag_id: string } | null;
+      .query(`
+        SELECT
+          sf.tag_id,
+          COUNT(DISTINCT sf.field_name) as field_count,
+          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sf.tag_id) as parent_count
+        FROM supertag_fields sf
+        WHERE sf.tag_name = ?
+        GROUP BY sf.tag_id
+        ORDER BY parent_count DESC, field_count DESC
+        LIMIT 1
+      `)
+      .get(tagName) as { tag_id: string; field_count: number; parent_count: number } | null;
 
     return result?.tag_id ?? null;
+  }
+
+  /**
+   * Find all tags with a given name, returning details for disambiguation.
+   * Includes field count and usage count for each.
+   * Returns empty array if no tags found.
+   */
+  findAllTagsByName(tagName: string): Array<{
+    tagId: string;
+    tagName: string;
+    fieldCount: number;
+    parentCount: number;
+    usageCount: number;
+  }> {
+    const results = this.db
+      .query(`
+        SELECT
+          sf.tag_id,
+          sf.tag_name,
+          COUNT(DISTINCT sf.field_name) as field_count,
+          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sf.tag_id) as parent_count,
+          (SELECT COUNT(*) FROM tag_applications ta WHERE ta.tag_id = sf.tag_id) as usage_count
+        FROM supertag_fields sf
+        WHERE sf.tag_name = ?
+        GROUP BY sf.tag_id
+        ORDER BY parent_count DESC, field_count DESC
+      `)
+      .all(tagName) as Array<{
+        tag_id: string;
+        tag_name: string;
+        field_count: number;
+        parent_count: number;
+        usage_count: number;
+      }>;
+
+    return results.map(r => ({
+      tagId: r.tag_id,
+      tagName: r.tag_name,
+      fieldCount: r.field_count,
+      parentCount: r.parent_count,
+      usageCount: r.usage_count,
+    }));
+  }
+
+  /**
+   * Check if a string looks like a tag ID (8+ alphanumeric chars with optional - and _).
+   */
+  isTagId(input: string): boolean {
+    return /^[A-Za-z0-9_-]{8,}$/.test(input);
+  }
+
+  /**
+   * Find tag by ID. Returns the tag name if found, null otherwise.
+   */
+  findTagById(tagId: string): string | null {
+    const result = this.db
+      .query(`SELECT tag_name FROM supertag_fields WHERE tag_id = ? LIMIT 1`)
+      .get(tagId) as { tag_name: string } | null;
+
+    return result?.tag_name ?? null;
   }
 
   /**

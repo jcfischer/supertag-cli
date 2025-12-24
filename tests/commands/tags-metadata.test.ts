@@ -38,6 +38,17 @@ describe("Tags Metadata CLI Commands", () => {
     migrateSupertagMetadataSchema(db);
     migrateSchemaConsolidation(db);
 
+    // Create tag_applications table (used for usage counts)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS tag_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tuple_node_id TEXT NOT NULL,
+        data_node_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        tag_name TEXT NOT NULL
+      )
+    `);
+
     // Insert test inheritance: manager -> employee -> contact
     db.run(`
       INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
@@ -160,8 +171,10 @@ describe("Tags Metadata CLI Commands", () => {
       const result = await $`bun run src/index.ts tags fields manager --all --json --db-path ${dbPath}`.text();
 
       const parsed = JSON.parse(result);
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed.length).toBe(5); // Team + Department + StartDate + Email + Phone
+      expect(parsed.tagId).toBe("manager-tag");
+      expect(parsed.tagName).toBe("manager");
+      expect(Array.isArray(parsed.fields)).toBe(true);
+      expect(parsed.fields.length).toBe(5); // Team + Department + StartDate + Email + Phone
     });
   });
 });

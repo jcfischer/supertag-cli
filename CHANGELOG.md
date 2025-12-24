@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Duplicate Supertag Detection** - Fixed inconsistent tag resolution when multiple tags share the same name
+  - `tags show`, `tags fields`, and `tags inheritance` now use consistent preference logic (most inheritance parents, then most fields)
+  - Shows warning with all duplicate options: ID, usage count, and field count
+  - Supports direct ID access for disambiguation (e.g., `supertag tags show fbAkgDqs3k`)
+  - Added tip suggesting to rename duplicates in Tana
+
 - **Tags Show Command** - Fixed "Invalid export format" error in `supertag tags show <tag>`
   - Command was incorrectly loading schema cache as Tana export format
   - Now uses `getSchemaRegistry()` which correctly parses cached registry format
