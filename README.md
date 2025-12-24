@@ -71,6 +71,8 @@ supertag nodes show <id> --depth 3           # Node contents
 supertag tags top                            # Most used tags
 supertag tags inheritance manager            # Show tag hierarchy
 supertag tags fields meeting --all           # Show tag fields
+supertag tags visualize                      # Inheritance graph (mermaid)
+supertag tags visualize --format dot         # Graphviz DOT format
 supertag stats                               # Statistics
 ```
 
@@ -133,6 +135,38 @@ curl http://localhost:3100/search -d '{"query": "meeting"}'
 ```
 
 See [Webhook Server Documentation](./docs/WEBHOOK-SERVER.md) for API reference.
+
+### VISUALIZE - Inheritance Graphs
+
+Generate visual representations of your supertag inheritance hierarchy.
+
+```bash
+# Mermaid flowchart (default) - paste into Obsidian, GitHub, etc.
+supertag tags visualize
+
+# Graphviz DOT format - render with `dot -Tpng`
+supertag tags visualize --format dot
+
+# JSON data structure for custom tooling
+supertag tags visualize --format json
+
+# Filter options
+supertag tags visualize --root entity              # Subtree from a tag
+supertag tags visualize --direction LR             # Left-to-right layout
+supertag tags visualize --show-fields              # Show field counts
+supertag tags visualize --colors                   # Use tag colors (DOT)
+
+# Write to file
+supertag tags visualize --output graph.md
+supertag tags visualize --format dot --output graph.dot
+```
+
+**Output formats:**
+- `mermaid` - Mermaid flowchart syntax (default)
+- `dot` - Graphviz DOT for rendering to SVG/PNG/PDF
+- `json` - Raw data for custom visualization
+
+See [Visualization Documentation](./docs/visualization.md) for rendering instructions.
 
 ### MCP - AI Tool Integration
 
@@ -240,6 +274,7 @@ bun install
 | [MCP Integration](./docs/mcp.md) | AI tool setup (Claude, ChatGPT, Cursor, etc.) |
 | [Embeddings](./docs/embeddings.md) | Semantic search configuration |
 | [Field Values](./docs/fields.md) | Query and search field data from nodes |
+| [Visualization](./docs/visualization.md) | Inheritance graph rendering (Mermaid, DOT, PNG) |
 | [Webhook Server](./docs/WEBHOOK-SERVER.md) | HTTP API reference |
 | [Workspaces](./docs/workspaces.md) | Multi-workspace management |
 | [Export](./docs/export.md) | Automated backup and scheduling |

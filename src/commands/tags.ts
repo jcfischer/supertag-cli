@@ -35,12 +35,29 @@ import {
 } from "../utils/format";
 import { resolveOutputOptions } from "../utils/output-options";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
+import { VisualizationService } from "../visualization/service";
+import { render, supportedFormats, isFormatSupported } from "../visualization/renderers";
+import type { VisualizationFormat, MermaidRenderOptions, DOTRenderOptions } from "../visualization/types";
+import { writeFileSync } from "fs";
 
 interface TagsMetadataOptions extends StandardOptions {
   flat?: boolean;
   all?: boolean;
   inherited?: boolean;
   own?: boolean;
+}
+
+interface VisualizeOptions extends StandardOptions {
+  format?: string;
+  root?: string;
+  depth?: number;
+  minUsage?: number;
+  orphans?: boolean;
+  output?: string;
+  open?: boolean;
+  direction?: string;
+  showFields?: boolean;
+  colors?: boolean;
 }
 
 /**
@@ -452,6 +469,98 @@ export function createTagsCommand(): Command {
           }
         }
         console.log();
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  // tags visualize
+  const visualizeCmd = tags
+    .command("visualize")
+    .description("Visualize supertag inheritance graph")
+    .option("--format <format>", "Output format (mermaid, dot, json)", "mermaid")
+    .option("--root <tag>", "Root tag to start from (show subtree only)")
+    .option("--depth <n>", "Maximum depth to traverse", parseInt)
+    .option("--min-usage <n>", "Minimum usage count to include", parseInt)
+    .option("--orphans", "Include orphan tags (no parents or children)")
+    .option("--output <file>", "Write output to file instead of stdout")
+    .option("--open", "Open output file after writing (requires --output)")
+    .option("--direction <dir>", "Graph direction: BT, TB, LR, RL (default: BT)")
+    .option("--show-fields", "Show field counts in node labels")
+    .option("--colors", "Use tag colors in output (DOT format)");
+
+  addStandardOptions(visualizeCmd, { defaultLimit: "1000" });
+
+  visualizeCmd.action(async (options: VisualizeOptions) => {
+    const dbPath = resolveDbPath(options);
+    if (!checkDb(dbPath, options.workspace)) {
+      process.exit(1);
+    }
+
+    const db = new Database(dbPath);
+
+    try {
+      // Validate format
+      const format = (options.format || "mermaid") as VisualizationFormat;
+      if (!isFormatSupported(format)) {
+        console.error(`❌ Unsupported format: ${format}`);
+        console.error(`   Supported formats: ${supportedFormats.join(", ")}`);
+        process.exit(1);
+      }
+
+      // Get visualization data
+      const vizService = new VisualizationService(db);
+      let data = vizService.getData({
+        minUsageCount: options.minUsage,
+        includeOrphans: options.orphans,
+      });
+
+      // Filter to subtree if --root specified
+      if (options.root) {
+        const subtree = vizService.getSubtree(options.root, options.depth);
+        if (subtree) {
+          data = subtree;
+        } else {
+          console.error(`❌ Root tag not found: ${options.root}`);
+          process.exit(1);
+        }
+      }
+
+      // Build format-specific render options
+      const direction = options.direction || "BT";
+      let renderOptions: MermaidRenderOptions | DOTRenderOptions;
+
+      if (format === "mermaid") {
+        renderOptions = {
+          direction: direction as "BT" | "TB" | "LR" | "RL",
+          showFieldCount: options.showFields || false,
+        } as MermaidRenderOptions;
+      } else if (format === "dot") {
+        renderOptions = {
+          rankdir: direction as "BT" | "TB" | "LR" | "RL",
+          showFieldCount: options.showFields || false,
+          useColors: options.colors || false,
+        } as DOTRenderOptions;
+      } else {
+        renderOptions = {};
+      }
+
+      // Render output
+      const output = render(format, data, renderOptions);
+
+      // Write to file or stdout
+      if (options.output) {
+        writeFileSync(options.output, output);
+        console.error(`✅ Output written to: ${options.output}`);
+
+        if (options.open) {
+          // Open file with default application
+          const { spawn } = await import("child_process");
+          spawn("open", [options.output], { detached: true, stdio: "ignore" }).unref();
+        }
+      } else {
+        console.log(output);
       }
     } finally {
       db.close();

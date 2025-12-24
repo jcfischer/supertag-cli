@@ -291,6 +291,16 @@ supertag tags fields meeting              # Own fields only
 supertag tags fields manager --all        # Include inherited fields
 supertag tags fields manager --inherited  # Inherited only
 supertag tags fields manager --json       # JSON output
+
+# Visualize inheritance graph
+supertag tags visualize                   # Mermaid flowchart (default)
+supertag tags visualize --format dot      # Graphviz DOT format
+supertag tags visualize --format json     # Raw JSON data
+supertag tags visualize --root entity     # Subtree from a tag
+supertag tags visualize --direction LR    # Left-to-right layout
+supertag tags visualize --show-fields     # Show field counts
+supertag tags visualize --colors          # Use tag colors (DOT)
+supertag tags visualize --output graph.md # Write to file
 ```
 
 ### Create Commands

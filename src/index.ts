@@ -176,6 +176,9 @@ program.on('--help', () => {
   console.log('    supertag tags list             List all supertags');
   console.log('    supertag tags top              Most used supertags');
   console.log('    supertag tags show <name>      Show tag schema');
+  console.log('    supertag tags inheritance <n>  Show tag inheritance chain');
+  console.log('    supertag tags fields <name>    Show tag fields (--all for inherited)');
+  console.log('    supertag tags visualize        Visualize inheritance graph');
   console.log('');
   console.log('  STATS:');
   console.log('    supertag stats                 All statistics');
@@ -209,6 +212,8 @@ program.on('--help', () => {
   console.log('    supertag embed config          Configure embedding provider');
   console.log('    supertag embed generate        Generate node embeddings');
   console.log('    supertag embed stats           Show embedding statistics');
+  console.log('    supertag embed filter-stats    Show content filter breakdown');
+  console.log('    supertag embed maintain        LanceDB maintenance (compact, rebuild)');
   console.log('    supertag search --semantic     Semantic search (use search command)');
   console.log('');
   console.log('  CONFIG:');
@@ -216,13 +221,18 @@ program.on('--help', () => {
   console.log('    supertag config --token <tok>  Set API token');
   console.log('    supertag schema sync           Sync supertag schema');
   console.log('    supertag schema list           List all supertags');
+  console.log('    supertag schema show <name>    Show supertag details');
+  console.log('    supertag schema search <q>     Search supertags by name');
   console.log('');
   console.log('  WORKSPACES:');
   console.log('    supertag workspace list        List all workspaces');
   console.log('    supertag workspace add <id>    Add a workspace');
+  console.log('    supertag workspace update <a>  Update workspace properties');
   console.log('    supertag workspace remove <a>  Remove a workspace');
   console.log('    supertag workspace set-default Set default workspace');
   console.log('    supertag workspace show        Show workspace details');
+  console.log('    supertag workspace enable <a>  Enable for batch operations');
+  console.log('    supertag workspace disable <a> Disable from batch operations');
   console.log('');
   console.log('Examples:');
   console.log('');
