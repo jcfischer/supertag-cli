@@ -12,6 +12,22 @@ supertag tags visualize
 supertag tags visualize --output graph.md
 ```
 
+## Examples
+
+The following examples show the ancestors of the `#meeting` tag using `--from meeting`.
+
+### Interactive HTML Visualization
+
+![HTML Visualization](images/meeting-html.png)
+
+*2D hierarchical layout with UML-style nodes showing fields and inheritance*
+
+### Interactive 3D Visualization
+
+![3D Visualization](images/meeting-3d.png)
+
+*3D force-directed graph with labeled nodes and click-to-highlight*
+
 ## Output Formats
 
 ### Mermaid (Default)
@@ -27,14 +43,14 @@ supertag tags visualize
 supertag tags visualize --format mermaid  # explicit
 ```
 
-Example output:
+Example output (`supertag tags visualize --from meeting`):
 ```mermaid
 flowchart BT
-    tweet["#tweet"]
-    webSource["#webSource"]
-    source["#source"]
-    tweet --> webSource
-    webSource --> source
+    WcNfAKD2JI["#meeting"]
+    BpyXUrxqwJ3Q["#Stream | Professional"]
+    2Ux7TUEjN4yt["#Type | Event"]
+    WcNfAKD2JI --> BpyXUrxqwJ3Q
+    BpyXUrxqwJ3Q --> 2Ux7TUEjN4yt
 ```
 
 ### Graphviz DOT
@@ -50,12 +66,12 @@ Example output:
 ```dot
 digraph supertags {
     rankdir=BT;
-    node [shape=box, style="rounded,filled"];
-    tweet [label="#tweet"];
-    webSource [label="#webSource"];
-    source [label="#source"];
-    tweet -> webSource;
-    webSource -> source;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#E8E8E8"];
+    WcNfAKD2JI [label="#meeting"];
+    BpyXUrxqwJ3Q [label="#Stream | Professional"];
+    2Ux7TUEjN4yt [label="#Type | Event"];
+    WcNfAKD2JI -> BpyXUrxqwJ3Q;
+    BpyXUrxqwJ3Q -> 2Ux7TUEjN4yt;
 }
 ```
 
@@ -71,15 +87,19 @@ Returns:
 ```json
 {
   "nodes": [
-    {"id": "abc123", "name": "source", "fieldCount": 7, "usageCount": 100, "isOrphan": true, "isLeaf": false}
+    {"id": "WcNfAKD2JI", "name": "meeting", "fieldCount": 8, "usageCount": 2258, "isOrphan": false, "isLeaf": false},
+    {"id": "BpyXUrxqwJ3Q", "name": "Stream | Professional", "fieldCount": 1, "usageCount": 0, "isOrphan": false, "isLeaf": false}
   ],
   "links": [
-    {"source": "def456", "target": "abc123"}
+    {"source": "WcNfAKD2JI", "target": "BpyXUrxqwJ3Q"}
   ],
   "metadata": {
-    "totalTags": 150,
-    "totalLinks": 272,
-    "maxDepth": 4
+    "totalTags": 8,
+    "totalLinks": 7,
+    "maxDepth": 4,
+    "rootTag": "meeting",
+    "generatedAt": "2025-12-24T11:52:38.023Z",
+    "workspace": "main"
   }
 }
 ```
