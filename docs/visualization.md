@@ -84,7 +84,7 @@ Returns:
 }
 ```
 
-### HTML (Interactive)
+### HTML (Interactive 2D)
 
 Self-contained interactive HTML file with UML-style class diagram nodes. Features:
 - **Pan & Zoom** - Drag to pan, scroll to zoom
@@ -125,16 +125,74 @@ UML-style node layout:
 └─────────────────────┘
 ```
 
+### 3D (Interactive Three.js)
+
+Interactive 3D visualization using Three.js and 3d-force-graph. Ideal for exploring large, complex tag hierarchies in three-dimensional space. Features:
+- **Rotate, Pan & Zoom** - Full 3D camera controls
+- **Click to Highlight** - Click a node to highlight ancestors and descendants
+- **Force-Directed Layout** - Nodes naturally cluster by relationships
+- **Hierarchical Layout** - Optional mode with parents above children
+- **Dark/Light Theme** - Choose your preferred color scheme
+- **Self-Contained** - Works offline, no external dependencies
+
+```bash
+# Basic 3D output
+supertag tags visualize --format 3d --output graph.html
+
+# Open in browser immediately
+supertag tags visualize --format 3d --output graph.html --open
+
+# Hierarchical layout (parents above children)
+supertag tags visualize --format 3d --layout hierarchical --output graph.html
+
+# Dark theme
+supertag tags visualize --format 3d --theme dark --output graph.html
+
+# Scale nodes by usage count
+supertag tags visualize --format 3d --size-by-usage --output graph.html
+
+# With field details in tooltips
+supertag tags visualize --format 3d --show-fields --output graph.html
+
+# All options combined
+supertag tags visualize --format 3d \
+  --layout hierarchical \
+  --theme dark \
+  --show-fields \
+  --show-inherited \
+  --size-by-usage \
+  --output graph.html --open
+```
+
+**Controls:**
+- **Left-drag**: Rotate view
+- **Right-drag / Shift+drag**: Pan
+- **Scroll wheel**: Zoom
+- **Click node**: Highlight inheritance path
+- **R key**: Reset view
+- **Escape**: Deselect node
+
 ## Filtering Options
 
-### Filter by Root Tag
+### Filter by Root Tag (Descendants)
 
-Show only a subtree starting from a specific tag:
+Show only a subtree starting from a specific tag (descendants):
 
 ```bash
 supertag tags visualize --root source
 supertag tags visualize --root "web source"  # quoted if spaces
 ```
+
+### Filter by Starting Tag (Ancestors)
+
+Show only ancestors of a specific tag (traverse upwards):
+
+```bash
+supertag tags visualize --from tweet
+supertag tags visualize --from meeting --depth 3  # limit ancestor depth
+```
+
+This is useful when you want to see what a tag inherits from, rather than what inherits from it.
 
 ### Include Orphans
 
@@ -340,8 +398,9 @@ Tag names with special characters are automatically escaped in both Mermaid and 
 supertag tags visualize [options]
 
 Options:
-  --format <format>      Output format: mermaid, dot, json, html (default: mermaid)
-  --root <tag>           Filter to subtree from this tag
+  --format <format>      Output format: mermaid, dot, json, html, 3d (default: mermaid)
+  --root <tag>           Filter to subtree from this tag (descendants)
+  --from <tag>           Start tag to show ancestors (upwards)
   --depth <n>            Maximum depth to traverse
   --min-usage <n>        Minimum usage count to include
   --orphans              Include orphan tags (no parents or children)
@@ -349,7 +408,9 @@ Options:
   --show-fields          Show field names and types in nodes (all formats)
   --show-inherited       Include inherited fields (all formats, requires --show-fields)
   --colors               Use tag colors (DOT and HTML formats)
-  --theme <theme>        Color theme: light, dark (HTML format, default: light)
+  --theme <theme>        Color theme: light, dark (HTML and 3D formats, default: light)
+  --layout <layout>      3D layout: force, hierarchical (3D format only, default: force)
+  --size-by-usage        Scale node size by usage count (3D format only)
   --output <file>        Write to file instead of stdout
   --open                 Open output file after writing (requires --output)
   --json                 Output as JSON (same as --format json)

@@ -424,3 +424,81 @@ describe("HTMLRenderOptions", () => {
     }
   });
 });
+
+describe("ThreeRenderOptions", () => {
+  const { ThreeRenderOptionsSchema } = require("../../src/visualization/types");
+
+  it("should validate default options (all optional)", () => {
+    const options = {};
+
+    const result = ThreeRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+  });
+
+  it("should validate complete options", () => {
+    const options = {
+      layout: "hierarchical",
+      theme: "dark",
+      showFields: true,
+      showInheritedFields: true,
+      sizeByUsage: true,
+      cameraDistance: 2.0,
+    };
+
+    const result = ThreeRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.layout).toBe("hierarchical");
+      expect(result.data.theme).toBe("dark");
+      expect(result.data.showFields).toBe(true);
+      expect(result.data.sizeByUsage).toBe(true);
+      expect(result.data.cameraDistance).toBe(2.0);
+    }
+  });
+
+  it("should validate force layout (default)", () => {
+    const options = { layout: "force" };
+
+    const result = ThreeRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.layout).toBe("force");
+    }
+  });
+
+  it("should reject invalid layout", () => {
+    const invalid = {
+      layout: "circular",
+    };
+
+    const result = ThreeRenderOptionsSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject invalid theme", () => {
+    const invalid = {
+      theme: "blue",
+    };
+
+    const result = ThreeRenderOptionsSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it("should validate valid themes", () => {
+    for (const theme of ["light", "dark"]) {
+      const options = { theme };
+      const result = ThreeRenderOptionsSchema.safeParse(options);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("should accept positive camera distance", () => {
+    const options = { cameraDistance: 3.5 };
+
+    const result = ThreeRenderOptionsSchema.safeParse(options);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.cameraDistance).toBe(3.5);
+    }
+  });
+});

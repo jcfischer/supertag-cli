@@ -191,6 +191,79 @@ export class VisualizationService {
   }
 
   /**
+   * Get ancestors of a specific tag (traverse upwards).
+   * Returns null if tag not found.
+   */
+  getAncestors(tagName: string, maxDepth?: number): VisualizationData | null {
+    // Find tag ID
+    const tagResult = this.db.query(`
+      SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
+    `).get(tagName) as { tag_id: string } | null;
+
+    if (!tagResult) {
+      return null;
+    }
+
+    const tagId = tagResult.tag_id;
+
+    // Get all ancestors using recursive CTE (traverse upwards via parents)
+    const depthLimit = maxDepth ?? 10;
+    const ancestorRows = this.db.query(`
+      WITH RECURSIVE ancestors(tag_id, depth) AS (
+        -- Base case: starting tag
+        SELECT ?, 0
+
+        UNION ALL
+
+        -- Recursive case: parents of current nodes
+        SELECT sp.parent_tag_id, a.depth + 1
+        FROM supertag_parents sp
+        INNER JOIN ancestors a ON sp.child_tag_id = a.tag_id
+        WHERE a.depth < ?
+      )
+      SELECT DISTINCT tag_id, MIN(depth) as depth
+      FROM ancestors
+      GROUP BY tag_id
+    `).all(tagId, depthLimit) as Array<{ tag_id: string; depth: number }>;
+
+    const includedIds = new Set(ancestorRows.map(r => r.tag_id));
+
+    // Get full data and filter to included IDs
+    const fullData = this.getData({ includeOrphans: true });
+
+    const nodes = fullData.nodes.filter(n => includedIds.has(n.id));
+    const links = fullData.links.filter(l => includedIds.has(l.source) && includedIds.has(l.target));
+
+    // Calculate local max depth
+    const localMaxDepth = ancestorRows.length > 0
+      ? Math.max(...ancestorRows.map(r => r.depth))
+      : 0;
+
+    const metadata: VisualizationMetadata = {
+      totalTags: nodes.length,
+      totalLinks: links.length,
+      maxDepth: localMaxDepth,
+      rootTag: tagName,
+      generatedAt: new Date().toISOString(),
+      workspace: this.workspace,
+    };
+
+    return { nodes, links, metadata };
+  }
+
+  /**
+   * Get ancestors with field information.
+   */
+  getAncestorsWithFields(
+    tagName: string,
+    maxDepth?: number
+  ): VisualizationData | null {
+    const data = this.getAncestors(tagName, maxDepth);
+    if (!data) return null;
+    return this.enrichNodesWithFields(data);
+  }
+
+  /**
    * Calculate max depth of inheritance in the entire graph.
    */
   getMaxDepth(): number {

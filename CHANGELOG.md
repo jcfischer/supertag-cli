@@ -5,6 +5,20 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-12-24
+
+### Added
+
+- **3D Visualization Enhancements**
+  - Visible node labels with tag names displayed above each sphere
+  - Theme-appropriate label colors (dark text on light, light text on dark)
+  - Cursor-following tooltips showing field details and usage stats
+
+- **Ancestor Traversal** - New `--from <tag>` option for visualizing inheritance upwards
+  - Shows the specified tag and all its ancestors (parents, grandparents, etc.)
+  - Complements `--root <tag>` which shows descendants
+  - Works with all visualization formats (mermaid, dot, json, html, 3d)
+
 ## [1.1.0] - 2025-12-24
 
 ### Added
@@ -28,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mapping exported as `SYSTEM_FIELD_MARKERS` for extensibility
 
 - **Supertag Visualization** - New `tags visualize` command for inheritance graph visualization
-  - Four output formats: Mermaid (default), Graphviz DOT, JSON, and **HTML (interactive)**
+  - Five output formats: Mermaid (default), Graphviz DOT, JSON, **HTML (interactive 2D)**, and **3D (Three.js)**
   - Filter options: `--root <tag>` for subtrees, `--orphans` to include isolated tags
   - Display options: `--direction` (BT/TB/LR/RL), `--show-fields`, `--show-inherited`, `--colors`, `--theme`
   - Output to file with `--output <file>`, auto-open with `--open`
@@ -41,6 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Light/dark theme support with `--theme` option
   - Hierarchical layout with barycenter ordering to minimize edge crossings
   - No external dependencies - works offline
+
+- **3D Visualization (Spec 021)** - Interactive 3D graph visualization using Three.js
+  - `--format 3d` generates self-contained HTML with 3d-force-graph
+  - Full 3D camera controls: rotate, pan, zoom with mouse and touch support
+  - Click-to-highlight inheritance paths (ancestors and descendants glow)
+  - Force-directed layout (default) for natural node clustering
+  - `--layout hierarchical` mode positions parents above children
+  - `--size-by-usage` scales node size by tag usage count
+  - `--theme dark/light` for color scheme preference
 
 - **Field Details in All Formats** - `--show-fields` now shows actual field names in all visualization formats
   - Previously only showed field counts in Mermaid/DOT; now shows field names and types

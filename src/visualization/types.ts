@@ -161,3 +161,23 @@ export const HTMLRenderOptionsSchema = z.object({
 });
 
 export type HTMLRenderOptions = z.infer<typeof HTMLRenderOptionsSchema>;
+
+/**
+ * 3D (Three.js) renderer options (with Zod schema for validation)
+ */
+export const ThreeRenderOptionsSchema = z.object({
+  /** Layout algorithm: force-directed (default) or hierarchical */
+  layout: z.enum(["force", "hierarchical"]).optional(),
+  /** Color theme */
+  theme: z.enum(["light", "dark"]).optional(),
+  /** Show field details in node tooltips */
+  showFields: z.boolean().optional(),
+  /** Show inherited fields in tooltips (requires showFields) */
+  showInheritedFields: z.boolean().optional(),
+  /** Scale node size by usage count */
+  sizeByUsage: z.boolean().optional(),
+  /** Initial camera distance multiplier (default: 1.5) */
+  cameraDistance: z.number().optional(),
+});
+
+export type ThreeRenderOptions = z.infer<typeof ThreeRenderOptionsSchema>;

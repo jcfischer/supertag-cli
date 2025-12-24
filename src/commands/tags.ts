@@ -37,7 +37,7 @@ import { resolveOutputOptions } from "../utils/output-options";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
 import { VisualizationService } from "../visualization/service";
 import { render, supportedFormats, isFormatSupported } from "../visualization/renderers";
-import type { VisualizationFormat, MermaidRenderOptions, DOTRenderOptions, HTMLRenderOptions } from "../visualization/types";
+import type { VisualizationFormat, MermaidRenderOptions, DOTRenderOptions, HTMLRenderOptions, ThreeRenderOptions } from "../visualization/types";
 import { writeFileSync } from "fs";
 
 interface TagsMetadataOptions extends StandardOptions {
@@ -50,6 +50,7 @@ interface TagsMetadataOptions extends StandardOptions {
 interface VisualizeOptions extends StandardOptions {
   format?: string;
   root?: string;
+  from?: string;
   depth?: number;
   minUsage?: number;
   orphans?: boolean;
@@ -60,6 +61,8 @@ interface VisualizeOptions extends StandardOptions {
   showInherited?: boolean;
   colors?: boolean;
   theme?: string;
+  layout?: string;
+  sizeByUsage?: boolean;
 }
 
 /**
@@ -481,8 +484,9 @@ export function createTagsCommand(): Command {
   const visualizeCmd = tags
     .command("visualize")
     .description("Visualize supertag inheritance graph")
-    .option("--format <format>", "Output format (mermaid, dot, json, html)", "mermaid")
-    .option("--root <tag>", "Root tag to start from (show subtree only)")
+    .option("--format <format>", "Output format (mermaid, dot, json, html, 3d)", "mermaid")
+    .option("--root <tag>", "Root tag to start from (show descendants)")
+    .option("--from <tag>", "Start tag to show ancestors (upwards)")
     .option("--depth <n>", "Maximum depth to traverse", parseInt)
     .option("--min-usage <n>", "Minimum usage count to include", parseInt)
     .option("--orphans", "Include orphan tags (no parents or children)")
@@ -492,7 +496,9 @@ export function createTagsCommand(): Command {
     .option("--show-fields", "Show field names and types in nodes (all formats)")
     .option("--show-inherited", "Include inherited fields (all formats, requires --show-fields)")
     .option("--colors", "Use tag colors in output (DOT and HTML format)")
-    .option("--theme <theme>", "Color theme: light, dark (HTML format)", "light");
+    .option("--theme <theme>", "Color theme: light, dark (HTML and 3D format)", "light")
+    .option("--layout <layout>", "3D layout: force, hierarchical (3D format only)", "force")
+    .option("--size-by-usage", "Scale node size by usage count (3D format only)");
 
   addStandardOptions(visualizeCmd, { defaultLimit: "1000" });
 
@@ -530,6 +536,13 @@ export function createTagsCommand(): Command {
             process.exit(1);
           }
           data = subtree;
+        } else if (options.from) {
+          const ancestors = vizService.getAncestorsWithFields(options.from, options.depth);
+          if (!ancestors) {
+            console.error(`❌ Tag not found: ${options.from}`);
+            process.exit(1);
+          }
+          data = ancestors;
         } else {
           data = vizService.getDataWithFields(vizOptions);
         }
@@ -543,12 +556,19 @@ export function createTagsCommand(): Command {
             process.exit(1);
           }
           data = subtree;
+        } else if (options.from) {
+          const ancestors = vizService.getAncestors(options.from, options.depth);
+          if (!ancestors) {
+            console.error(`❌ Tag not found: ${options.from}`);
+            process.exit(1);
+          }
+          data = ancestors;
         }
       }
 
       // Build format-specific render options
       const direction = options.direction || "BT";
-      let renderOptions: MermaidRenderOptions | DOTRenderOptions | HTMLRenderOptions;
+      let renderOptions: MermaidRenderOptions | DOTRenderOptions | HTMLRenderOptions | ThreeRenderOptions;
 
       if (format === "mermaid") {
         renderOptions = {
@@ -570,6 +590,14 @@ export function createTagsCommand(): Command {
           showInheritedFields: options.showInherited || false,
           theme: (options.theme === "dark" ? "dark" : "light") as "light" | "dark",
         } as HTMLRenderOptions;
+      } else if (format === "3d") {
+        renderOptions = {
+          layout: (options.layout === "hierarchical" ? "hierarchical" : "force") as "force" | "hierarchical",
+          theme: (options.theme === "dark" ? "dark" : "light") as "light" | "dark",
+          showFields: options.showFields || false,
+          showInheritedFields: options.showInherited || false,
+          sizeByUsage: options.sizeByUsage || false,
+        } as ThreeRenderOptions;
       } else {
         renderOptions = {};
       }
