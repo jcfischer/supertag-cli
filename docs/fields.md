@@ -231,7 +231,7 @@ supertag fields values "Gratitude" --limit 30
 supertag fields search "family" --field "Gratitude"
 
 # Export for review
-supertag fields values "Gestern war gut weil" --json > reflections.json
+ --json > reflections.json
 ```
 
 ### Meeting Management

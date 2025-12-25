@@ -132,7 +132,20 @@ function formatValue(name: string | null | undefined, id: string): string {
 }
 
 /**
+ * Check if field_values table exists in the database
+ */
+function hasFieldValuesTable(db: Database): boolean {
+  const result = db
+    .query("SELECT name FROM sqlite_master WHERE type='table' AND name='field_values'")
+    .get() as { name: string } | null;
+  return result !== null;
+}
+
+/**
  * Extract and resolve node contents from the database
+ *
+ * Uses field_values table when available (preferred - has correct field names).
+ * Falls back to tuple parsing when field_values is not available.
  */
 export function getNodeContents(db: Database, nodeId: string): NodeContents | null {
   const nodeResult = withDbRetrySync(
@@ -149,6 +162,7 @@ export function getNodeContents(db: Database, nodeId: string): NodeContents | nu
   const rawData = JSON.parse(nodeResult.rawData);
   const childIds: string[] = rawData.children || [];
 
+  // Get children data for content children identification
   const placeholders = childIds.map(() => "?").join(",");
   const childrenData =
     childIds.length > 0
@@ -168,6 +182,66 @@ export function getNodeContents(db: Database, nodeId: string): NodeContents | nu
   const contentChildren: Array<{ id: string; name: string; isContent: boolean }> = [];
   const tags: string[] = [];
 
+  // Collect tuple IDs for exclusion from content children
+  const tupleIds = new Set<string>();
+
+  // Try to get fields from field_values table (preferred method)
+  if (hasFieldValuesTable(db)) {
+    const fieldValuesResult = withDbRetrySync(
+      () => db
+        .query(`
+          SELECT field_name, field_def_id, value_text, value_node_id, value_order
+          FROM field_values
+          WHERE parent_id = ?
+          ORDER BY field_name, value_order
+        `)
+        .all(nodeId) as Array<{
+          field_name: string;
+          field_def_id: string;
+          value_text: string;
+          value_node_id: string;
+          value_order: number;
+        }>,
+      "getNodeContents field_values"
+    );
+
+    // Group values by field name
+    const fieldGroups = new Map<string, { fieldId: string; values: string[]; valueId: string }>();
+
+    for (const row of fieldValuesResult) {
+      const formattedValue = formatValue(row.value_text, row.value_node_id);
+
+      if (!fieldGroups.has(row.field_name)) {
+        fieldGroups.set(row.field_name, {
+          fieldId: row.field_def_id,
+          values: [],
+          valueId: row.value_node_id,
+        });
+      }
+      fieldGroups.get(row.field_name)!.values.push(formattedValue);
+    }
+
+    // Convert to FieldValue array
+    for (const [fieldName, data] of fieldGroups) {
+      const meaningfulValues = data.values.filter(v => {
+        if (v.match(/^\d{4}-\d{2}-\d{2}/)) return true;
+        if (v.startsWith("[[")) return true;
+        if (v.match(/^[a-zA-Z0-9_-]{12,}$/)) return false;
+        return true;
+      });
+
+      if (meaningfulValues.length > 0) {
+        fields.push({
+          fieldName,
+          fieldId: data.fieldId,
+          value: meaningfulValues.join(", "),
+          valueId: data.valueId,
+        });
+      }
+    }
+  }
+
+  // Identify content children (non-tuple children)
   for (const childId of childIds) {
     const child = childMap.get(childId);
     if (!child) continue;
@@ -175,64 +249,7 @@ export function getNodeContents(db: Database, nodeId: string): NodeContents | nu
     const childRaw = JSON.parse(child.rawData);
 
     if (childRaw.props?._docType === "tuple") {
-      const tupleChildren: string[] = childRaw.children || [];
-
-      if (tupleChildren.length >= 1) {
-        const resolvedPlaceholders = tupleChildren.map(() => "?").join(",");
-        const resolvedNodes =
-          tupleChildren.length > 0
-            ? withDbRetrySync(
-                () => db
-                  .query(
-                    `SELECT id, name FROM nodes WHERE id IN (${resolvedPlaceholders})`
-                  )
-                  .all(...tupleChildren) as Array<{ id: string; name: string | null }>,
-                "getNodeContents resolvedNodes"
-              )
-            : [];
-
-        const resolvedMap = new Map(resolvedNodes.map((n) => [n.id, n.name]));
-
-        let fieldName = "";
-        let fieldId = "";
-        const values: string[] = [];
-        let valueId = "";
-
-        for (const id of tupleChildren) {
-          const name = resolvedMap.get(id);
-          const mappedName = getFieldNameFromDb(db, id);
-
-          if (id.startsWith("SYS_")) {
-            fieldName = mappedName;
-            fieldId = id;
-          } else if (mappedName !== id) {
-            fieldName = mappedName;
-            fieldId = id;
-          } else if (name?.startsWith("⚙️") || isFieldName(name)) {
-            fieldName = name || id;
-            fieldId = id;
-          } else {
-            const formattedValue = formatValue(name, id);
-            values.push(formattedValue);
-            if (!valueId) valueId = id;
-          }
-        }
-
-        const meaningfulValues = values.filter(v => {
-          if (v.match(/^\d{4}-\d{2}-\d{2}/)) return true;
-          if (v.startsWith("[[")) return true;
-          if (v.match(/^[a-zA-Z0-9_-]{12,}$/)) return false;
-          return true;
-        });
-        if (fieldName && meaningfulValues.length > 0) {
-          fields.push({
-            fieldName,
-            fieldId,
-            value: meaningfulValues.join(", "),
-            valueId
-          });
-        }
-      }
+      tupleIds.add(childId);
     } else {
       contentChildren.push({
         id: childId,
@@ -242,6 +259,7 @@ export function getNodeContents(db: Database, nodeId: string): NodeContents | nu
     }
   }
 
+  // Get tags
   const tagResults = withDbRetrySync(
     () => db
       .query("SELECT tag_name FROM tag_applications WHERE data_node_id = ?")

@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `resolveFieldNameFromTuple()` now looks up SYS_* names from centralized `SYSTEM_FIELD_NAMES` mapping
   - Added tests for Due date (SYS_A61), Date (SYS_A90), and Attendees (SYS_A142) extraction
 
+### Added
+
+- **Expanded System Field Mappings** - Added 12 additional SYS_* field mappings for comprehensive field extraction
+  - Core fields: Tag (SYS_A13), Due date (SYS_A61), Date (SYS_A90), Attendees (SYS_A142)
+  - Schema fields: Supertag (SYS_T01), Field (SYS_T02), Option value (SYS_T03)
+  - Search fields: Search expression (SYS_A15), Search title (SYS_A144)
+  - AI/Entity fields: Entity type (SYS_A130)
+  - Transcript fields: Speaker (SYS_A150), Transcript speaker (SYS_A252), Start time (SYS_A253), End time (SYS_A254)
+  - Internal fields: System reference (SYS_A12), Default value (SYS_A16), Field reference (SYS_A20)
+
 ## [1.1.1] - 2025-12-24
 
 ### Added

@@ -18,14 +18,44 @@ import type { ExtractedFieldValue } from "../types/field-values";
  * System field IDs to human-readable names
  * These are synthetic field IDs that don't exist in the nodes table
  * but are used by Tana for built-in fields
+ *
+ * Categories:
+ * - Core fields (SYS_A13, SYS_A61, SYS_A90, SYS_A142): Common user-facing fields
+ * - Schema fields (SYS_T01, SYS_T02, SYS_T03): Supertag/field definitions
+ * - Search fields (SYS_A15, SYS_A144): Saved search configurations
+ * - AI/Entity fields (SYS_A130): AI-detected entity types
+ * - Transcript fields (SYS_A150, SYS_A252, SYS_A253, SYS_A254): Meeting transcripts
+ * - Internal fields (SYS_A12, SYS_A16, SYS_A20): System configuration
  */
 export const SYSTEM_FIELD_NAMES: Record<string, string> = {
+  // Core user-facing fields
   SYS_A13: "Tag",
   SYS_A61: "Due date",
   SYS_A90: "Date",
   SYS_A142: "Attendees",
+
+  // Schema/definition fields
   SYS_T01: "Supertag",
   SYS_T02: "Field",
+  SYS_T03: "Option value",
+
+  // Search configuration fields
+  SYS_A15: "Search expression",
+  SYS_A144: "Search title",
+
+  // AI/Entity detection fields
+  SYS_A130: "Entity type",
+
+  // Transcript/meeting fields
+  SYS_A150: "Speaker",
+  SYS_A252: "Transcript speaker",
+  SYS_A253: "Start time",
+  SYS_A254: "End time",
+
+  // Internal system fields
+  SYS_A12: "System reference",
+  SYS_A16: "Default value",
+  SYS_A20: "Field reference",
 };
 
 /**

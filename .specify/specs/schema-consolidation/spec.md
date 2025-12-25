@@ -141,9 +141,13 @@ A single service must provide schema data to all consumers (CLI commands, MCP to
 ## [NEEDS CLARIFICATION]
 
 - **Color extraction:** Where is supertag color stored in Tana exports? (props.color? tagDef children?)
+  -> I don't know. Where does it come from for the schema sync?
 - **Description extraction:** Where is supertag description stored? (props.description? separate node?)
+  -> I don't know, find out
 - **Field description:** Do fields have descriptions in Tana exports, or is this display-only?
+  -> Yes. all nodes (fields are special nodes) can have descriptions
 - **Migration strategy:** Should we migrate data from existing schema-registry.json, or re-extract from export?
+  -> re-extract from export
 
 ## Out of Scope
 
