@@ -66,7 +66,13 @@ describe("content-filter", () => {
       expect(SYSTEM_DOC_TYPES).not.toContain("chat");
       expect(SYSTEM_DOC_TYPES).not.toContain("url");
       expect(SYSTEM_DOC_TYPES).not.toContain("codeblock");
-      expect(SYSTEM_DOC_TYPES).not.toContain("transcriptLine");
+    });
+
+    it("should include transcript types (excluded by default)", () => {
+      // Transcripts are in SYSTEM_DOC_TYPES to exclude them by default
+      // Use --include-transcripts flag to opt-in
+      expect(SYSTEM_DOC_TYPES).toContain("transcript");
+      expect(SYSTEM_DOC_TYPES).toContain("transcriptLine");
     });
   });
 
@@ -214,7 +220,6 @@ describe("content-filter", () => {
       // Should include:
       // - "This is a good content node with enough length" (47 chars, no docType)
       // - "Another meaningful node" (23 chars, no docType)
-      // - "Meeting notes from yesterday" (28 chars, transcriptLine docType - content type!)
       // Excludes:
       // - "Yes." (4 chars < 10)
       // - "Mhm." (4 chars < 10)
@@ -223,7 +228,8 @@ describe("content-filter", () => {
       // - "1970-01-01T00:00:00.000Z" (timestamp)
       // - "typeChoice" (10 chars, but tuple docType)
       // - "tuple" (5 chars < 10, also tuple docType)
-      expect(defaultCount).toBe(3);
+      // - "Meeting notes from yesterday" (28 chars, but transcriptLine docType - now excluded)
+      expect(defaultCount).toBe(2);
     });
   });
 

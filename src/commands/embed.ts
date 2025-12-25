@@ -167,6 +167,7 @@ export function createEmbedCommand(): Command {
     .option("--include-all", "Include all nodes (bypass content filters)")
     .option("--include-timestamps", "Include timestamp-like nodes")
     .option("--include-system", "Include system docTypes (tuple, metanode, etc.)")
+    .option("--include-transcripts", "Include transcript content (90K+ lines, normally excluded)")
     .option("--include-fields", "Include field values in embedding context")
     .option("-v, --verbose", "Verbose output")
     .option("--lance-batch-size <n>", "LanceDB write batch size (default: 5000)")
@@ -275,6 +276,7 @@ export function createEmbedCommand(): Command {
         minLength: options.includeAll ? undefined : parseInt(options.minLength),
         excludeTimestamps: !options.includeAll && !options.includeTimestamps,
         excludeSystemTypes: !options.includeAll && !options.includeSystem,
+        includeTranscripts: options.includeTranscripts,
         tag: options.tag,
         limit: options.limit ? parseInt(options.limit) : undefined,
         includeAll: options.includeAll,
@@ -306,6 +308,7 @@ export function createEmbedCommand(): Command {
           console.log(`     - Min length: ${options.minLength} chars`);
           if (!options.includeTimestamps) console.log("     - Excluding timestamp artifacts");
           if (!options.includeSystem) console.log("     - Excluding system docTypes");
+          if (options.includeTranscripts) console.log("     - Including transcript content");
         } else {
           console.log("     - None (include-all mode)");
         }

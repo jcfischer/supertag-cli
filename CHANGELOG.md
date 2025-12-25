@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Transcript Filtering and Commands (Spec 023)** - Dedicated transcript access with default exclusion from search/embeddings
+  - New `supertag transcript list` command - List meetings with transcripts (ID, name, line count, date)
+  - New `supertag transcript show <id>` command - Display transcript content with speaker and timing info
+  - New `supertag transcript search <query>` command - Full-text search within transcript content only
+  - New `--include-transcripts` flag for `embed generate` to opt-in to transcript embedding
+  - Transcripts (90K+ lines) excluded from default embeddings to improve search quality
+  - MCP tools: `tana_transcript_list`, `tana_transcript_show`, `tana_transcript_search`
+  - Optimized batch queries for transcript metadata (30x performance improvement)
+
 ### Fixed
 
 - **System Field Extraction** - Fixed SYS_* fields (Due date, Date, Attendees) not being extracted into `field_values` table

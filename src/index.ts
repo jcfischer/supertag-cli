@@ -31,6 +31,7 @@ import { createNodesCommand } from './commands/nodes';
 import { createTagsCommand } from './commands/tags';
 import { createStatsCommand } from './commands/stats';
 import { createFieldsCommand } from './commands/fields';
+import { createTranscriptCommand } from './commands/transcript';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -144,11 +145,12 @@ program.addCommand(createEmbedCommand());     // supertag embed config|generate|
  * Harmonized commands (CLI Harmonization Phase 1)
  * Object-action pattern for consistent CLI experience.
  */
-program.addCommand(createSearchCommand());    // supertag search <query> [--semantic] [--tag]
-program.addCommand(createNodesCommand());     // supertag nodes show|refs|recent
-program.addCommand(createTagsCommand());      // supertag tags list|top|show
-program.addCommand(createStatsCommand());     // supertag stats [--db] [--embed] [--filter]
-program.addCommand(createFieldsCommand());    // supertag fields list|values|search
+program.addCommand(createSearchCommand());     // supertag search <query> [--semantic] [--tag]
+program.addCommand(createNodesCommand());      // supertag nodes show|refs|recent
+program.addCommand(createTagsCommand());       // supertag tags list|top|show
+program.addCommand(createStatsCommand());      // supertag stats [--db] [--embed] [--filter]
+program.addCommand(createFieldsCommand());     // supertag fields list|values|search
+program.addCommand(createTranscriptCommand()); // supertag transcript list|show|search
 
 /**
  * Help text with examples
@@ -190,6 +192,11 @@ program.on('--help', () => {
   console.log('    supertag fields list           List all field names');
   console.log('    supertag fields values <name>  Get values for a field');
   console.log('    supertag fields search <query> Search in field values');
+  console.log('');
+  console.log('  TRANSCRIPTS:');
+  console.log('    supertag transcript list       List meetings with transcripts');
+  console.log('    supertag transcript show <id>  Show transcript content');
+  console.log('    supertag transcript search <q> Search in transcript content');
   console.log('');
   console.log('  EXPORT (Separate Tool):');
   console.log('    supertag-export login          First-time login setup');

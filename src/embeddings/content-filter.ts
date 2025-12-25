@@ -34,6 +34,11 @@ import { ENTITY_FILTER_SQL, getEntityStats } from "../db/entity";
 /**
  * System docTypes that should be excluded from embeddings.
  * These are structural/metadata nodes with no semantic search value.
+ *
+ * Note: transcript and transcriptLine are excluded by default because:
+ * - 90K+ transcript lines (6.7% of all nodes) create significant noise
+ * - Spoken language contains filler words, fragments, "um", "äh"
+ * - Use --include-transcripts flag to include them when needed
  */
 export const SYSTEM_DOC_TYPES = [
   "tuple", // Field:value pairs - all named generically
@@ -50,18 +55,21 @@ export const SYSTEM_DOC_TYPES = [
   "group", // Group nodes
   "chatbot", // Chatbot definitions
   "workspace", // Workspace metadata
+  "transcript", // Transcript containers - excluded by default (use --include-transcripts)
+  "transcriptLine", // Individual transcript lines - excluded by default (90K+ noisy nodes)
 ] as const;
 
 /**
  * Content docTypes that SHOULD be included in embeddings.
  * These contain meaningful searchable content.
+ *
+ * Note: transcript and transcriptLine moved to SYSTEM_DOC_TYPES (excluded by default).
+ * Use includeTranscripts option to include them in search/embeddings.
  */
 export const CONTENT_DOC_TYPES = [
-  "transcriptLine", // Meeting transcriptions - valuable!
   "chat", // Chat messages
   "url", // URLs with titles
   "codeblock", // Code snippets
-  "transcript", // Full transcripts
 ] as const;
 
 /**
@@ -95,6 +103,15 @@ export interface ContentFilterOptions {
    * Dramatically reduces noise by focusing on meaningful user-created content.
    */
   entitiesOnly?: boolean;
+
+  /**
+   * Include transcript content (transcript, transcriptLine nodes).
+   * By default, transcripts are excluded from search/embeddings because:
+   * - 90K+ transcript lines create significant noise (6.7% of all nodes)
+   * - Spoken language contains filler words, fragments, "um", "äh"
+   * Set to true to include transcripts in search results or embeddings.
+   */
+  includeTranscripts?: boolean;
 }
 
 /**
@@ -144,7 +161,13 @@ export function buildContentFilterQuery(options: ContentFilterOptions): {
 
     // Exclude system docTypes
     if (options.excludeSystemTypes) {
-      const docTypeList = SYSTEM_DOC_TYPES.map((t) => `'${t}'`).join(", ");
+      // When includeTranscripts is true, exclude transcript types from the exclusion list
+      const transcriptTypes = ["transcript", "transcriptLine"];
+      const typesToExclude = options.includeTranscripts
+        ? SYSTEM_DOC_TYPES.filter((t) => !transcriptTypes.includes(t))
+        : SYSTEM_DOC_TYPES;
+
+      const docTypeList = typesToExclude.map((t) => `'${t}'`).join(", ");
       conditions.push(`(
         json_extract(n.raw_data, '$.props._docType') IS NULL
         OR json_extract(n.raw_data, '$.props._docType') NOT IN (${docTypeList})

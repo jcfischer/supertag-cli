@@ -28,6 +28,7 @@ import { sync } from './tools/sync.js';
 import { semanticSearch } from './tools/semantic-search.js';
 import { fieldValues } from './tools/field-values.js';
 import { supertagInfo } from './tools/supertag-info.js';
+import { transcriptList, transcriptShow, transcriptSearch } from './tools/transcript.js';
 import { VERSION } from '../version.js';
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
@@ -144,6 +145,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Query supertag inheritance and fields. Use mode="fields" to get field definitions (with includeInherited=true for inherited fields), mode="inheritance" to get parent relationships (with includeAncestors=true for full ancestry chain), or mode="full" for both fields and inheritance. Useful for understanding supertag structure and validating field names.',
         inputSchema: schemas.zodToJsonSchema(schemas.supertagInfoSchema),
       },
+      {
+        name: 'tana_transcript_list',
+        description:
+          'List meetings that have transcripts. Returns meeting IDs, names, transcript IDs, and line counts. Use to discover available transcripts before showing or searching.',
+        inputSchema: schemas.zodToJsonSchema(schemas.transcriptListSchema),
+      },
+      {
+        name: 'tana_transcript_show',
+        description:
+          'Show transcript content for a meeting. Returns transcript lines with speaker names, timestamps, and text. Provide either a meeting ID or transcript ID.',
+        inputSchema: schemas.zodToJsonSchema(schemas.transcriptShowSchema),
+      },
+      {
+        name: 'tana_transcript_search',
+        description:
+          'Search within transcript content. Full-text search across all transcript lines. Returns matching lines with speaker info and meeting context.',
+        inputSchema: schemas.zodToJsonSchema(schemas.transcriptSearchSchema),
+      },
     ],
   };
 });
@@ -205,6 +224,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_supertag_info': {
         const validated = schemas.supertagInfoSchema.parse(args);
         result = await supertagInfo(validated);
+        break;
+      }
+      case 'tana_transcript_list': {
+        const validated = schemas.transcriptListSchema.parse(args);
+        result = await transcriptList(validated);
+        break;
+      }
+      case 'tana_transcript_show': {
+        const validated = schemas.transcriptShowSchema.parse(args);
+        result = await transcriptShow(validated);
+        break;
+      }
+      case 'tana_transcript_search': {
+        const validated = schemas.transcriptSearchSchema.parse(args);
+        result = await transcriptSearch(validated);
         break;
       }
       default:

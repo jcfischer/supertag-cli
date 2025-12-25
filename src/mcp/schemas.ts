@@ -229,6 +229,34 @@ export const semanticSearchSchema = z.object({
 });
 export type SemanticSearchInput = z.infer<typeof semanticSearchSchema>;
 
+// tana_transcript_list
+export const transcriptListSchema = z.object({
+  workspace: workspaceSchema,
+  limit: limitSchema,
+});
+export type TranscriptListInput = z.infer<typeof transcriptListSchema>;
+
+// tana_transcript_show
+export const transcriptShowSchema = z.object({
+  id: z.string().min(1).describe('Meeting or transcript node ID'),
+  workspace: workspaceSchema,
+  limit: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(100)
+    .describe('Maximum number of transcript lines to return'),
+});
+export type TranscriptShowInput = z.infer<typeof transcriptShowSchema>;
+
+// tana_transcript_search
+export const transcriptSearchSchema = z.object({
+  query: z.string().min(1).describe('Full-text search query for transcript content'),
+  workspace: workspaceSchema,
+  limit: limitSchema,
+});
+export type TranscriptSearchInput = z.infer<typeof transcriptSearchSchema>;
+
 // Zod v4 internal type definition
 interface ZodDef {
   type: string;
