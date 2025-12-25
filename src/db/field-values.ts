@@ -48,6 +48,7 @@ export const SYSTEM_FIELD_NAMES: Record<string, string> = {
 
   // Transcript/meeting fields
   SYS_A150: "Speaker",
+  SYS_A199: "Transcript",
   SYS_A252: "Transcript speaker",
   SYS_A253: "Start time",
   SYS_A254: "End time",
