@@ -5,6 +5,19 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-12-26
+
+### Fixed
+
+- **Transcript Search Table Format** - `transcript search --pretty` now uses table format matching documentation
+  - Added Meeting ID column to search results table
+  - Columns: ID, Meeting, Speaker, Text (truncated to 50 chars)
+  - Inline date references in meeting names now parsed correctly
+
+- **CI Test Fixes** - Fixed MCP transcript tests failing on GitHub CI
+  - Added database existence check before running tests
+  - Fixed TypeScript type errors for workspace parameter
+
 ## [1.2.0] - 2025-12-26
 
 ### Added
