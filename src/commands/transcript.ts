@@ -38,6 +38,7 @@ import {
   header,
   formatDateISO,
   tip,
+  table,
 } from "../utils/format";
 import { resolveOutputOptions } from "../utils/output-options";
 import type { StandardOptions } from "../types";
@@ -104,19 +105,16 @@ function createListCommand(): Command {
       } else if (outputOpts.pretty) {
         console.log(`\n${header(EMOJI.transcribe, `Meetings with transcripts (${meetings.length})`)}:\n`);
 
-        for (const meeting of meetings) {
+        const rows = meetings.map((meeting) => {
           const dateStr = meeting.created
             ? outputOpts.humanDates
               ? new Date(meeting.created).toLocaleDateString()
               : formatDateISO(meeting.created)
-            : "unknown";
+            : "";
+          return [meeting.meetingId, meeting.meetingName, String(meeting.lineCount), dateStr];
+        });
 
-          console.log(`📅 ${meeting.meetingName}`);
-          console.log(`   ID: ${meeting.meetingId}`);
-          console.log(`   Lines: ${meeting.lineCount}`);
-          console.log(`   Date: ${dateStr}`);
-          console.log();
-        }
+        console.log(table(["ID", "Meeting", "Lines", "Date"], rows, { align: ["left", "left", "right", "left"] }));
 
         console.log(tip("Use 'supertag transcript show <id>' to view transcript"));
       } else {
