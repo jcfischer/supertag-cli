@@ -59,6 +59,48 @@ export function isTranscriptNode(docType: string | null | undefined): boolean {
 }
 
 /**
+ * Parse inline reference spans and extract readable text
+ *
+ * Handles:
+ * - data-inlineref-date: Extracts dateTimeString and formats as date
+ * - data-inlineref-node: Extracts display text from span content
+ *
+ * @param text - Text potentially containing inline ref spans
+ * @returns Clean text with spans replaced by readable values
+ */
+export function parseInlineRefs(text: string): string {
+  if (!text || !text.includes("<span")) return text;
+
+  // Handle date inline refs: <span data-inlineref-date="{...}"></span>
+  const datePattern = /<span\s+data-inlineref-date="([^"]+)"[^>]*>([^<]*)<\/span>/g;
+  text = text.replace(datePattern, (_, jsonStr, content) => {
+    try {
+      // Decode HTML entities
+      const decoded = jsonStr
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">");
+      const data = JSON.parse(decoded);
+      if (data.dateTimeString) {
+        // Format as ISO-8601 date
+        const date = new Date(data.dateTimeString);
+        return date.toISOString().slice(0, 16).replace("T", " ");
+      }
+    } catch {
+      // Fall through to content or empty
+    }
+    return content || "";
+  });
+
+  // Handle node inline refs: <span data-inlineref-node="...">Display</span>
+  const nodePattern = /<span\s+data-inlineref-node="[^"]*"[^>]*>([^<]*)<\/span>/g;
+  text = text.replace(nodePattern, (_, content) => content || "");
+
+  return text.trim();
+}
+
+/**
  * Format transcript timestamp to human-readable MM:SS format
  *
  * Transcript timestamps use 1970-01-01T00:35:58.004Z format where
@@ -242,6 +284,7 @@ export function getMeetingsWithTranscripts(
   const { limit = 50, offset = 0 } = options;
 
   // Find all meetings that have SYS_A199 (transcript) links
+  // Excludes trashed meetings and deduplicates by transcript_id
   const results = db
     .query(
       `
@@ -262,6 +305,8 @@ export function getMeetingsWithTranscripts(
       JOIN nodes v ON v.id = json_extract(t.raw_data, '$.children[1]')
         AND json_extract(v.raw_data, '$.props._docType') = 'transcript'
       WHERE json_extract(t.raw_data, '$.children[0]') = 'SYS_A199'
+        AND json_extract(m.raw_data, '$.props._ownerId') NOT LIKE '%_TRASH'
+      GROUP BY v.id
       ORDER BY m.created DESC
       LIMIT ? OFFSET ?
     `
@@ -276,7 +321,7 @@ export function getMeetingsWithTranscripts(
 
   return results.map((r) => ({
     meetingId: r.meeting_id,
-    meetingName: r.meeting_name ?? "(unnamed)",
+    meetingName: parseInlineRefs(r.meeting_name ?? "") || "(unnamed)",
     transcriptId: r.transcript_id,
     lineCount: r.line_count,
     created: r.created,

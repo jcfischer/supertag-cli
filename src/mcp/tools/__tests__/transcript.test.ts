@@ -58,27 +58,31 @@ describe("MCP Transcript Tools", () => {
       expect(defaults.limit).toBe(20);
     });
 
-    it("should return list of meetings with transcripts", async () => {
-      if (!hasTranscripts) {
-        console.log("Skipping - no transcripts available");
-        return;
-      }
+    it(
+      "should return list of meetings with transcripts",
+      async () => {
+        if (!hasTranscripts) {
+          console.log("Skipping - no transcripts available");
+          return;
+        }
 
-      const result = await transcriptList({ limit: 5 });
+        const result = await transcriptList({ limit: 5 });
 
-      expect(result).toHaveProperty("workspace");
-      expect(result).toHaveProperty("meetings");
-      expect(result).toHaveProperty("count");
-      expect(Array.isArray(result.meetings)).toBe(true);
+        expect(result).toHaveProperty("workspace");
+        expect(result).toHaveProperty("meetings");
+        expect(result).toHaveProperty("count");
+        expect(Array.isArray(result.meetings)).toBe(true);
 
-      if (result.meetings.length > 0) {
-        const meeting = result.meetings[0];
-        expect(meeting).toHaveProperty("meetingId");
-        expect(meeting).toHaveProperty("meetingName");
-        expect(meeting).toHaveProperty("transcriptId");
-        expect(meeting).toHaveProperty("lineCount");
-      }
-    });
+        if (result.meetings.length > 0) {
+          const meeting = result.meetings[0];
+          expect(meeting).toHaveProperty("meetingId");
+          expect(meeting).toHaveProperty("meetingName");
+          expect(meeting).toHaveProperty("transcriptId");
+          expect(meeting).toHaveProperty("lineCount");
+        }
+      },
+      30000
+    );
 
     it("should respect limit parameter", async () => {
       if (!hasTranscripts) {

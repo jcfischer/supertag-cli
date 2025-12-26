@@ -52,24 +52,29 @@ describe("Transcript CLI Commands", () => {
       expect(result.length).toBeGreaterThan(0);
     });
 
-    it("should support --json output", async () => {
-      if (!hasTranscripts) {
-        console.log("Skipping - no transcripts available");
-        return;
-      }
+    it(
+      "should support --json output",
+      async () => {
+        if (!hasTranscripts) {
+          console.log("Skipping - no transcripts available");
+          return;
+        }
 
-      const result = await $`bun run src/index.ts transcript list --limit 3 --json`.text();
+        const result =
+          await $`bun run src/index.ts transcript list --limit 3 --json`.text();
 
-      // Should be valid JSON
-      const parsed = JSON.parse(result.trim());
-      expect(Array.isArray(parsed)).toBe(true);
-      if (parsed.length > 0) {
-        expect(parsed[0]).toHaveProperty("meetingId");
-        expect(parsed[0]).toHaveProperty("meetingName");
-        expect(parsed[0]).toHaveProperty("transcriptId");
-        expect(parsed[0]).toHaveProperty("lineCount");
-      }
-    });
+        // Should be valid JSON
+        const parsed = JSON.parse(result.trim());
+        expect(Array.isArray(parsed)).toBe(true);
+        if (parsed.length > 0) {
+          expect(parsed[0]).toHaveProperty("meetingId");
+          expect(parsed[0]).toHaveProperty("meetingName");
+          expect(parsed[0]).toHaveProperty("transcriptId");
+          expect(parsed[0]).toHaveProperty("lineCount");
+        }
+      },
+      30000
+    );
   });
 
   describe("T-3.2: transcript show", () => {

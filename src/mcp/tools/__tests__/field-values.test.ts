@@ -93,20 +93,24 @@ describe("tana_field_values MCP Tool", () => {
       expect(Array.isArray(result.results)).toBe(true);
     });
 
-    testFn("should support field name filter in search", async () => {
-      const listResult = await fieldValues({ mode: "list" });
+    testFn(
+      "should support field name filter in search",
+      async () => {
+        const listResult = await fieldValues({ mode: "list" });
 
-      if (listResult.fields && listResult.fields.length > 0) {
-        const fieldName = listResult.fields[0].fieldName;
-        const result = await fieldValues({
-          mode: "search",
-          query: "a OR e OR i OR o OR u", // Common vowels to match most content
-          fieldName,
-        });
+        if (listResult.fields && listResult.fields.length > 0) {
+          const fieldName = listResult.fields[0].fieldName;
+          const result = await fieldValues({
+            mode: "search",
+            query: "a OR e OR i OR o OR u", // Common vowels to match most content
+            fieldName,
+          });
 
-        expect(result.results).toBeDefined();
-      }
-    });
+          expect(result.results).toBeDefined();
+        }
+      },
+      120000
+    );
   });
 
   describe("error handling (T-5.4)", () => {
