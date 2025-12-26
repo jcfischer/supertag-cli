@@ -104,10 +104,10 @@ supertag transcript search "quarterly review"
 Search for text that was spoken in meetings:
 
 ```
-Meeting                        Speaker    Text
-────────────────────────────────────────────────────────────
-Q4 Planning Session           Speaker 2   ...discussed the quarterly review...
-Monthly Team Standup          Speaker 1   ...prep for quarterly review meeting...
+ID            Meeting                   Speaker      Text
+───────────────────────────────────────────────────────────────────────────────
+xY7nKpQrSt    Q4 Planning Session       Speaker 2    ...discussed the quarterly review...
+M9rkJkwuED    Monthly Team Standup      Speaker 1    ...prep for quarterly review meeting...
 ```
 
 **Options:**

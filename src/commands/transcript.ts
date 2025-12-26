@@ -292,15 +292,25 @@ function createSearchCommand(): Command {
       } else if (outputOpts.pretty) {
         console.log(`\n${header(EMOJI.search, `Transcript search: "${query}" (${results.length} results)`)}:\n`);
 
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          const speakerInfo = result.speaker ? ` (${result.speaker})` : "";
-          const meetingInfo = result.meetingName ? ` — from "${result.meetingName}"` : "";
+        const rows = results.map((result) => {
+          // Truncate text to reasonable length for table display
+          const maxTextLen = 50;
+          const text = result.lineText.length > maxTextLen
+            ? result.lineText.slice(0, maxTextLen - 3) + "..."
+            : result.lineText;
+          // Parse inline refs in meeting name (e.g., date spans)
+          const meetingName = parseInlineRefs(result.meetingName ?? "");
+          return [
+            result.meetingId ?? "",
+            meetingName,
+            result.speaker ?? "",
+            text,
+          ];
+        });
 
-          console.log(`${i + 1}. "${result.lineText}"${speakerInfo}${meetingInfo}`);
-          console.log(`   ID: ${result.lineId}`);
-          console.log();
-        }
+        console.log(table(["ID", "Meeting", "Speaker", "Text"], rows, { align: ["left", "left", "left", "left"] }));
+
+        console.log(tip("Use 'supertag transcript show <id>' to view full transcript"));
       } else {
         // Unix mode: TSV output
         // Format: line_id\tline_text\tspeaker\tmeeting_name

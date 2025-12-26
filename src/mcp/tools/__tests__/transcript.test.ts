@@ -22,6 +22,7 @@ import {
 
 describe("MCP Transcript Tools", () => {
   let hasTranscripts: boolean = false;
+  let dbExists: boolean = false;
   let dbPath: string;
 
   beforeAll(() => {
@@ -34,6 +35,7 @@ describe("MCP Transcript Tools", () => {
       return;
     }
 
+    dbExists = true;
     const db = new Database(dbPath, { readonly: true });
     const transcriptCount = db
       .query(`
@@ -137,6 +139,11 @@ describe("MCP Transcript Tools", () => {
     }, 15000); // Two sequential queries - may be slow
 
     it("should return empty lines for non-existent ID", async () => {
+      if (!dbExists) {
+        console.log("Skipping - no database available");
+        return;
+      }
+
       const result = await transcriptShow({ id: "nonexistent123" });
 
       expect(result.lines).toEqual([]);
