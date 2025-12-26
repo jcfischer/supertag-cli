@@ -308,7 +308,8 @@ export function createEmbedCommand(): Command {
           console.log(`     - Min length: ${options.minLength} chars`);
           if (!options.includeTimestamps) console.log("     - Excluding timestamp artifacts");
           if (!options.includeSystem) console.log("     - Excluding system docTypes");
-          if (options.includeTranscripts) console.log("     - Including transcript content");
+          if (!options.includeTranscripts) console.log("     - Excluding transcripts");
+          else console.log("     - Including transcript content");
         } else {
           console.log("     - None (include-all mode)");
         }
