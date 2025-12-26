@@ -22,6 +22,7 @@ import {
   getTranscriptLines,
   searchTranscripts,
   formatTranscriptTime,
+  parseInlineRefs,
   type TranscriptSummary,
   type TranscriptLine,
   type TranscriptSearchResult,
@@ -193,11 +194,13 @@ function createShowCommand(): Command {
         .query(`SELECT name FROM nodes WHERE id = ?`)
         .get(id) as { name: string } | null;
 
+      const parsedName = parseInlineRefs(meetingName?.name ?? "") || "(unknown)";
+
       if (options.json) {
         console.log(formatJsonOutput({
           meeting: {
             id,
-            name: meetingName?.name ?? "(unknown)",
+            name: parsedName,
           },
           lines: lines.map((line) => ({
             id: line.id,
@@ -209,7 +212,7 @@ function createShowCommand(): Command {
           })),
         }));
       } else if (outputOpts.pretty) {
-        console.log(`\n${header(EMOJI.transcribe, meetingName?.name ?? id)}:\n`);
+        console.log(`\n${header(EMOJI.transcribe, parsedName)}:\n`);
 
         let currentSpeaker: string | null = null;
 
