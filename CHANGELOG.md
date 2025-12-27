@@ -21,6 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Matches functionality of `tags fields --all`
   - Uses `SupertagMetadataService.getAllFields()` for accurate inheritance chain
 
+### Fixed
+
+- **Explicit Field Type Extraction** - Field types now extracted from Tana's typeChoice structure
+  - Discovered Tana encodes field types in `typeChoice` tuples with SYS_D* codes:
+    - SYS_D01 = checkbox, SYS_D03 = date, SYS_D05 = reference (Options from Supertag)
+    - SYS_D06 = text, SYS_D08 = number, SYS_D10 = url, SYS_D11 = email
+    - SYS_D12 = options (inline), SYS_D13 = reference (Tana User)
+  - Added new DataTypes: `email`, `options` for more accurate field typing
+  - Type extraction runs during sync, before value-based inference
+  - Reduced "text" type fields from 790 to 509, correctly typing 280+ additional fields
+  - Fixes bug where all field types displayed as "text" regardless of actual Tana configuration
+
+- **Value-Based Type Inference** - Fallback inference from actual field values
+  - Reference fields correctly detected when values have `_metaNodeId` (e.g., Horizon, Assignee)
+  - Date fields correctly detected from value patterns (ISO dates, PARENT+1, etc.)
+  - Checkbox fields correctly detected from true/false values
+  - Falls back to name-based heuristics when no values exist
+
 ## [1.2.1] - 2025-12-26
 
 ### Fixed

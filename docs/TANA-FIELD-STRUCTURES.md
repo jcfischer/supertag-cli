@@ -262,6 +262,99 @@ supertag tags show outcome-goal --inheritance
 
 ---
 
+## Field Type Definitions
+
+Each field definition (attrDef) can have a **type specification** stored in a `typeChoice` child tuple. This allows supertag-cli to determine the exact field type from Tana's internal representation.
+
+### typeChoice Structure
+
+```
+attrDef Node (e.g., "Due date", docType: attrDef)
+└── typeChoice Tuple (_sourceId: SYS_A02, name: "typeChoice")
+    ├── SYS_T06           ← type marker (always present)
+    └── SYS_D03           ← field type code (date in this case)
+```
+
+**JSON Example** (Date field):
+```json
+{
+  "id": "LUBR1psF86XL",
+  "props": {
+    "name": "Due date",
+    "_docType": "attrDef"
+  },
+  "children": ["VGrcCAv5NTy8"]
+}
+
+{
+  "id": "VGrcCAv5NTy8",
+  "props": {
+    "_sourceId": "SYS_A02",
+    "name": "typeChoice"
+  },
+  "children": ["SYS_T06", "SYS_D03"]
+}
+```
+
+### SYS_D* Type Codes
+
+Tana encodes field types using system reference codes:
+
+| SYS_D Code | Field Type | Description |
+|------------|------------|-------------|
+| SYS_D01 | checkbox | Boolean/checkbox field |
+| SYS_D03 | date | Date field (calendar picker) |
+| SYS_D05 | reference | Options from Supertag (reference to tagged items) |
+| SYS_D06 | text | Plain text field |
+| SYS_D08 | number | Numeric field |
+| SYS_D10 | url | URL field (clickable link) |
+| SYS_D11 | email | Email field |
+| SYS_D12 | options | Inline options (dropdown) |
+| SYS_D13 | reference | Tana User (team member assignment) |
+
+### Type Extraction Logic
+
+To determine a field's type:
+
+1. Find the field definition (attrDef) node
+2. Look for a child with `_sourceId: "SYS_A02"` and `name: "typeChoice"`
+3. In the typeChoice's children, find the SYS_D* code (ignoring SYS_T06)
+4. Map the SYS_D* code to the field type
+
+**SQL Query**:
+```sql
+-- Find field types from typeChoice structure
+SELECT
+  attrdef.id,
+  json_extract(attrdef.raw_data, '$.props.name') as field_name,
+  tc.children
+FROM nodes attrdef
+JOIN nodes tc ON tc.id IN (
+  SELECT value FROM json_each(json_extract(attrdef.raw_data, '$.children'))
+)
+WHERE json_extract(tc.raw_data, '$.props._sourceId') = 'SYS_A02'
+  AND json_extract(tc.raw_data, '$.props.name') = 'typeChoice';
+```
+
+### Type Extraction in supertag-cli
+
+The `extractFieldTypesFromDocs()` function in `src/db/explicit-type-extraction.ts`:
+
+1. Builds a parent lookup map for all nodes
+2. Finds all typeChoice tuples (`_sourceId: "SYS_A02"`, `name: "typeChoice"`)
+3. Extracts the SYS_D* code from each typeChoice's children
+4. Maps the parent (attrDef) ID to the detected DataType
+5. Updates `inferred_data_type` in the `supertag_fields` table
+
+**Priority Order** for field type detection:
+1. **Explicit type** from typeChoice structure (most reliable)
+2. **Value-based inference** from actual field values
+3. **Name-based heuristics** as fallback
+
+**Code Reference**: `src/db/explicit-type-extraction.ts`
+
+---
+
 ## Pattern 1: Standard Field Tuples
 
 **Structure**: Parent node contains tuple as child, tuple contains label + values

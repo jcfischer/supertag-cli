@@ -19,6 +19,24 @@ describe("inferDataType", () => {
       expect(inferDataType("Start Time")).toBe("date");
       expect(inferDataType("Completion Time")).toBe("date");
     });
+
+    it("should infer date type for field names containing 'scheduled'", () => {
+      expect(inferDataType("Scheduled on")).toBe("date");
+      expect(inferDataType("Scheduled")).toBe("date");
+      expect(inferDataType("Scheduled for")).toBe("date");
+    });
+
+    it("should infer date type for field names containing temporal keywords", () => {
+      // Deadline patterns
+      expect(inferDataType("Deadline")).toBe("date");
+      expect(inferDataType("Project Deadline")).toBe("date");
+      // When patterns
+      expect(inferDataType("When")).toBe("date");
+      // Expiry patterns
+      expect(inferDataType("Expires")).toBe("date");
+      expect(inferDataType("Expiry")).toBe("date");
+      expect(inferDataType("Expiration")).toBe("date");
+    });
   });
 
   describe("url type inference", () => {

@@ -35,6 +35,8 @@ import { withDbRetrySync } from "./retry";
 import { migrateFieldValuesSchema, clearFieldValues, migrateSupertagMetadataSchema, clearSupertagMetadata, migrateSchemaConsolidation } from "./migrate";
 import { extractFieldValuesFromNodes, insertFieldValues } from "./field-values";
 import { extractSupertagMetadata } from "./supertag-metadata";
+import { updateFieldTypesFromValues } from "./value-type-inference";
+import { extractFieldTypesFromDocs, updateFieldTypesFromExport } from "./explicit-type-extraction";
 import type { NodeDump } from "../types/tana-dump";
 
 export interface IndexResult {
@@ -306,7 +308,8 @@ export class TanaIndexer {
    */
   private async fullReindex(
     exportPath: string,
-    graph: ReturnType<TanaExportParser["buildGraph"]>
+    graph: ReturnType<TanaExportParser["buildGraph"]>,
+    docs: NodeDump[]
   ): Promise<IndexResult> {
     const startTime = Date.now();
     const exportFilename = require('path').basename(exportPath);
@@ -423,6 +426,15 @@ export class TanaIndexer {
       clearSupertagMetadata(this.sqlite);
       const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
 
+      // Post-process field types using explicit type extraction from Tana's typeChoice structure
+      // This is the most reliable source - extracts actual type definitions from the export
+      const explicitTypes = extractFieldTypesFromDocs(docs);
+      updateFieldTypesFromExport(this.sqlite, explicitTypes);
+
+      // Then apply value-based inference for any remaining 'text' types
+      // This catches fields without explicit typeChoice (older exports, etc.)
+      updateFieldTypesFromValues(this.sqlite);
+
       // Update sync metadata
       this.sqlite.run(
         "INSERT OR REPLACE INTO sync_metadata (id, last_export_file, last_sync_timestamp, total_nodes) VALUES (1, ?, ?, ?)",
@@ -476,7 +488,7 @@ export class TanaIndexer {
 
     if (needsFullReindex) {
       console.log(`🔄 First-time migration: performing full reindex of ${nodeCount.count.toLocaleString()} existing nodes`);
-      return this.fullReindex(exportPath, graph);
+      return this.fullReindex(exportPath, graph, dump.docs);
     }
 
     const changes = this.detectChanges(graph, existingData);
@@ -710,6 +722,15 @@ export class TanaIndexer {
       // STEP 5.6: T-2.4 - Clear and rebuild supertag metadata
       clearSupertagMetadata(this.sqlite);
       const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+
+      // STEP 5.7: Post-process field types using explicit type extraction from Tana's typeChoice structure
+      // This is the most reliable source - extracts actual type definitions from the export
+      const explicitTypes = extractFieldTypesFromDocs(dump.docs);
+      updateFieldTypesFromExport(this.sqlite, explicitTypes);
+
+      // STEP 5.8: Apply value-based inference for any remaining 'text' types
+      // This catches fields without explicit typeChoice (older exports, etc.)
+      updateFieldTypesFromValues(this.sqlite);
 
       // STEP 6: Update sync metadata
       this.sqlite.run(

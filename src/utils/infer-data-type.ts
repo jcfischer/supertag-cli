@@ -3,7 +3,7 @@
  *
  * Spec 020: Schema Consolidation - T-2.2
  */
-export type DataType = 'text' | 'date' | 'reference' | 'url' | 'number' | 'checkbox';
+export type DataType = 'text' | 'date' | 'reference' | 'url' | 'email' | 'number' | 'checkbox' | 'options';
 
 /**
  * Infer data type from field name using heuristics
@@ -16,8 +16,16 @@ export type DataType = 'text' | 'date' | 'reference' | 'url' | 'number' | 'check
 export function inferDataType(fieldName: string): DataType {
   const name = fieldName.toLowerCase();
 
-  // Date type - names containing 'date' or 'time'
-  if (name.includes('date') || name.includes('time')) {
+  // Date type - names containing temporal keywords
+  // Common patterns: date, time, scheduled, deadline, when, expires, expiry, expiration
+  if (
+    name.includes('date') ||
+    name.includes('time') ||
+    name.includes('scheduled') ||
+    name.includes('deadline') ||
+    name.includes('expir') || // catches expires, expiry, expiration
+    name === 'when'
+  ) {
     return 'date';
   }
 
