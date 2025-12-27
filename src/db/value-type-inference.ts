@@ -86,7 +86,7 @@ export function inferTypeFromValues(
     JOIN nodes n ON fv.value_node_id = n.id
     WHERE fv.field_name = ?
   `;
-  const params: (string | undefined)[] = [fieldName];
+  const params: string[] = [fieldName];
 
   if (fieldDefId) {
     query += " AND fv.field_def_id = ?";

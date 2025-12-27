@@ -1,4 +1,4 @@
-import { DataType } from "../types";
+import type { DataType } from "../utils/infer-data-type";
 import { Database } from "bun:sqlite";
 
 /**
