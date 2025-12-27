@@ -6,6 +6,7 @@
  */
 
 import type { TanaApiNode, TanaApiFieldNode } from '../types';
+import { SYSTEM_FIELD_MARKERS } from '../db/supertag-metadata';
 
 /**
  * Field schema definition
@@ -208,12 +209,22 @@ export class SchemaRegistry {
           const fieldDoc = this.docsById.get(fieldId);
 
           if (fieldDoc?.props?.name) {
+            // Regular field with a node definition
             fields.push({
               attributeId: fieldId,
               name: fieldDoc.props.name,
               normalizedName: normalizeName(fieldDoc.props.name),
               description: fieldDoc.props.description,
               dataType: this.inferDataType(fieldDoc),
+            });
+          } else if (fieldId in SYSTEM_FIELD_MARKERS) {
+            // System field marker (SYS_A61, SYS_A90, etc.)
+            const systemFieldName = SYSTEM_FIELD_MARKERS[fieldId];
+            fields.push({
+              attributeId: fieldId,
+              name: systemFieldName,
+              normalizedName: normalizeName(systemFieldName),
+              dataType: this.inferDataTypeFromName(systemFieldName),
             });
           }
         }
@@ -278,7 +289,14 @@ export class SchemaRegistry {
    * Infer data type from field document
    */
   private inferDataType(fieldDoc: TanaDoc): FieldSchema['dataType'] {
-    const name = fieldDoc.props?.name?.toLowerCase() || '';
+    return this.inferDataTypeFromName(fieldDoc.props?.name || '');
+  }
+
+  /**
+   * Infer data type from field name
+   */
+  private inferDataTypeFromName(fieldName: string): FieldSchema['dataType'] {
+    const name = fieldName.toLowerCase();
 
     if (name.includes('date') || name.includes('time')) return 'date';
     if (name.includes('url') || name.includes('link')) return 'url';

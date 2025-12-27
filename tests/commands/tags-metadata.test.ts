@@ -57,15 +57,15 @@ describe("Tags Metadata CLI Commands", () => {
         ('manager-tag', 'employee-tag')
     `);
 
-    // Insert test fields
+    // Insert test fields with inferred data types
     db.run(`
-      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type)
       VALUES
-        ('contact-tag', 'contact', 'Email', 'l1', 0),
-        ('contact-tag', 'contact', 'Phone', 'l2', 1),
-        ('employee-tag', 'employee', 'Department', 'l3', 0),
-        ('employee-tag', 'employee', 'StartDate', 'l4', 1),
-        ('manager-tag', 'manager', 'Team', 'l5', 0)
+        ('contact-tag', 'contact', 'Email', 'l1', 0, 'email'),
+        ('contact-tag', 'contact', 'Phone', 'l2', 1, 'text'),
+        ('employee-tag', 'employee', 'Department', 'l3', 0, 'text'),
+        ('employee-tag', 'employee', 'StartDate', 'l4', 1, 'date'),
+        ('manager-tag', 'manager', 'Team', 'l5', 0, 'text')
     `);
 
     db.close();

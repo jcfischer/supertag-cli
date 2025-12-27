@@ -5,7 +5,7 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.2] - 2025-12-27
 
 ### Changed
 
@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses `SupertagMetadataService.getAllFields()` for accurate inheritance chain
 
 ### Fixed
+
+- **System Field Markers in SchemaRegistry** - `tags show` now displays system fields (Due Date, Date, etc.)
+  - SchemaRegistry now extracts system field markers (SYS_A61, SYS_A90, etc.) from tagDef children
+  - Fixes inconsistency where `tags show` showed fewer fields than `tags fields`
+  - Uses shared `SYSTEM_FIELD_MARKERS` mapping from supertag-metadata.ts (DRY)
+  - System fields now visible in all schema-based commands
 
 - **Explicit Field Type Extraction** - Field types now extracted from Tana's typeChoice structure
   - Discovered Tana encodes field types in `typeChoice` tuples with SYS_D* codes:

@@ -298,4 +298,84 @@ describe('SchemaRegistry', () => {
       expect(attributeIds.length).toBe(uniqueIds.length);
     });
   });
+
+  describe('system field markers', () => {
+    // System field markers like SYS_A61 (Due Date), SYS_A90 (Date) are raw string
+    // identifiers in tagDef tuple children that indicate system-defined fields.
+    // They should be extracted as regular fields for consistency with the indexer.
+    const systemFieldExport = {
+      formatVersion: 1,
+      docs: [
+        // Supertag with system field marker
+        {
+          id: 'tagWithSystemField',
+          props: {
+            name: 'Status Pro',
+            _docType: 'tagDef',
+          },
+          children: ['statusTuple', 'dueDateTuple'],
+        },
+        // Regular field tuple
+        {
+          id: 'statusTuple',
+          props: {
+            _docType: 'tuple',
+            _ownerId: 'tagWithSystemField',
+          },
+          children: ['statusFieldDef', 'statusValue'],
+        },
+        {
+          id: 'statusFieldDef',
+          props: {
+            name: '⚙️ Status',
+            _docType: 'attrDef',
+          },
+        },
+        // System field marker tuple (first child is SYS_A61, not a node ID)
+        {
+          id: 'dueDateTuple',
+          props: {
+            _docType: 'tuple',
+            _ownerId: 'tagWithSystemField',
+          },
+          children: ['SYS_A61', 'somePlaceholder'],
+        },
+        // Note: SYS_A61 is NOT a node, it's a raw string marker
+      ],
+    };
+
+    it('should extract system field markers as fields', () => {
+      const sysRegistry = new SchemaRegistry();
+      sysRegistry.loadFromExport(systemFieldExport);
+
+      const tag = sysRegistry.getSupertag('Status Pro');
+      expect(tag).toBeDefined();
+      expect(tag?.fields.length).toBe(2); // Status + Due Date
+
+      const fieldNames = tag?.fields.map(f => f.name) ?? [];
+      expect(fieldNames).toContain('⚙️ Status');
+      expect(fieldNames).toContain('Due Date'); // From SYS_A61 marker
+    });
+
+    it('should use system marker as attributeId for system fields', () => {
+      const sysRegistry = new SchemaRegistry();
+      sysRegistry.loadFromExport(systemFieldExport);
+
+      const tag = sysRegistry.getSupertag('Status Pro');
+      const dueDateField = tag?.fields.find(f => f.name === 'Due Date');
+
+      expect(dueDateField).toBeDefined();
+      expect(dueDateField?.attributeId).toBe('SYS_A61');
+    });
+
+    it('should infer correct data type for system fields', () => {
+      const sysRegistry = new SchemaRegistry();
+      sysRegistry.loadFromExport(systemFieldExport);
+
+      const tag = sysRegistry.getSupertag('Status Pro');
+      const dueDateField = tag?.fields.find(f => f.name === 'Due Date');
+
+      expect(dueDateField?.dataType).toBe('date');
+    });
+  });
 });
