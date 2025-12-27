@@ -5,6 +5,22 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2025-12-28
+
+### Fixed
+
+- **Explicit Field Types in Node Creation** - `createNode()` now uses database field types for Input API payloads
+  - Date fields correctly sent as `{ dataType: "date", name: "2025-01-15" }`
+  - Reference fields correctly sent as `{ dataType: "reference", id: "nodeId" }`
+  - URL fields correctly sent as `{ dataType: "url", name: "https://..." }`
+  - Falls back to SchemaRegistry when database unavailable
+  - Benefits both CLI (`supertag create`) and MCP (`tana_create`) commands
+
+- **Duplicate Supertag Handling** - Fixed `UnifiedSchemaService.getSupertag()` selecting wrong entry
+  - Database can have multiple entries for same supertag name (e.g., 3 "todo" entries)
+  - Now selects canonical entry using SchemaRegistry logic: prefer more inheritance parents, then more fields
+  - Ensures correct field lookup when creating nodes
+
 ## [1.2.2] - 2025-12-27
 
 ### Changed

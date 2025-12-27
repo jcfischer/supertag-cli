@@ -204,23 +204,46 @@ export async function createNode(
   const { getSchemaRegistry } = await import('../commands/schema');
   const { ConfigManager } = await import('../config/manager');
   const { createApiClient } = await import('../api/client');
+  const { resolveWorkspace } = await import('../config/paths');
 
   // Get configuration
   const configManager = ConfigManager.getInstance();
   const config = configManager.getConfig();
 
-  // Load schema registry
-  const registry = getSchemaRegistry();
-  const supertags = registry.listSupertags();
+  // Try to use database-backed payload building (has explicit field types)
+  let payload: TanaApiNode | undefined;
 
-  if (supertags.length === 0) {
-    throw new Error(
-      'Schema registry is empty. Sync it first with: supertag schema sync'
-    );
+  // Determine database path (test override or resolved workspace)
+  let dbPath: string | undefined = input._dbPathOverride;
+
+  if (!dbPath) {
+    try {
+      const workspace = resolveWorkspace(undefined, config);
+      dbPath = workspace.dbPath;
+    } catch {
+      // Workspace resolution failed, fall back to registry
+    }
   }
 
-  // Build the node payload (validates supertag and builds structure)
-  const payload = buildNodePayload(registry, input);
+  if (dbPath && existsSync(dbPath)) {
+    // Use database for explicit field types
+    payload = buildNodePayloadFromDatabase(dbPath, input);
+  }
+
+  // Fall back to schema registry if database not available
+  if (!payload) {
+    const registry = getSchemaRegistry();
+    const supertags = registry.listSupertags();
+
+    if (supertags.length === 0) {
+      throw new Error(
+        'Schema registry is empty. Sync it first with: supertag schema sync'
+      );
+    }
+
+    // Build the node payload (validates supertag and builds structure)
+    payload = buildNodePayload(registry, input);
+  }
 
   // Determine target
   const target = input.target || config.defaultTargetNode || 'INBOX';

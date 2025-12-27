@@ -66,19 +66,29 @@ export class UnifiedSchemaService {
   /**
    * Find a supertag by name (exact or normalized match).
    *
+   * When multiple supertags have the same name (can happen with Tana exports),
+   * selects the canonical one using the same logic as SchemaRegistry:
+   * 1. Prefer more inheritance parents
+   * 2. Then prefer more own fields
+   *
    * @param name - Supertag name to find
    * @returns Unified supertag or null if not found
    */
   getSupertag(name: string): UnifiedSupertag | null {
     const normalizedQuery = normalizeName(name);
 
-    // Try exact match first, then normalized match
+    // Find all matching supertags and pick the canonical one
+    // Priority: more inheritance parents, then more own fields
+    // This handles cases where duplicate entries exist in the database
     const row = this.db
       .query(
         `
-        SELECT tag_id, tag_name, normalized_name, description, color
-        FROM supertag_metadata
-        WHERE tag_name = ? OR normalized_name = ?
+        SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color,
+               (SELECT COUNT(*) FROM supertag_parents p WHERE p.child_tag_id = m.tag_id) as parent_count,
+               (SELECT COUNT(*) FROM supertag_fields f WHERE f.tag_id = m.tag_id) as field_count
+        FROM supertag_metadata m
+        WHERE m.tag_name = ? OR m.normalized_name = ?
+        ORDER BY parent_count DESC, field_count DESC
         LIMIT 1
       `
       )
@@ -88,6 +98,8 @@ export class UnifiedSchemaService {
       normalized_name: string;
       description: string | null;
       color: string | null;
+      parent_count: number;
+      field_count: number;
     } | null;
 
     if (!row) {

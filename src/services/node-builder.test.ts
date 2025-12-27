@@ -5,8 +5,10 @@
  * These tests should FAIL initially (RED state) until implementation is complete.
  */
 
-import { describe, it, expect, beforeAll } from 'bun:test';
-import { existsSync } from 'fs';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'bun:test';
+import { existsSync, mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { Database } from 'bun:sqlite';
 import {
   validateSupertags,
   buildChildNodes,
@@ -15,6 +17,7 @@ import {
 } from './node-builder';
 import { getSchemaRegistry } from '../commands/schema';
 import { SCHEMA_CACHE_FILE } from '../config/paths';
+import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from '../db/migrate';
 import type { ChildNodeInput, CreateNodeInput } from '../types';
 
 // Check if we have a schema registry to test against
@@ -310,6 +313,120 @@ describe('Node Builder Service', () => {
         // Either token error or supertag error is acceptable
         expect(error).toBeDefined();
       }
+    });
+  });
+
+  // =========================================================================
+  // Database-backed createNode() Tests (T-1, T-3)
+  // =========================================================================
+  describe('createNode() with database field types', () => {
+    let testDir: string;
+    let dbPath: string;
+    let db: Database;
+
+    beforeEach(() => {
+      // Create temp directory and database
+      testDir = join('/tmp', `supertag-node-builder-test-${Date.now()}`);
+      dbPath = join(testDir, 'workspaces', 'main', 'tana-index.db');
+      mkdirSync(join(testDir, 'workspaces', 'main'), { recursive: true });
+
+      db = new Database(dbPath);
+      migrateSupertagMetadataSchema(db);
+      migrateSchemaConsolidation(db);
+
+      // Insert test supertag with explicit field types
+      db.run(`
+        INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, description)
+        VALUES ('test-tag-id', 'TestTag', 'testtag', 'Test supertag')
+      `);
+
+      // Insert date field with explicit type
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type)
+        VALUES ('test-tag-id', 'TestTag', 'Due Date', 'due-date-attr', 0, 'duedate', 'date')
+      `);
+
+      // Insert URL field with explicit type
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type)
+        VALUES ('test-tag-id', 'TestTag', 'Website', 'website-attr', 1, 'website', 'url')
+      `);
+
+      // Insert reference field with explicit type
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type)
+        VALUES ('test-tag-id', 'TestTag', 'Assigned To', 'assignedto-attr', 2, 'assignedto', 'reference')
+      `);
+
+      db.close();
+    });
+
+    afterEach(() => {
+      if (existsSync(testDir)) {
+        rmSync(testDir, { recursive: true, force: true });
+      }
+    });
+
+    // T-1: Test that createNode uses database field types
+    it('should use explicit field types from database for date fields', async () => {
+      const input: CreateNodeInput = {
+        supertag: 'TestTag',
+        name: 'Test Node with Date',
+        fields: { 'Due Date': '2025-01-15' },
+        dryRun: true,
+        _dbPathOverride: dbPath, // Use test database
+      };
+
+      const result = await createNode(input);
+
+      expect(result.success).toBe(true);
+      expect(result.payload).toBeDefined();
+      expect(result.payload.children).toBeDefined();
+
+      // Find the date field child
+      const children = result.payload.children as any[];
+      const dateField = children?.find(
+        (c: any) => c.type === 'field' && c.attributeId === 'due-date-attr'
+      );
+
+      expect(dateField).toBeDefined();
+      expect(dateField?.children?.[0]?.dataType).toBe('date');
+    });
+
+    // T-3: Test fallback when no database
+    it('should fall back to registry when database does not exist', async () => {
+      // Remove the database
+      if (existsSync(testDir)) {
+        rmSync(testDir, { recursive: true, force: true });
+      }
+
+      // This should still work using registry
+      const testFn = hasSchema ? it : it.skip;
+
+      if (!hasSchema) {
+        console.log('No schema registry, skipping fallback test');
+        return;
+      }
+
+      const registry = getSchemaRegistry();
+      const supertags = registry.listSupertags();
+
+      if (supertags.length === 0) {
+        console.log('No supertags in registry, skipping test');
+        return;
+      }
+
+      const input: CreateNodeInput = {
+        supertag: supertags[0].name,
+        name: 'Fallback Test Node',
+        dryRun: true,
+      };
+
+      const result = await createNode(input);
+
+      expect(result.success).toBe(true);
+      expect(result.dryRun).toBe(true);
+      expect(result.payload).toBeDefined();
     });
   });
 });

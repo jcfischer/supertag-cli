@@ -358,6 +358,8 @@ export interface CreateNodeInput {
   target?: string;
   /** Validate only, don't post to API */
   dryRun?: boolean;
+  /** Override database path (for testing) - internal use only */
+  _dbPathOverride?: string;
 }
 
 /**

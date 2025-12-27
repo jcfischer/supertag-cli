@@ -143,17 +143,31 @@ After schema changes (like adding `_flags` support), you must either:
 1. Run from source: `bun run src/index.ts sync`
 2. Rebuild binary: `./scripts/build.sh`
 
+### Testing Workflow
+
+**IMPORTANT: Use fast tests during development, full suite only before pushing.**
+
+```bash
+bun run test          # Fast tests only (~12s) - use during development
+bun run test:full     # ALL tests (~200s) - run before pushing/releasing
+bun run test:slow     # Slow tests only
+```
+
+**Do NOT run `bun test` directly** - it runs ALL tests including slow ones. Use `bun run test` instead.
+
+The build script (`./scripts/build.sh`) runs fast tests automatically.
+
 ### Building After Implementation
 
 **IMPORTANT: After implementing any code changes, rebuild the binary:**
 
 ```bash
-./scripts/build.sh           # Build if source changed (runs tests first)
+./scripts/build.sh           # Build if source changed (runs fast tests first)
 ./scripts/build.sh --force   # Force rebuild
 ./scripts/build.sh --check   # Check if rebuild needed
 ```
 
 The build script:
-1. Runs tests first (fails build if tests fail)
+1. Runs fast tests first (fails build if tests fail)
 2. Only rebuilds if source files changed (unless --force)
 3. Compiles to standalone `supertag` binary
