@@ -5,6 +5,22 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Consistent Field Display** - `tags fields` now shows field IDs and types matching `tags show` format
+  - Fields now display as: `- FieldName (fieldId)` with `Type: dataType` on next line
+  - Inherited fields show origin: `- FieldName (fieldId, from ParentTag)`
+  - Shared `formatFieldLines()` helper ensures DRY, consistent output across commands
+
+### Added
+
+- **Inherited Fields in `tags show`** - New `--all` flag shows inherited fields
+  - `supertag tags show todo --all` - Shows all 8 fields including inherited
+  - Matches functionality of `tags fields --all`
+  - Uses `SupertagMetadataService.getAllFields()` for accurate inheritance chain
+
 ## [1.2.1] - 2025-12-26
 
 ### Fixed

@@ -176,5 +176,60 @@ describe("Tags Metadata CLI Commands", () => {
       expect(Array.isArray(parsed.fields)).toBe(true);
       expect(parsed.fields.length).toBe(5); // Team + Department + StartDate + Email + Phone
     });
+
+    it("should show field IDs matching tags show format", async () => {
+      const result = await $`bun run src/index.ts tags fields contact --db-path ${dbPath}`.text();
+
+      // Should show field IDs like tags show does
+      expect(result).toContain("(l1)"); // Email field ID
+      expect(result).toContain("(l2)"); // Phone field ID
+    });
+
+    it("should show field type when available", async () => {
+      // First update a field with a type
+      const db = new Database(dbPath);
+      db.run(`UPDATE supertag_fields SET inferred_data_type = 'email' WHERE field_name = 'Email'`);
+      db.run(`UPDATE supertag_fields SET inferred_data_type = 'text' WHERE field_name = 'Phone'`);
+      db.close();
+
+      const result = await $`bun run src/index.ts tags fields contact --db-path ${dbPath}`.text();
+
+      // Should show field types like tags show does
+      expect(result).toContain("Type: email");
+      expect(result).toContain("Type: text");
+    });
+
+    it("should show inherited field origin with ID and type", async () => {
+      const result = await $`bun run src/index.ts tags fields manager --all --db-path ${dbPath}`.text();
+
+      // Should show field IDs for inherited fields with origin: "(id, from origin)"
+      expect(result).toContain("(l1, from contact)"); // Email field ID with origin
+      // Should show type for inherited fields
+      expect(result).toContain("Type: email");
+    });
+  });
+
+  describe("tags show <tagname> --all", () => {
+    it("should show own fields by default", async () => {
+      const result = await $`bun run src/index.ts tags show manager --db-path ${dbPath}`.text();
+
+      // Should show own field
+      expect(result).toContain("Team");
+      // Should NOT show inherited fields without --all
+      expect(result).not.toContain("Email");
+      expect(result).not.toContain("Department");
+    });
+
+    it("should show all fields including inherited with --all", async () => {
+      const result = await $`bun run src/index.ts tags show manager --all --db-path ${dbPath}`.text();
+
+      // Should show own field
+      expect(result).toContain("Team");
+      // Should show inherited from employee
+      expect(result).toContain("Department");
+      // Should show inherited from contact with origin
+      expect(result).toContain("Email");
+      expect(result).toContain("from contact");
+    });
   });
 });

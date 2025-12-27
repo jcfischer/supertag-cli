@@ -292,11 +292,12 @@ export function createTagsCommand(): Command {
   // tags show <tagname>
   const showCmd = tags
     .command("show <tagname>")
-    .description("Show schema fields for a supertag");
+    .description("Show schema fields for a supertag")
+    .option("--all", "Show all fields including inherited");
 
   addStandardOptions(showCmd, { defaultLimit: "1" });
 
-  showCmd.action(async (tagname: string, options: StandardOptions) => {
+  showCmd.action(async (tagname: string, options: TagsMetadataOptions) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -311,32 +312,74 @@ export function createTagsCommand(): Command {
       if (!resolved) {
         process.exit(1);
       }
+      const { tagId, displayName } = resolved;
 
-      // Load schema registry from cache
-      const registry = getSchemaRegistry(options.workspace);
+      // Get fields from service (supports --all for inherited fields)
+      let fields: Array<{
+        name: string;
+        id: string;
+        dataType?: string;
+        origin?: string;
+        inherited: boolean;
+      }>;
 
-      // Find the tag by ID (after resolving with duplicate detection)
-      const tag = registry.getSupertagById(resolved.tagId) || registry.findTagByName(tagname);
+      if (options.all) {
+        // All fields including inherited from SupertagMetadataService
+        fields = service.getAllFields(tagId).map(f => ({
+          name: f.fieldName,
+          id: f.fieldLabelId,
+          dataType: f.inferredDataType,
+          origin: f.originTagName,
+          inherited: f.depth > 0,
+        }));
+      } else {
+        // Own fields only - try schema registry first, fall back to service
+        const registry = getSchemaRegistry(options.workspace);
+        const tag = registry.getSupertagById(tagId) || registry.findTagByName(tagname);
 
-      if (!tag) {
-        console.error(`❌ Supertag not found: ${tagname}`);
-        console.error(`   Available tags can be listed with: supertag tags list`);
-        process.exit(1);
+        if (tag?.fields && tag.fields.length > 0) {
+          fields = tag.fields.map((field: { name: string; attributeId: string; dataType?: string }) => ({
+            name: field.name,
+            id: field.attributeId,
+            dataType: field.dataType,
+            inherited: false,
+          }));
+        } else {
+          // Fall back to service for own fields
+          fields = service.getFields(tagId).map(f => ({
+            name: f.fieldName,
+            id: f.fieldLabelId,
+            dataType: f.inferredDataType,
+            inherited: false,
+          }));
+        }
       }
 
-      if (options.json) {
-        console.log(formatJsonOutput(tag));
-      } else {
-        console.log(`\n🏷️  ${tag.name}`);
-        console.log(`   ID: ${tag.id}`);
-        console.log(`   Color: ${tag.color || "(none)"}`);
+      // Get tag metadata (color) from schema registry if available
+      const registry = getSchemaRegistry(options.workspace);
+      const tagMeta = registry.getSupertagById(tagId);
+      const color = tagMeta?.color || null;
 
-        if (tag.fields && tag.fields.length > 0) {
-          console.log(`\n   Fields (${tag.fields.length}):`);
-          tag.fields.forEach((field: { name: string; attributeId: string; dataType?: string }) => {
-            console.log(`   - ${field.name} (${field.attributeId})`);
-            if (field.dataType) {
-              console.log(`     Type: ${field.dataType}`);
+      if (options.json) {
+        console.log(formatJsonOutput({ id: tagId, name: displayName, color, fields }));
+      } else {
+        console.log(`\n🏷️  ${displayName}`);
+        console.log(`   ID: ${tagId}`);
+        console.log(`   Color: ${color || "(none)"}`);
+
+        if (fields.length > 0) {
+          const modeLabel = options.all ? "all" : "";
+          console.log(`\n   Fields${modeLabel ? ` (${modeLabel})` : ""} (${fields.length}):`);
+          fields.forEach((field) => {
+            const lines = formatFieldLines({
+              name: field.name,
+              id: field.id,
+              dataType: field.dataType,
+              origin: field.origin,
+              inherited: field.inherited,
+            });
+            for (const line of lines) {
+              console.log(line);
             }
           });
         } else {
@@ -430,14 +473,22 @@ export function createTagsCommand(): Command {
       }
       const { tagId, displayName } = resolved;
 
-      let fields: Array<{ fieldName: string; originTagName: string; depth: number }>;
+      let fields: Array<{
+        fieldName: string;
+        fieldLabelId: string;
+        originTagName: string;
+        depth: number;
+        inferredDataType?: string;
+      }>;
 
       if (options.all) {
         // All fields including inherited
         fields = service.getAllFields(tagId).map(f => ({
           fieldName: f.fieldName,
+          fieldLabelId: f.fieldLabelId,
           originTagName: f.originTagName,
           depth: f.depth,
+          inferredDataType: f.inferredDataType,
         }));
       } else if (options.inherited) {
         // Only inherited fields (depth > 0)
@@ -445,15 +496,19 @@ export function createTagsCommand(): Command {
           .filter(f => f.depth > 0)
           .map(f => ({
             fieldName: f.fieldName,
+            fieldLabelId: f.fieldLabelId,
             originTagName: f.originTagName,
             depth: f.depth,
+            inferredDataType: f.inferredDataType,
           }));
       } else {
         // Default: own fields only (depth === 0)
         fields = service.getFields(tagId).map(f => ({
           fieldName: f.fieldName,
+          fieldLabelId: f.fieldLabelId,
           originTagName: f.tagName,
           depth: 0,
+          inferredDataType: f.inferredDataType,
         }));
       }
 
@@ -466,10 +521,15 @@ export function createTagsCommand(): Command {
           console.log("   (no fields)");
         } else {
           for (const field of fields) {
-            if (field.depth > 0) {
-              console.log(`   - ${field.fieldName} (from ${field.originTagName})`);
-            } else {
-              console.log(`   - ${field.fieldName}`);
+            const lines = formatFieldLines({
+              name: field.fieldName,
+              id: field.fieldLabelId,
+              dataType: field.inferredDataType,
+              origin: field.originTagName,
+              inherited: field.depth > 0,
+            });
+            for (const line of lines) {
+              console.log(line);
             }
           }
         }
@@ -635,4 +695,37 @@ function printInheritanceTree(node: { tagId: string; tagName: string; parents: A
   for (const parent of node.parents) {
     printInheritanceTree(parent, indent + 1);
   }
+}
+
+/**
+ * Format field details for display (shared between tags show and tags fields)
+ *
+ * @param field - Field with name, ID, and optional type
+ * @param options - Display options
+ * @returns Array of formatted lines to print
+ */
+export function formatFieldLines(
+  field: {
+    name: string;
+    id: string;
+    dataType?: string | null;
+    origin?: string;
+    inherited?: boolean;
+  }
+): string[] {
+  const lines: string[] = [];
+
+  // Build the main field line: "- Name (id)" or "- Name (id, from origin)"
+  let mainLine = `   - ${field.name} (${field.id})`;
+  if (field.inherited && field.origin) {
+    mainLine = `   - ${field.name} (${field.id}, from ${field.origin})`;
+  }
+  lines.push(mainLine);
+
+  // Add type on the next line if available
+  if (field.dataType) {
+    lines.push(`     Type: ${field.dataType}`);
+  }
+
+  return lines;
 }
