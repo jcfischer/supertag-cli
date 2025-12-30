@@ -60,15 +60,48 @@ function parseFieldOptions(options: CreateOptions): Record<string, string | stri
 }
 
 /**
+ * Recursively parse a child node object (from JSON)
+ */
+function parseChildObject(obj: Record<string, unknown>): ChildNodeInput | null {
+  if (!obj.name || typeof obj.name !== 'string') return null;
+
+  const child: ChildNodeInput = { name: obj.name };
+
+  if (typeof obj.id === 'string') {
+    child.id = obj.id;
+  }
+  if (obj.dataType === 'url' || obj.dataType === 'reference') {
+    child.dataType = obj.dataType;
+  }
+
+  // Recursively parse nested children
+  if (Array.isArray(obj.children)) {
+    const nestedChildren: ChildNodeInput[] = [];
+    for (const nestedChild of obj.children) {
+      if (typeof nestedChild === 'object' && nestedChild !== null) {
+        const parsed = parseChildObject(nestedChild as Record<string, unknown>);
+        if (parsed) nestedChildren.push(parsed);
+      }
+    }
+    if (nestedChildren.length > 0) {
+      child.children = nestedChildren;
+    }
+  }
+
+  return child;
+}
+
+/**
  * Parse children from command line
  * Supports multiple formats:
  * - Simple text: "Child node name"
  * - JSON object: '{"name": "Child", "id": "abc123"}'
  * - JSON object with URL: '{"name": "https://...", "dataType": "url"}'
+ * - JSON object with nested children: '{"name": "Section", "children": [{"name": "Item"}]}'
  * - Inline reference syntax in text: "See [[Node Name]]" or "[[Name^nodeId]]"
  */
-function parseChildren(childrenStrings: string[]): ChildNode[] {
-  const children: ChildNode[] = [];
+function parseChildren(childrenStrings: string[]): ChildNodeInput[] {
+  const children: ChildNodeInput[] = [];
 
   for (const str of childrenStrings) {
     const trimmed = str.trim();
@@ -77,15 +110,9 @@ function parseChildren(childrenStrings: string[]): ChildNode[] {
     // Try to parse as JSON first
     if (trimmed.startsWith('{')) {
       try {
-        const parsed = JSON.parse(trimmed) as { name?: string; id?: string; dataType?: string };
-        if (parsed.name) {
-          const child: ChildNode = { name: parsed.name };
-          if (parsed.id) {
-            child.id = parsed.id;
-          }
-          if (parsed.dataType === 'url' || parsed.dataType === 'reference') {
-            child.dataType = parsed.dataType;
-          }
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        const child = parseChildObject(parsed);
+        if (child) {
           children.push(child);
         }
         continue;
