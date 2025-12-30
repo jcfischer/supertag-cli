@@ -10,8 +10,8 @@ import { getConfig } from '../../../config/manager';
 // Check if workspaces are configured (for CI vs local development)
 let hasWorkspacesConfigured = false;
 try {
-  const config = getConfig();
-  hasWorkspacesConfigured = Object.keys(config.workspaces || {}).length > 0;
+  const configManager = getConfig();
+  hasWorkspacesConfigured = Object.keys(configManager.getAllWorkspaces()).length > 0;
 } catch {
   hasWorkspacesConfigured = false;
 }

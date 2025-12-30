@@ -19,6 +19,7 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { TanaQueryEngine } from "../query/tana-query-engine";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
+import { ConfigManager } from "../config/manager";
 import {
   resolveDbPath,
   checkDb,
