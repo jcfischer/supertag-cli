@@ -32,6 +32,78 @@ import type { TanaApiNode, ChildNodeInput, CreateNodeInput, CreateNodeResult } f
 import { UnifiedSchemaService } from './unified-schema-service';
 
 /**
+ * Recursively parse a child node object from unknown input
+ * Used by CLI (from JSON.parse) and MCP (from Zod-validated input)
+ *
+ * @param obj Unknown object to parse
+ * @returns ChildNodeInput if valid, null if invalid
+ *
+ * @example
+ * // Simple child
+ * parseChildObject({ name: "Task 1" })
+ * // => { name: "Task 1" }
+ *
+ * @example
+ * // Nested children
+ * parseChildObject({
+ *   name: "Section",
+ *   children: [{ name: "Item 1" }, { name: "Item 2" }]
+ * })
+ * // => { name: "Section", children: [{ name: "Item 1" }, { name: "Item 2" }] }
+ */
+export function parseChildObject(obj: Record<string, unknown>): ChildNodeInput | null {
+  if (!obj.name || typeof obj.name !== 'string') return null;
+
+  const child: ChildNodeInput = { name: obj.name };
+
+  if (typeof obj.id === 'string') {
+    child.id = obj.id;
+  }
+  if (obj.dataType === 'url' || obj.dataType === 'reference') {
+    child.dataType = obj.dataType;
+  }
+
+  // Recursively parse nested children
+  if (Array.isArray(obj.children)) {
+    const nestedChildren: ChildNodeInput[] = [];
+    for (const nestedChild of obj.children) {
+      if (typeof nestedChild === 'object' && nestedChild !== null) {
+        const parsed = parseChildObject(nestedChild as Record<string, unknown>);
+        if (parsed) nestedChildren.push(parsed);
+      }
+    }
+    if (nestedChildren.length > 0) {
+      child.children = nestedChildren;
+    }
+  }
+
+  return child;
+}
+
+/**
+ * Parse an array of child objects recursively
+ * Convenience wrapper around parseChildObject for array inputs
+ *
+ * @param children Array of objects to parse (or undefined)
+ * @returns Array of ChildNodeInput, or undefined if input is empty/undefined
+ */
+export function parseChildArray(
+  children: Array<Record<string, unknown>> | undefined
+): ChildNodeInput[] | undefined {
+  if (!children || children.length === 0) return undefined;
+
+  const result: ChildNodeInput[] = [];
+  for (const child of children) {
+    if (typeof child === 'object' && child !== null) {
+      const parsed = parseChildObject(child);
+      if (parsed) result.push(parsed);
+    }
+  }
+
+  return result.length > 0 ? result : undefined;
+}
+
+/**
  * Validate supertag names exist in registry
  * @param registry Schema registry instance
  * @param supertagInput Single supertag name or comma-separated list

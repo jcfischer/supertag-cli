@@ -11,7 +11,7 @@ import { parseJsonSmart } from '../parsers/json';
 import { getConfig } from '../config/manager';
 import { getSchemaRegistry } from './schema';
 import { exitWithError, ParseError, ConfigError } from '../utils/errors';
-import { createNode } from '../services/node-builder';
+import { createNode, parseChildObject } from '../services/node-builder';
 import type { ChildNodeInput } from '../types';
 
 /**
@@ -57,38 +57,6 @@ function parseFieldOptions(options: CreateOptions): Record<string, string | stri
   }
 
   return fields;
-}
-
-/**
- * Recursively parse a child node object (from JSON)
- */
-function parseChildObject(obj: Record<string, unknown>): ChildNodeInput | null {
-  if (!obj.name || typeof obj.name !== 'string') return null;
-
-  const child: ChildNodeInput = { name: obj.name };
-
-  if (typeof obj.id === 'string') {
-    child.id = obj.id;
-  }
-  if (obj.dataType === 'url' || obj.dataType === 'reference') {
-    child.dataType = obj.dataType;
-  }
-
-  // Recursively parse nested children
-  if (Array.isArray(obj.children)) {
-    const nestedChildren: ChildNodeInput[] = [];
-    for (const nestedChild of obj.children) {
-      if (typeof nestedChild === 'object' && nestedChild !== null) {
-        const parsed = parseChildObject(nestedChild as Record<string, unknown>);
-        if (parsed) nestedChildren.push(parsed);
-      }
-    }
-    if (nestedChildren.length > 0) {
-      child.children = nestedChildren;
-    }
-  }
-
-  return child;
 }
 
 /**

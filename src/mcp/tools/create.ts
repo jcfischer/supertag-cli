@@ -9,9 +9,9 @@
 
 import { ConfigManager } from '../../config/manager.js';
 import { resolveWorkspace } from '../../config/paths.js';
-import { createNode } from '../../services/node-builder.js';
+import { createNode, parseChildArray } from '../../services/node-builder.js';
 import type { CreateInput } from '../schemas.js';
-import type { TanaApiNode, ChildNodeInput } from '../../types.js';
+import type { TanaApiNode } from '../../types.js';
 
 export interface CreateResult {
   workspace: string;
@@ -40,18 +40,8 @@ export async function create(input: CreateInput): Promise<CreateResult> {
     throw new Error('Node name is required');
   }
 
-  // Recursive helper to convert MCP children format to shared ChildNodeInput format
-  const mapChildren = (inputChildren: typeof input.children): ChildNodeInput[] | undefined => {
-    if (!inputChildren) return undefined;
-    return inputChildren.map((child) => ({
-      name: child.name,
-      id: child.id,
-      dataType: child.dataType as 'url' | 'reference' | undefined,
-      children: mapChildren(child.children),
-    }));
-  };
-
-  const children = mapChildren(input.children);
+  // Use shared child parsing function (same as CLI)
+  const children = parseChildArray(input.children as Array<Record<string, unknown>> | undefined);
 
   // Use shared createNode function
   const nodeResult = await createNode({
