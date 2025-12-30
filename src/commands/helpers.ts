@@ -11,8 +11,12 @@
 
 import { Command } from "commander";
 import { existsSync } from "fs";
-import { getDatabasePath, resolveWorkspace } from "../config/paths";
-import { getConfig } from "../config/manager";
+import { getDatabasePath } from "../config/paths";
+import {
+  resolveWorkspaceContext,
+  WorkspaceNotFoundError,
+  WorkspaceDatabaseMissingError,
+} from "../config/workspace-resolver";
 import type { StandardOptions } from "../types";
 
 // Default database path - uses XDG with legacy fallback
@@ -21,6 +25,8 @@ const DEFAULT_DB_PATH = getDatabasePath();
 /**
  * Resolve the database path from options
  * Priority: --db-path > --workspace > default workspace > legacy
+ *
+ * Uses the unified workspace resolver (spec 052) internally.
  */
 export function resolveDbPath(options: { dbPath?: string; workspace?: string }): string {
   // Explicit db-path takes precedence
@@ -28,15 +34,20 @@ export function resolveDbPath(options: { dbPath?: string; workspace?: string }):
     return options.dbPath;
   }
 
-  // Resolve workspace
-  const config = getConfig().getConfig();
-  const ctx = resolveWorkspace(options.workspace, config);
-  return ctx.dbPath;
+  // Use unified workspace resolver (requireDatabase: false to maintain backward compatibility)
+  const ws = resolveWorkspaceContext({
+    workspace: options.workspace,
+    requireDatabase: false,
+  });
+  return ws.dbPath;
 }
 
 /**
  * Check if database exists, print error message if not
  * Returns true if database exists, false otherwise
+ *
+ * Note: Consider using resolveWorkspaceContext({ requireDatabase: true }) instead,
+ * which throws WorkspaceDatabaseMissingError with a helpful message.
  */
 export function checkDb(dbPath: string, workspaceAlias?: string): boolean {
   if (!existsSync(dbPath)) {
