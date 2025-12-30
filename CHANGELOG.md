@@ -5,6 +5,17 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-12-30
+
+### Added
+
+- **Nested Children Support in Node Creation** - `tana_create` MCP tool and `createNode()` now support hierarchical child structures
+  - Children can have their own `children` arrays for deep nesting (e.g., workshop notes with sections and sub-points)
+  - Recursive schema validation using `z.lazy()` for type-safe nested structures
+  - Both CLI (`supertag create`) and MCP (`tana_create`) support nested children
+  - Example: `{"name": "Section 1", "children": [{"name": "Point 1"}, {"name": "Point 2"}]}`
+  - Perfect for creating structured notes, outlines, and hierarchical content via AI assistants
+
 ## [1.3.0] - 2025-12-28
 
 ### Added

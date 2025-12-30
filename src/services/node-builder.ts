@@ -67,8 +67,8 @@ export function validateSupertags(
 }
 
 /**
- * Build child nodes from input array
- * Handles plain text, URLs, and references
+ * Build child nodes from input array (recursive)
+ * Handles plain text, URLs, references, and nested children
  * @param children Array of child node inputs
  * @returns Array of TanaApiNode ready for API
  */
@@ -92,8 +92,15 @@ export function buildChildNodes(
       } as unknown as TanaApiNode;
     }
 
-    // Plain text node
-    return { name: child.name };
+    // Plain text or nested node
+    const node: TanaApiNode = { name: child.name };
+
+    // Recursively process nested children
+    if (child.children && child.children.length > 0) {
+      node.children = buildChildNodes(child.children);
+    }
+
+    return node;
   });
 }
 

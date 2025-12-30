@@ -188,6 +188,48 @@ This creates a todo with a child reference that links to the existing node.
 
 ---
 
+## Creating Hierarchical/Nested Content
+
+Children can have their own `children` arrays for deep nesting. This is perfect for structured notes, outlines, and hierarchical content:
+
+```json
+{
+  "supertag": "meeting",
+  "name": "Workshop Notes",
+  "children": [
+    {
+      "name": "Key Concepts",
+      "children": [
+        {"name": "Concept 1: Introduction to topic"},
+        {"name": "Concept 2: Advanced techniques"}
+      ]
+    },
+    {
+      "name": "Action Items",
+      "children": [
+        {"name": "Review documentation"},
+        {"name": "Schedule follow-up meeting"}
+      ]
+    }
+  ]
+}
+```
+
+This creates a hierarchical structure in Tana:
+```
+- Workshop Notes #meeting
+  - Key Concepts
+    - Concept 1: Introduction to topic
+    - Concept 2: Advanced techniques
+  - Action Items
+    - Review documentation
+    - Schedule follow-up meeting
+```
+
+Nesting can go as deep as needed - children at any level can have their own children.
+
+---
+
 ## Local LLMs (Ollama)
 
 You can use Supertag MCP tools with local LLMs running in Ollama for completely offline, private AI access to your Tana data.

@@ -40,12 +40,18 @@ export async function create(input: CreateInput): Promise<CreateResult> {
     throw new Error('Node name is required');
   }
 
-  // Convert MCP children format to shared ChildNodeInput format
-  const children: ChildNodeInput[] | undefined = input.children?.map((child) => ({
-    name: child.name,
-    id: child.id,
-    dataType: child.dataType as 'url' | 'reference' | undefined,
-  }));
+  // Recursive helper to convert MCP children format to shared ChildNodeInput format
+  const mapChildren = (inputChildren: typeof input.children): ChildNodeInput[] | undefined => {
+    if (!inputChildren) return undefined;
+    return inputChildren.map((child) => ({
+      name: child.name,
+      id: child.id,
+      dataType: child.dataType as 'url' | 'reference' | undefined,
+      children: mapChildren(child.children),
+    }));
+  };
+
+  const children = mapChildren(input.children);
 
   // Use shared createNode function
   const nodeResult = await createNode({

@@ -339,6 +339,8 @@ export interface ChildNodeInput {
   id?: string;
   /** Data type: 'url' for clickable links, 'reference' for node refs */
   dataType?: 'url' | 'reference';
+  /** Nested child nodes for hierarchical structures */
+  children?: ChildNodeInput[];
 }
 
 /**

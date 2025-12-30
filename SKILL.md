@@ -108,6 +108,7 @@ Create new nodes in Tana with supertags, fields, and references.
 
 **Children formats:**
 - Plain text: `[{"name": "Child text"}]`
+- Nested: `[{"name": "Section", "children": [{"name": "Sub-item"}]}]`
 - Reference: `[{"name": "Link", "id": "abc123"}]`
 - Inline ref: `[{"name": "See <span data-inlineref-node=\"xyz\">Related</span> item"}]`
 

@@ -113,10 +113,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 properties: {
                   name: { type: 'string', description: 'Child node text. For inline refs: <span data-inlineref-node="NODE_ID">Text</span>' },
                   id: { type: 'string', description: 'Optional node ID to create this child as a reference node (dataType: reference)' },
+                  dataType: { type: 'string', enum: ['url', 'reference'], description: 'Data type: "url" for clickable links, "reference" for node links (requires id)' },
+                  children: { type: 'array', description: 'Nested child nodes (recursive) for hierarchical structures' },
                 },
                 required: ['name'],
               },
-              description: 'Child nodes. Plain text: [{"name": "Child"}]. Reference node: {"name": "Link", "id": "abc123"}. Inline ref in text: {"name": "See <span data-inlineref-node=\\"xyz\\">Related</span>"}',
+              description: 'Child nodes with NESTED STRUCTURE support. Plain: [{"name": "Child"}]. NESTED: [{"name": "Parent", "children": [{"name": "Sub-item"}, {"name": "Another"}]}]. Reference: {"name": "Link", "id": "abc123"}. URL: {"name": "https://example.com", "dataType": "url"}',
             },
           },
         },

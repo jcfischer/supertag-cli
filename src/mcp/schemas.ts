@@ -102,6 +102,23 @@ export const nodeSchema = z.object({
 });
 export type NodeInput = z.infer<typeof nodeSchema>;
 
+// Recursive child node schema for nested structures
+interface ChildNode {
+  name: string;
+  id?: string;
+  dataType?: 'url' | 'reference';
+  children?: ChildNode[];
+}
+
+const childNodeSchema: z.ZodType<ChildNode> = z.lazy(() =>
+  z.object({
+    name: z.string().describe('Child node name. For inline refs: <span data-inlineref-node="NODE_ID">Text</span>'),
+    id: z.string().optional().describe('Optional node ID to create this child as a reference node (dataType: reference)'),
+    dataType: z.enum(['url', 'reference']).optional().describe('Data type: "url" for clickable links, "reference" for node links (requires id)'),
+    children: z.array(childNodeSchema).optional().describe('Nested child nodes for hierarchical structures'),
+  })
+);
+
 // tana_create (Phase 2)
 export const createSchema = z.object({
   supertag: z
@@ -119,16 +136,10 @@ export const createSchema = z.object({
     .optional()
     .describe('Field values as key-value pairs (e.g., {"Status": "Done", "Tags": ["urgent"]})'),
   children: z
-    .array(
-      z.object({
-        name: z.string().describe('Child node name. For inline refs: <span data-inlineref-node="NODE_ID">Text</span>'),
-        id: z.string().optional().describe('Optional node ID to create this child as a reference node (dataType: reference)'),
-        dataType: z.enum(['url', 'reference']).optional().describe('Data type: "url" for clickable links, "reference" for node links (requires id)'),
-      })
-    )
+    .array(childNodeSchema)
     .optional()
     .describe(
-      'Child nodes. Plain text: [{"name": "Child"}]. Reference node: {"name": "Link", "id": "abc123"}. Inline ref in text: {"name": "See <span data-inlineref-node=\\"xyz\\">Related</span>"}'
+      'Child nodes with optional nesting. Plain: [{"name": "Child"}]. Nested: [{"name": "Parent", "children": [{"name": "Sub-item"}]}]. Reference: {"name": "Link", "id": "abc123"}. URL: {"name": "https://...", "dataType": "url"}'
     ),
   workspace: workspaceSchema,
   target: z
