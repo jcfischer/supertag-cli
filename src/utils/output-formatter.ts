@@ -130,3 +130,74 @@ export interface OutputFormatter {
    */
   finalize(): void;
 }
+
+// ============================================================================
+// UnixFormatter Implementation (T-1.2)
+// ============================================================================
+
+/**
+ * Unix-style formatter: TSV output, pipe-friendly, no decoration
+ *
+ * Output characteristics:
+ * - Tab-separated values for tables
+ * - YAML-like records with "---" separator
+ * - One item per line for lists
+ * - No headers, tips, or dividers
+ *
+ * @example
+ * const formatter = new UnixFormatter({ mode: 'unix' });
+ * formatter.table(['ID', 'Name'], [['abc', 'Node 1']]);
+ * // Output: "abc\tNode 1\n"
+ */
+export class UnixFormatter implements OutputFormatter {
+  private out: NodeJS.WriteStream;
+
+  constructor(options: FormatterOptions) {
+    this.out = options.stream ?? process.stdout;
+  }
+
+  value(value: unknown): void {
+    this.out.write(String(value) + "\n");
+  }
+
+  header(_text: string, _emoji?: keyof typeof EMOJI): void {
+    // No headers in unix mode
+  }
+
+  table(_headers: string[], rows: (string | number | undefined)[][]): void {
+    for (const row of rows) {
+      this.out.write(row.map((v) => v ?? "").join("\t") + "\n");
+    }
+  }
+
+  record(fields: Record<string, unknown>): void {
+    this.out.write("---\n");
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && value !== null) {
+        this.out.write(`${key}: ${value}\n`);
+      }
+    }
+  }
+
+  list(items: string[], _bullet?: string): void {
+    for (const item of items) {
+      this.out.write(item + "\n");
+    }
+  }
+
+  divider(): void {
+    // No dividers in unix mode
+  }
+
+  tip(_message: string): void {
+    // No tips in unix mode
+  }
+
+  error(message: string): void {
+    process.stderr.write(message + "\n");
+  }
+
+  finalize(): void {
+    // Nothing to finalize
+  }
+}
