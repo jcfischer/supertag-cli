@@ -265,4 +265,97 @@ describe("processWorkspaces", () => {
     expect(result.results[0].success).toBe(false);
     expect(result.results[0].error).toBeInstanceOf(Error);
   });
+
+  // T-2.2: Parallel execution tests
+  it("should support parallel execution", async () => {
+    const { processWorkspaces } = await import("../src/config/batch-processor");
+
+    const startTimes: number[] = [];
+    const result = await processWorkspaces(
+      { workspaces: ["main", "main"], parallel: true },
+      async (ws) => {
+        startTimes.push(Date.now());
+        await new Promise((r) => setTimeout(r, 50));
+        return ws.alias;
+      }
+    );
+
+    // Both should start at roughly the same time (within 10ms)
+    expect(result.successful).toBe(2);
+    if (startTimes.length === 2) {
+      const timeDiff = Math.abs(startTimes[0] - startTimes[1]);
+      expect(timeDiff).toBeLessThan(30); // Should be nearly simultaneous
+    }
+  });
+
+  it("should respect concurrency limit", async () => {
+    const { processWorkspaces } = await import("../src/config/batch-processor");
+
+    let concurrent = 0;
+    let maxConcurrent = 0;
+
+    const result = await processWorkspaces(
+      { workspaces: ["main", "main", "main", "main"], parallel: true, concurrency: 2 },
+      async (ws) => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await new Promise((r) => setTimeout(r, 50));
+        concurrent--;
+        return ws.alias;
+      }
+    );
+
+    expect(result.successful).toBe(4);
+    expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+});
+
+// T-2.3: createProgressLogger tests
+describe("createProgressLogger", () => {
+  it("should return pretty formatter with icons", async () => {
+    const { createProgressLogger } = await import("../src/config/batch-processor");
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+
+    try {
+      const logger = createProgressLogger("pretty");
+      logger("main", 1, 3, "start");
+      logger("main", 1, 3, "success");
+      logger("main", 1, 3, "error");
+
+      // Should contain icons
+      expect(logs.some((l) => l.includes("\u22EF"))).toBe(true); // start icon
+      expect(logs.some((l) => l.includes("\u2713"))).toBe(true); // success icon
+      expect(logs.some((l) => l.includes("\u2717"))).toBe(true); // error icon
+      // Should contain progress format [1/3]
+      expect(logs.some((l) => l.includes("[1/3]"))).toBe(true);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it("should return unix formatter with TSV", async () => {
+    const { createProgressLogger } = await import("../src/config/batch-processor");
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+
+    try {
+      const logger = createProgressLogger("unix");
+      logger("main", 1, 3, "start");
+      logger("main", 1, 3, "success");
+      logger("books", 2, 3, "error");
+
+      // Unix mode should not log on start
+      expect(logs.length).toBe(2);
+      // Should be tab-separated
+      expect(logs[0]).toBe("main\tsuccess");
+      expect(logs[1]).toBe("books\terror");
+    } finally {
+      console.log = originalLog;
+    }
+  });
 });

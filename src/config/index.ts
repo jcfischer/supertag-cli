@@ -55,3 +55,17 @@ export {
   withWorkspace,
   clearWorkspaceCache,
 } from "./workspace-resolver";
+
+// Batch workspace processor (spec 056)
+export {
+  // Types
+  type BatchOptions,
+  type WorkspaceResult,
+  type BatchResult,
+  type ProgressCallback,
+  // Functions
+  processWorkspaces,
+  resolveWorkspaceList,
+  isBatchMode,
+  createProgressLogger,
+} from "./batch-processor";

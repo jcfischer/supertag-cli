@@ -98,15 +98,34 @@ export async function processWorkspaces<T>(
 
   const results: WorkspaceResult<T>[] = [];
 
-  // Sequential execution (parallel added in T-2.2)
-  for (let i = 0; i < workspaceAliases.length; i++) {
-    const alias = workspaceAliases[i];
-    const result = await processOne(alias, operation, onProgress, i, total);
-    results.push(result);
+  // Parallel execution with concurrency limit
+  if (options.parallel) {
+    const concurrency = options.concurrency ?? 4;
+    const chunks = chunkArray(workspaceAliases, concurrency);
 
-    // Stop on first error if not continuing
-    if (!result.success && !options.continueOnError) {
-      break;
+    let globalIndex = 0;
+    for (const chunk of chunks) {
+      const chunkResults = await Promise.all(
+        chunk.map((alias, localIdx) => {
+          const idx = globalIndex + localIdx;
+          return processOne(alias, operation, onProgress, idx, total);
+        })
+      );
+      results.push(...chunkResults);
+      globalIndex += chunk.length;
+    }
+  }
+  // Sequential execution
+  else {
+    for (let i = 0; i < workspaceAliases.length; i++) {
+      const alias = workspaceAliases[i];
+      const result = await processOne(alias, operation, onProgress, i, total);
+      results.push(result);
+
+      // Stop on first error if not continuing
+      if (!result.success && !options.continueOnError) {
+        break;
+      }
     }
   }
 
@@ -116,6 +135,17 @@ export async function processWorkspaces<T>(
     failed: results.filter((r) => !r.success).length,
     totalDuration: Date.now() - startTime,
   };
+}
+
+/**
+ * Split array into chunks of specified size
+ */
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 }
 
 /**
