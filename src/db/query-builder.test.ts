@@ -58,3 +58,64 @@ describe("Query Builder Types", () => {
     expect(typeof buildSelectQuery).toBe("function");
   });
 });
+
+// =============================================================================
+// T-1.2: buildPagination()
+// =============================================================================
+
+describe("buildPagination", () => {
+  it("should build LIMIT clause only", () => {
+    const { sql, params } = buildPagination({ limit: 10 });
+    expect(sql).toBe("LIMIT ?");
+    expect(params).toEqual([10]);
+  });
+
+  it("should build LIMIT and OFFSET", () => {
+    const { sql, params } = buildPagination({ limit: 10, offset: 20 });
+    expect(sql).toBe("LIMIT ? OFFSET ?");
+    expect(params).toEqual([10, 20]);
+  });
+
+  it("should return empty for no options", () => {
+    const { sql, params } = buildPagination({});
+    expect(sql).toBe("");
+    expect(params).toEqual([]);
+  });
+
+  it("should return empty for undefined options", () => {
+    const { sql, params } = buildPagination({ limit: undefined, offset: undefined });
+    expect(sql).toBe("");
+    expect(params).toEqual([]);
+  });
+
+  it("should ignore zero limit", () => {
+    const { sql, params } = buildPagination({ limit: 0 });
+    expect(sql).toBe("");
+    expect(params).toEqual([]);
+  });
+
+  it("should ignore negative limit", () => {
+    const { sql, params } = buildPagination({ limit: -5 });
+    expect(sql).toBe("");
+    expect(params).toEqual([]);
+  });
+
+  it("should ignore zero offset when limit is set", () => {
+    const { sql, params } = buildPagination({ limit: 10, offset: 0 });
+    expect(sql).toBe("LIMIT ?");
+    expect(params).toEqual([10]);
+  });
+
+  it("should ignore negative offset", () => {
+    const { sql, params } = buildPagination({ limit: 10, offset: -5 });
+    expect(sql).toBe("LIMIT ?");
+    expect(params).toEqual([10]);
+  });
+
+  it("should ignore offset without limit", () => {
+    // OFFSET without LIMIT is invalid SQL in most databases
+    const { sql, params } = buildPagination({ offset: 20 });
+    expect(sql).toBe("");
+    expect(params).toEqual([]);
+  });
+});

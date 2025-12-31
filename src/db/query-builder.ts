@@ -55,10 +55,32 @@ export interface BuiltQuery {
 /**
  * Build LIMIT/OFFSET clause with parameter binding
  * Validates positive values, ignores zero/negative
+ *
+ * @param options - Pagination options
+ * @returns Built query fragment
+ *
+ * @example
+ * const { sql, params } = buildPagination({ limit: 10, offset: 20 });
+ * // sql: "LIMIT ? OFFSET ?"
+ * // params: [10, 20]
  */
-export function buildPagination(_options: PaginationOptions): BuiltQuery {
-  // Stub - to be implemented in T-1.2
-  return { sql: "", params: [] };
+export function buildPagination(options: PaginationOptions): BuiltQuery {
+  const parts: string[] = [];
+  const params: unknown[] = [];
+
+  // Only add LIMIT if positive
+  if (options.limit !== undefined && options.limit > 0) {
+    parts.push("LIMIT ?");
+    params.push(options.limit);
+
+    // Only add OFFSET if LIMIT exists and offset is positive
+    if (options.offset !== undefined && options.offset > 0) {
+      parts.push("OFFSET ?");
+      params.push(options.offset);
+    }
+  }
+
+  return { sql: parts.join(" "), params };
 }
 
 /**
