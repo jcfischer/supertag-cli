@@ -398,11 +398,76 @@ bun install
 
 ## Troubleshooting
 
+### Common Issues
+
 | Problem | Solution |
 |---------|----------|
 | "API token not configured" | `export TANA_API_TOKEN="your_token"` |
 | "Database not found" | `supertag sync index` |
 | "Chromium not found" | `supertag-export setup` |
+
+### Windows-Specific Issues
+
+#### "Cannot find package 'playwright'" Error
+
+When running `supertag-export login` on Windows, you may see:
+
+```
+error: Cannot find package 'playwright' from 'B:/~BUN/root/supertag-export.exe'
+```
+
+**Solution:** Install Playwright separately. The browser automation binaries cannot be bundled into the executable.
+
+**Option 1: Using Node.js (Recommended)**
+
+1. Install Node.js from https://nodejs.org (LTS version)
+2. Open PowerShell and run:
+   ```powershell
+   npx playwright install chromium
+   ```
+
+**Option 2: Using Bun**
+
+1. Install Bun from https://bun.sh
+2. Open PowerShell and run:
+   ```powershell
+   bunx playwright install chromium
+   ```
+
+After installing Playwright, `supertag-export login` should work.
+
+#### Alternative: Manual Export (No Playwright Required)
+
+If you prefer not to install Node.js/Bun, you can export manually:
+
+1. In Tana, go to **Settings → Export**
+2. Select **JSON** format and export
+3. Save the file to `%USERPROFILE%\Documents\Tana-Export\main\`
+4. Run `.\supertag sync index` to index the export
+
+This bypasses the need for `supertag-export` entirely.
+
+#### Windows Path Configuration
+
+To run `supertag` from any directory, add it to your PATH:
+
+```powershell
+# Add to current session
+$env:PATH += ";C:\path\to\supertag-cli-windows-x64"
+
+# Add permanently (run as Administrator)
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\path\to\supertag-cli-windows-x64", "User")
+```
+
+#### Windows API Token Configuration
+
+```powershell
+# Set for current session
+$env:TANA_API_TOKEN = "your_token_here"
+
+# Set permanently
+[Environment]::SetEnvironmentVariable("TANA_API_TOKEN", "your_token_here", "User")
+```
 
 ---
 
