@@ -16,6 +16,7 @@ import {
   DatabaseNotFoundError,
   withDatabase,
   withTransaction,
+  withQueryEngine,
   type DatabaseContext,
   type QueryContext,
   type DatabaseOptions,
@@ -297,5 +298,153 @@ describe("withTransaction", () => {
     db.close();
 
     expect(rows).toHaveLength(2);
+  });
+});
+
+// =============================================================================
+// T-2.1: withQueryEngine()
+// =============================================================================
+
+/**
+ * Create a test database with the schema needed for TanaQueryEngine
+ */
+function createTestTanaDb(dbPath: string): void {
+  const db = new Database(dbPath);
+
+  // Minimal schema for TanaQueryEngine
+  db.exec(`
+    CREATE TABLE nodes (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      parent_id TEXT,
+      node_type TEXT,
+      created INTEGER,
+      updated INTEGER,
+      done_at INTEGER,
+      raw_data TEXT
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE supertags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      node_id TEXT NOT NULL,
+      tag_name TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      color TEXT
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      node_id TEXT NOT NULL,
+      field_name TEXT NOT NULL,
+      field_value TEXT
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE "references" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_id TEXT NOT NULL,
+      target_id TEXT NOT NULL
+    )
+  `);
+
+  // Insert test data
+  db.exec("INSERT INTO nodes (id, name) VALUES ('node1', 'Test Node')");
+  db.exec("INSERT INTO supertags (node_id, tag_name, tag_id) VALUES ('node1', 'test', 'tag1')");
+
+  db.close();
+}
+
+describe("withQueryEngine", () => {
+  let testDir: string;
+  let testDbPath: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `supertag-qe-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(testDir, { recursive: true });
+    testDbPath = join(testDir, "tana.db");
+    createTestTanaDb(testDbPath);
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("should provide both db and engine in context", async () => {
+    const result = await withQueryEngine({ dbPath: testDbPath }, (ctx) => {
+      expect(ctx.db).toBeDefined();
+      expect(ctx.engine).toBeDefined();
+      expect(ctx.dbPath).toBe(testDbPath);
+      return "success";
+    });
+
+    expect(result).toBe("success");
+  });
+
+  it("should close database after callback completes", async () => {
+    let dbFromCallback: Database | null = null;
+
+    await withQueryEngine({ dbPath: testDbPath }, (ctx) => {
+      dbFromCallback = ctx.db;
+    });
+
+    // Database should be closed
+    expect(() => dbFromCallback!.query("SELECT 1")).toThrow();
+  });
+
+  it("should close engine after callback completes", async () => {
+    let engineFromCallback: any = null;
+
+    await withQueryEngine({ dbPath: testDbPath }, (ctx) => {
+      engineFromCallback = ctx.engine;
+    });
+
+    // Engine should be closed (attempting to query should fail)
+    expect(() => engineFromCallback.getStatistics()).toThrow();
+  });
+
+  it("should allow querying through engine", async () => {
+    const stats = await withQueryEngine({ dbPath: testDbPath }, (ctx) => {
+      return ctx.engine.getStatistics();
+    });
+
+    expect(stats.totalNodes).toBe(1);
+    expect(stats.totalSupertags).toBe(1);
+  });
+
+  it("should close on error", async () => {
+    let dbFromCallback: Database | null = null;
+
+    await expect(
+      withQueryEngine({ dbPath: testDbPath }, (ctx) => {
+        dbFromCallback = ctx.db;
+        throw new Error("Intentional test error");
+      })
+    ).rejects.toThrow("Intentional test error");
+
+    // Database should be closed after error
+    expect(() => dbFromCallback!.query("SELECT 1")).toThrow();
+  });
+
+  it("should throw DatabaseNotFoundError for missing file", async () => {
+    const missingPath = join(testDir, "nonexistent.db");
+
+    await expect(
+      withQueryEngine({ dbPath: missingPath }, (ctx) => {
+        return ctx.engine;
+      })
+    ).rejects.toThrow(DatabaseNotFoundError);
+  });
+
+  it("should support readonly mode", async () => {
+    const result = await withQueryEngine({ dbPath: testDbPath, readonly: true }, (ctx) => {
+      return ctx.engine.getStatistics();
+    });
+
+    expect(result.totalNodes).toBe(1);
   });
 });

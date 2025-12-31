@@ -9,7 +9,7 @@
 
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
-import type { TanaQueryEngine } from "../query/tana-query-engine";
+import { TanaQueryEngine } from "../query/tana-query-engine";
 import type { ResolvedWorkspace } from "../config/workspace-resolver";
 
 // =============================================================================
@@ -177,5 +177,51 @@ export async function withTransaction<T>(
     throw error;
   } finally {
     db.close();
+  }
+}
+
+/**
+ * Execute a function with an auto-closing query engine.
+ *
+ * Creates a TanaQueryEngine, executes the callback, and guarantees it's
+ * closed afterwards (even if an error occurs). The engine manages its own
+ * database connection internally.
+ *
+ * @example
+ * ```typescript
+ * const stats = await withQueryEngine({ dbPath: '/path/to/db' }, (ctx) => {
+ *   return ctx.engine.getStatistics();
+ * });
+ * ```
+ *
+ * @param options - Database options (path, readonly, requireExists)
+ * @param fn - Callback function receiving QueryContext
+ * @returns Promise resolving to callback's return value
+ * @throws DatabaseNotFoundError if database doesn't exist and requireExists is true
+ */
+export async function withQueryEngine<T>(
+  options: DatabaseOptions,
+  fn: (ctx: QueryContext) => T | Promise<T>
+): Promise<T> {
+  const { dbPath, readonly = false, requireExists = true } = options;
+
+  // Check if database exists (unless creating new)
+  if (requireExists && !existsSync(dbPath)) {
+    throw new DatabaseNotFoundError(dbPath);
+  }
+
+  // Create query engine (it manages its own database connection)
+  // Note: TanaQueryEngine opens its own database, so readonly option is not supported
+  // If readonly is needed, use withDatabase directly
+  const engine = new TanaQueryEngine(dbPath);
+
+  try {
+    // Execute callback (may be sync or async)
+    // Provide engine's raw db for direct access
+    const result = await fn({ db: engine.rawDb, dbPath, engine });
+    return result;
+  } finally {
+    // Always close engine (which closes its internal database)
+    engine.close();
   }
 }
