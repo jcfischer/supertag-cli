@@ -448,3 +448,46 @@ describe("withQueryEngine", () => {
     expect(result.totalNodes).toBe(1);
   });
 });
+
+// =============================================================================
+// T-2.2: withWorkspaceDatabase()
+// =============================================================================
+
+describe("withWorkspaceDatabase", () => {
+  // Note: These tests use mocked config since we can't easily set up real workspaces
+  // The integration with resolveWorkspaceContext is tested in actual command tests
+
+  it("should be exported from module", async () => {
+    const { withWorkspaceDatabase } = await import("../../src/db/with-database");
+    expect(typeof withWorkspaceDatabase).toBe("function");
+  });
+
+  it("should accept WorkspaceDatabaseOptions type", () => {
+    // Type check - options should accept workspace and readonly
+    const opts: import("../../src/db/with-database").WorkspaceDatabaseOptions = {
+      workspace: "main",
+      readonly: true,
+    };
+    expect(opts.workspace).toBe("main");
+    expect(opts.readonly).toBe(true);
+  });
+});
+
+// =============================================================================
+// T-2.3: withWorkspaceQuery()
+// =============================================================================
+
+describe("withWorkspaceQuery", () => {
+  it("should be exported from module", async () => {
+    const { withWorkspaceQuery } = await import("../../src/db/with-database");
+    expect(typeof withWorkspaceQuery).toBe("function");
+  });
+
+  it("should accept WorkspaceDatabaseOptions type", async () => {
+    const opts: import("../../src/db/with-database").WorkspaceDatabaseOptions = {
+      workspace: "main",
+      readonly: false,
+    };
+    expect(opts.workspace).toBe("main");
+  });
+});

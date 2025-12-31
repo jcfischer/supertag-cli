@@ -10,6 +10,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import { TanaQueryEngine } from "../query/tana-query-engine";
+import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import type { ResolvedWorkspace } from "../config/workspace-resolver";
 
 // =============================================================================
@@ -224,4 +225,84 @@ export async function withQueryEngine<T>(
     // Always close engine (which closes its internal database)
     engine.close();
   }
+}
+
+// =============================================================================
+// Workspace Composition Functions
+// =============================================================================
+
+/**
+ * Execute a function with workspace resolution and auto-closing database.
+ *
+ * Resolves the workspace alias to a database path, opens the database,
+ * executes the callback, and guarantees the database is closed afterwards.
+ *
+ * @example
+ * ```typescript
+ * const result = await withWorkspaceDatabase({ workspace: 'main' }, (ctx) => {
+ *   return ctx.db.query('SELECT COUNT(*) FROM nodes').get();
+ * });
+ * ```
+ *
+ * @param options - Workspace options (workspace alias, readonly)
+ * @param fn - Callback function receiving WorkspaceDatabaseContext
+ * @returns Promise resolving to callback's return value
+ * @throws WorkspaceNotFoundError if workspace doesn't exist
+ * @throws WorkspaceDatabaseMissingError if database doesn't exist
+ */
+export async function withWorkspaceDatabase<T>(
+  options: WorkspaceDatabaseOptions,
+  fn: (ctx: WorkspaceDatabaseContext) => T | Promise<T>
+): Promise<T> {
+  const { workspace, readonly = false } = options;
+
+  // Resolve workspace to get database path
+  const resolvedWorkspace = resolveWorkspaceContext({
+    workspace,
+    requireDatabase: true,
+  });
+
+  // Open database using withDatabase
+  return withDatabase(
+    { dbPath: resolvedWorkspace.dbPath, readonly },
+    (ctx) => fn({ ...ctx, workspace: resolvedWorkspace })
+  );
+}
+
+/**
+ * Execute a function with workspace resolution and auto-closing query engine.
+ *
+ * Resolves the workspace alias, creates a TanaQueryEngine, executes the callback,
+ * and guarantees the engine is closed afterwards.
+ *
+ * @example
+ * ```typescript
+ * const stats = await withWorkspaceQuery({ workspace: 'main' }, (ctx) => {
+ *   return ctx.engine.getStatistics();
+ * });
+ * ```
+ *
+ * @param options - Workspace options (workspace alias, readonly)
+ * @param fn - Callback function receiving WorkspaceQueryContext
+ * @returns Promise resolving to callback's return value
+ * @throws WorkspaceNotFoundError if workspace doesn't exist
+ * @throws WorkspaceDatabaseMissingError if database doesn't exist
+ */
+export async function withWorkspaceQuery<T>(
+  options: WorkspaceDatabaseOptions,
+  fn: (ctx: WorkspaceQueryContext) => T | Promise<T>
+): Promise<T> {
+  const { workspace, readonly = false } = options;
+
+  // Resolve workspace to get database path
+  const resolvedWorkspace = resolveWorkspaceContext({
+    workspace,
+    requireDatabase: true,
+  });
+
+  // Open query engine using withQueryEngine
+  return withQueryEngine(
+    { dbPath: resolvedWorkspace.dbPath, readonly },
+    (ctx) => fn({ ...ctx, workspace: resolvedWorkspace })
+  );
 }
