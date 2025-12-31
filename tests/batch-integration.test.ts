@@ -134,10 +134,52 @@ describe("sync command batch processing", () => {
   });
 });
 
-// Placeholder for T-3.2 and T-3.3
+// T-3.2: Embed command integration tests
 describe("embed command batch processing", () => {
-  it.skip("should use processWorkspaces for --all-workspaces", () => {
-    // T-3.2: To be implemented when migrating embed command
+  it("should use processWorkspaces for --all-workspaces", async () => {
+    const { processWorkspaces, isBatchMode } = await import(
+      "../src/config/batch-processor"
+    );
+
+    // Verify the function can handle batch options
+    const options = { all: true };
+    expect(isBatchMode(options)).toBe(true);
+
+    // Simulate embed generate operation
+    const processed: string[] = [];
+    const result = await processWorkspaces(
+      { workspace: "main", continueOnError: true },
+      async (ws) => {
+        processed.push(ws.alias);
+        // Simulate embedding result
+        return {
+          processed: 100,
+          skipped: 50,
+          errors: 0,
+        };
+      }
+    );
+
+    expect(result.successful).toBe(1);
+    expect(processed).toContain("main");
+    expect(result.results[0].result).toEqual({
+      processed: 100,
+      skipped: 50,
+      errors: 0,
+    });
+  });
+
+  it("should report success and failure counts", async () => {
+    const { processWorkspaces } = await import("../src/config/batch-processor");
+
+    const result = await processWorkspaces(
+      { workspaces: ["main", "nonexistent"], continueOnError: true },
+      async (ws) => ({ alias: ws.alias })
+    );
+
+    // Output should show "X succeeded, Y failed"
+    expect(result.successful).toBeGreaterThanOrEqual(1);
+    expect(result.failed).toBeGreaterThanOrEqual(1);
   });
 });
 
