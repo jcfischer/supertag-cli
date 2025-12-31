@@ -15,7 +15,6 @@ import type {
   FormatterOptions,
 } from "../../src/utils/output-formatter";
 
-import { UnixFormatter } from "../../src/utils/output-formatter";
 
 // Helper to capture output for testing
 function captureOutput(): { stream: NodeJS.WriteStream; getOutput: () => string } {
@@ -104,6 +103,8 @@ describe("OutputFormatter Interface (T-1.1)", () => {
 // ============================================================================
 // T-1.2: UnixFormatter Tests
 // ============================================================================
+
+import { UnixFormatter, PrettyFormatter } from "../../src/utils/output-formatter";
 
 describe("UnixFormatter (T-1.2)", () => {
   describe("value()", () => {
@@ -275,6 +276,228 @@ describe("UnixFormatter (T-1.2)", () => {
     it("should be a no-op (nothing to finalize in unix mode)", () => {
       const { stream, getOutput } = captureOutput();
       const formatter = new UnixFormatter({ mode: "unix", stream });
+
+      formatter.value("test");
+      const beforeFinalize = getOutput();
+      formatter.finalize();
+      expect(getOutput()).toBe(beforeFinalize);
+    });
+  });
+});
+
+// ============================================================================
+// T-1.3: PrettyFormatter Tests
+// ============================================================================
+
+describe("PrettyFormatter (T-1.3)", () => {
+  describe("value()", () => {
+    it("should output value as string with newline", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.value("hello");
+      expect(getOutput()).toBe("hello\n");
+    });
+
+    it("should convert non-string values to string", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.value(42);
+      expect(getOutput()).toBe("42\n");
+    });
+  });
+
+  describe("header()", () => {
+    it("should output header with emoji", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.header("Search Results", "search");
+      expect(getOutput()).toBe("\n🔍 Search Results\n");
+    });
+
+    it("should output header without emoji when not provided", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.header("Results");
+      expect(getOutput()).toBe("\nResults\n");
+    });
+  });
+
+  describe("table()", () => {
+    it("should output formatted table with headers", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.table(["ID", "Name"], [
+        ["abc", "Node 1"],
+        ["xyz", "Node 2"],
+      ]);
+
+      const output = getOutput();
+      // Should contain headers
+      expect(output).toContain("ID");
+      expect(output).toContain("Name");
+      // Should contain separator line
+      expect(output).toContain("─");
+      // Should contain data rows
+      expect(output).toContain("abc");
+      expect(output).toContain("Node 1");
+      expect(output).toContain("xyz");
+      expect(output).toContain("Node 2");
+    });
+
+    it("should handle undefined values", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.table(["ID", "Name", "Tags"], [
+        ["abc", "Node 1", undefined],
+      ]);
+
+      const output = getOutput();
+      expect(output).toContain("abc");
+      expect(output).toContain("Node 1");
+    });
+
+    it("should handle numeric values", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.table(["ID", "Count"], [
+        ["abc", 42],
+      ]);
+
+      const output = getOutput();
+      expect(output).toContain("42");
+    });
+
+    it("should output nothing for empty rows", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.table(["ID", "Name"], []);
+      expect(getOutput()).toBe("");
+    });
+  });
+
+  describe("record()", () => {
+    it("should output aligned key-value pairs", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.record({ id: "abc", name: "Test" });
+
+      const output = getOutput();
+      // Keys are padded for alignment, so check for key and value separately
+      expect(output).toContain("id");
+      expect(output).toContain("abc");
+      expect(output).toContain("name");
+      expect(output).toContain("Test");
+      // Should contain colon separators
+      expect(output).toContain(":");
+    });
+
+    it("should skip undefined and null values", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.record({ id: "abc", name: undefined, tags: null });
+
+      const output = getOutput();
+      expect(output).toContain("id");
+      expect(output).toContain("abc");
+      expect(output).not.toContain("name");
+      expect(output).not.toContain("tags");
+    });
+
+    it("should handle empty record", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.record({});
+      expect(getOutput()).toBe("");
+    });
+  });
+
+  describe("list()", () => {
+    it("should output bulleted list", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.list(["item1", "item2", "item3"]);
+
+      const output = getOutput();
+      expect(output).toContain("•");
+      expect(output).toContain("item1");
+      expect(output).toContain("item2");
+      expect(output).toContain("item3");
+    });
+
+    it("should use custom bullet", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.list(["item1"], "-");
+
+      const output = getOutput();
+      expect(output).toContain("-");
+      expect(output).toContain("item1");
+    });
+
+    it("should output nothing for empty list", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.list([]);
+      expect(getOutput()).toBe("");
+    });
+  });
+
+  describe("divider()", () => {
+    it("should output horizontal line", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.divider();
+
+      const output = getOutput();
+      expect(output).toContain("─");
+      expect(output.length).toBeGreaterThan(10); // Should be a decent length
+    });
+  });
+
+  describe("tip()", () => {
+    it("should output tip with emoji", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.tip("Use --show for details");
+
+      const output = getOutput();
+      expect(output).toContain("💡");
+      expect(output).toContain("Tip:");
+      expect(output).toContain("Use --show for details");
+    });
+  });
+
+  describe("error()", () => {
+    it("should output to stderr (not stdout)", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
+
+      formatter.error("Something went wrong");
+      // error() writes to stderr, not the provided stream
+      expect(getOutput()).toBe("");
+    });
+  });
+
+  describe("finalize()", () => {
+    it("should be a no-op (nothing to finalize in pretty mode)", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = new PrettyFormatter({ mode: "pretty", stream });
 
       formatter.value("test");
       const beforeFinalize = getOutput();

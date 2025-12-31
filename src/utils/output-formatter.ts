@@ -201,3 +201,112 @@ export class UnixFormatter implements OutputFormatter {
     // Nothing to finalize
   }
 }
+
+// ============================================================================
+// PrettyFormatter Implementation (T-1.3)
+// ============================================================================
+
+/**
+ * Pretty-style formatter: Human-readable output with emojis and formatting
+ *
+ * Output characteristics:
+ * - Formatted tables with headers and alignment
+ * - Emoji-prefixed headers
+ * - Tips with emoji
+ * - Bulleted lists
+ * - Horizontal dividers
+ *
+ * @example
+ * const formatter = new PrettyFormatter({ mode: 'pretty' });
+ * formatter.header('Search Results', 'search');
+ * // Output: "\n🔍 Search Results\n"
+ */
+export class PrettyFormatter implements OutputFormatter {
+  private out: NodeJS.WriteStream;
+
+  constructor(options: FormatterOptions) {
+    this.out = options.stream ?? process.stdout;
+  }
+
+  value(value: unknown): void {
+    this.out.write(String(value) + "\n");
+  }
+
+  header(text: string, emoji?: keyof typeof EMOJI): void {
+    if (emoji && EMOJI[emoji]) {
+      this.out.write(`\n${EMOJI[emoji]} ${text}\n`);
+    } else {
+      this.out.write(`\n${text}\n`);
+    }
+  }
+
+  table(headers: string[], rows: (string | number | undefined)[][]): void {
+    if (rows.length === 0) {
+      return; // Don't output anything for empty tables
+    }
+
+    // Convert rows to string arrays
+    const stringRows = rows.map((row) =>
+      row.map((v) => (v === undefined || v === null ? "" : String(v)))
+    );
+
+    // Calculate column widths (max of header and all values)
+    const widths = headers.map((h, i) =>
+      Math.max(h.length, ...stringRows.map((r) => (r[i] || "").length))
+    );
+
+    // Format a single row with padding
+    const formatRow = (row: string[]) =>
+      row.map((cell, i) => cell.padEnd(widths[i])).join("  ");
+
+    const indent = "  ";
+
+    // Output header row
+    this.out.write(indent + formatRow(headers) + "\n");
+    // Output separator
+    this.out.write(indent + widths.map((w) => "─".repeat(w)).join("──") + "\n");
+    // Output data rows
+    for (const row of stringRows) {
+      this.out.write(indent + formatRow(row) + "\n");
+    }
+  }
+
+  record(fields: Record<string, unknown>): void {
+    const entries = Object.entries(fields).filter(
+      ([, value]) => value !== undefined && value !== null
+    );
+
+    if (entries.length === 0) {
+      return; // Don't output anything for empty records
+    }
+
+    // Calculate max key length for alignment
+    const maxKeyLength = Math.max(...entries.map(([key]) => key.length));
+
+    for (const [key, value] of entries) {
+      this.out.write(`  ${key.padEnd(maxKeyLength)}: ${value}\n`);
+    }
+  }
+
+  list(items: string[], bullet = "•"): void {
+    for (const item of items) {
+      this.out.write(`  ${bullet} ${item}\n`);
+    }
+  }
+
+  divider(): void {
+    this.out.write("─".repeat(60) + "\n");
+  }
+
+  tip(message: string): void {
+    this.out.write(`\n${EMOJI.tip} Tip: ${message}\n`);
+  }
+
+  error(message: string): void {
+    process.stderr.write(`${EMOJI.error} ${message}\n`);
+  }
+
+  finalize(): void {
+    // Nothing to finalize in pretty mode
+  }
+}
