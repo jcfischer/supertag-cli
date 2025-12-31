@@ -15,9 +15,13 @@ import {
   getDatabasePath,
   DEFAULT_EXPORT_DIR,
   createSimpleLogger,
-  getEnabledWorkspaces,
   ensureWorkspaceDir,
 } from "../config/paths";
+import {
+  processWorkspaces,
+  createProgressLogger,
+  type ResolvedWorkspace,
+} from "../config";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import { getConfig } from "../config/manager";
 import {
@@ -164,64 +168,54 @@ export function registerSyncCommands(program: Command): void {
     .action(async (options) => {
       // Handle --all option for batch indexing
       if (options.all) {
-        const config = getConfig().getConfig();
-        const workspaces = getEnabledWorkspaces(config);
+        const batchResult = await processWorkspaces(
+          { all: true, continueOnError: true },
+          async (ws: ResolvedWorkspace) => {
+            logger.info(`\n--- Workspace: ${ws.alias} ---`);
 
-        if (workspaces.length === 0) {
+            if (!existsSync(ws.exportDir)) {
+              throw new Error(`Export directory does not exist: ${ws.exportDir}`);
+            }
+
+            // Ensure workspace directory exists
+            ensureWorkspaceDir(ws.alias);
+
+            const watcher = new TanaExportWatcher({
+              exportDir: ws.exportDir,
+              dbPath: ws.dbPath,
+            });
+
+            try {
+              const result = await watcher.indexLatest();
+              logger.info(`Indexed: ${result.exportFile}`);
+              logger.info(`Nodes: ${result.nodesIndexed.toLocaleString()}`);
+              logger.info(`Duration: ${result.durationMs}ms`);
+
+              // Sync schema registry from the same export
+              try {
+                const exportFullPath = join(ws.exportDir, result.exportFile);
+                const registry = syncSchemaToPath(exportFullPath, ws.schemaPath, false);
+                logger.info(`Schema: ${registry.listSupertags().length} supertags`);
+              } catch (schemaError) {
+                logger.warn(`Schema sync failed: ${schemaError}`);
+              }
+
+              return result;
+            } finally {
+              watcher.close();
+            }
+          }
+        );
+
+        if (batchResult.results.length === 0) {
           logger.error('No enabled workspaces configured');
           logger.error('Add workspaces with: tana workspace add <nodeid> --alias <name>');
           process.exit(1);
         }
 
-        logger.info(`Indexing ${workspaces.length} enabled workspace(s)...`);
-        let successCount = 0;
-        let failCount = 0;
-
-        for (const ws of workspaces) {
-          logger.info(`\n--- Workspace: ${ws.alias} ---`);
-
-          if (!existsSync(ws.exportDir)) {
-            logger.warn(`Export directory does not exist: ${ws.exportDir}`);
-            logger.warn(`Skipping workspace ${ws.alias}`);
-            failCount++;
-            continue;
-          }
-
-          // Ensure workspace directory exists
-          ensureWorkspaceDir(ws.alias);
-
-          const watcher = new TanaExportWatcher({
-            exportDir: ws.exportDir,
-            dbPath: ws.dbPath,
-          });
-
-          try {
-            const result = await watcher.indexLatest();
-            logger.info(`Indexed: ${result.exportFile}`);
-            logger.info(`Nodes: ${result.nodesIndexed.toLocaleString()}`);
-            logger.info(`Duration: ${result.durationMs}ms`);
-
-            // Sync schema registry from the same export
-            try {
-              const exportFullPath = join(ws.exportDir, result.exportFile);
-              const registry = syncSchemaToPath(exportFullPath, ws.schemaPath, false);
-              logger.info(`Schema: ${registry.listSupertags().length} supertags`);
-            } catch (schemaError) {
-              logger.warn(`Schema sync failed: ${schemaError}`);
-            }
-
-            successCount++;
-          } catch (error) {
-            logger.error(`Index failed for ${ws.alias}:`, error as Error);
-            failCount++;
-          } finally {
-            watcher.close();
-          }
-        }
-
         logger.info(`\n=== Batch Index Complete ===`);
-        logger.info(`Success: ${successCount}, Failed: ${failCount}`);
-        process.exit(failCount > 0 ? 1 : 0);
+        logger.info(`Success: ${batchResult.successful}, Failed: ${batchResult.failed}`);
+        process.exit(batchResult.failed > 0 ? 1 : 0);
       }
 
       // Single workspace index
@@ -284,26 +278,26 @@ export function registerSyncCommands(program: Command): void {
     .option("--all", "Show status for all enabled workspaces")
     .option("--export-dir <path>", "Export directory path (overrides workspace)")
     .option("--db-path <path>", "Database path (overrides workspace)")
-    .action((options) => {
+    .action(async (options) => {
       // Handle --all option
       if (options.all) {
-        const config = getConfig().getConfig();
-        const workspaces = getEnabledWorkspaces(config);
+        const batchResult = await processWorkspaces(
+          { all: true, continueOnError: true },
+          async (ws: ResolvedWorkspace) => {
+            logger.info(`--- ${ws.alias} ---`);
+            logger.info(`  Export dir: ${ws.exportDir}`);
+            logger.info(`  Database: ${ws.dbPath}`);
+            logger.info(`  Export exists: ${existsSync(ws.exportDir) ? 'Yes' : 'No'}`);
+            logger.info(`  Database exists: ${existsSync(ws.dbPath) ? 'Yes' : 'No'}`);
+            logger.info('');
+            return { alias: ws.alias };
+          }
+        );
 
-        if (workspaces.length === 0) {
+        if (batchResult.results.length === 0) {
           logger.info('No enabled workspaces configured');
-          return;
-        }
-
-        logger.info(`Status for ${workspaces.length} enabled workspace(s):\n`);
-
-        for (const ws of workspaces) {
-          logger.info(`--- ${ws.alias} ---`);
-          logger.info(`  Export dir: ${ws.exportDir}`);
-          logger.info(`  Database: ${ws.dbPath}`);
-          logger.info(`  Export exists: ${existsSync(ws.exportDir) ? 'Yes' : 'No'}`);
-          logger.info(`  Database exists: ${existsSync(ws.dbPath) ? 'Yes' : 'No'}`);
-          logger.info('');
+        } else {
+          logger.info(`Status for ${batchResult.results.length} enabled workspace(s):\n`);
         }
         return;
       }
@@ -344,7 +338,7 @@ export function registerSyncCommands(program: Command): void {
     .option("-k, --keep <count>", "Number of files to keep (uses config default if not specified)")
     .option("-d, --dry-run", "Show what would be deleted without deleting", false)
     .option("--export-dir <path>", "Export directory path (overrides workspace)")
-    .action((options) => {
+    .action(async (options) => {
       // Get cleanup config for defaults
       const cleanupConfig = getConfig().getCleanupConfig();
 
@@ -358,59 +352,68 @@ export function registerSyncCommands(program: Command): void {
 
       // Handle --all option for batch cleanup
       if (options.all) {
-        const config = getConfig().getConfig();
-        const workspaces = getEnabledWorkspaces(config);
+        if (options.dryRun) {
+          logger.info("(dry-run mode - no files will be deleted)");
+        }
 
-        if (workspaces.length === 0) {
+        const batchResult = await processWorkspaces(
+          { all: true, continueOnError: true },
+          async (ws: ResolvedWorkspace) => {
+            logger.info(`--- Workspace: ${ws.alias} ---`);
+
+            if (!existsSync(ws.exportDir)) {
+              logger.warn(`Export directory does not exist: ${ws.exportDir}`);
+              logger.warn(`Skipping workspace ${ws.alias}`);
+              return { deleted: 0, bytesFreed: 0, kept: 0, skipped: true };
+            }
+
+            const result = cleanupExports(ws.exportDir, {
+              keepCount,
+              dryRun: options.dryRun,
+            });
+
+            if (result.error) {
+              throw new Error(result.error);
+            }
+
+            const exportFiles = getExportFiles(ws.exportDir);
+            logger.info(`  Total files: ${exportFiles.length}`);
+            logger.info(`  Keeping: ${result.kept.length} newest`);
+
+            if (result.deleted.length > 0) {
+              logger.info(
+                `  ${options.dryRun ? "Would delete" : "Deleted"}: ${result.deleted.length} files (${formatBytes(result.bytesFreed)})`
+              );
+              for (const file of result.deleted) {
+                logger.info(`    - ${file}`);
+              }
+            } else {
+              logger.info("  Nothing to clean up");
+            }
+            logger.info("");
+
+            return {
+              deleted: result.deleted.length,
+              bytesFreed: result.bytesFreed,
+              kept: result.kept.length,
+              skipped: false,
+            };
+          }
+        );
+
+        if (batchResult.results.length === 0) {
           logger.error("No enabled workspaces configured");
           process.exit(1);
         }
 
-        logger.info(`Cleaning up ${workspaces.length} enabled workspace(s)...`);
-        if (options.dryRun) {
-          logger.info("(dry-run mode - no files will be deleted)");
-        }
-        logger.info("");
-
+        // Aggregate totals from successful results
         let totalDeleted = 0;
         let totalBytesFreed = 0;
-
-        for (const ws of workspaces) {
-          logger.info(`--- Workspace: ${ws.alias} ---`);
-
-          if (!existsSync(ws.exportDir)) {
-            logger.warn(`Export directory does not exist: ${ws.exportDir}`);
-            logger.warn(`Skipping workspace ${ws.alias}`);
-            continue;
+        for (const r of batchResult.results) {
+          if (r.success && r.result && !r.result.skipped) {
+            totalDeleted += r.result.deleted;
+            totalBytesFreed += r.result.bytesFreed;
           }
-
-          const result = cleanupExports(ws.exportDir, {
-            keepCount,
-            dryRun: options.dryRun,
-          });
-
-          if (result.error) {
-            logger.error(`Error: ${result.error}`);
-            continue;
-          }
-
-          const exportFiles = getExportFiles(ws.exportDir);
-          logger.info(`  Total files: ${exportFiles.length}`);
-          logger.info(`  Keeping: ${result.kept.length} newest`);
-
-          if (result.deleted.length > 0) {
-            logger.info(
-              `  ${options.dryRun ? "Would delete" : "Deleted"}: ${result.deleted.length} files (${formatBytes(result.bytesFreed)})`
-            );
-            for (const file of result.deleted) {
-              logger.info(`    - ${file}`);
-            }
-            totalDeleted += result.deleted.length;
-            totalBytesFreed += result.bytesFreed;
-          } else {
-            logger.info("  Nothing to clean up");
-          }
-          logger.info("");
         }
 
         logger.info("=== Cleanup Complete ===");
