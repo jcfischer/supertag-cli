@@ -11,6 +11,7 @@
  */
 
 import { Database, type SQLQueryBindings } from "bun:sqlite";
+import { buildPagination, buildOrderBy } from "./query-builder";
 import type { NodeDump } from "../types/tana-dump";
 import type { ExtractedFieldValue } from "../types/field-values";
 
@@ -449,27 +450,35 @@ export function getFieldValuesByName(
 }> {
   const { limit = 100, offset = 0, createdAfter, createdBefore } = options;
 
-  let sql = `
-    SELECT parent_id as parentId, value_text as valueText, value_order as valueOrder, created
+  // Build base query
+  const sqlParts = [
+    `SELECT parent_id as parentId, value_text as valueText, value_order as valueOrder, created
     FROM field_values
-    WHERE field_name = ?
-  `;
+    WHERE field_name = ?`,
+  ];
   const params: SQLQueryBindings[] = [fieldName];
 
+  // Add date range filters
   if (createdAfter !== undefined) {
-    sql += " AND created >= ?";
+    sqlParts.push("AND created >= ?");
     params.push(createdAfter);
   }
-
   if (createdBefore !== undefined) {
-    sql += " AND created <= ?";
+    sqlParts.push("AND created <= ?");
     params.push(createdBefore);
   }
 
-  sql += " ORDER BY created DESC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
+  // Use query builders for ORDER BY and pagination
+  const orderBy = buildOrderBy({ sort: "created", direction: "DESC" }, []);
+  sqlParts.push(orderBy.sql);
 
-  return db.query(sql).all(...params) as Array<{
+  const pagination = buildPagination({ limit, offset });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as SQLQueryBindings[]));
+  }
+
+  return db.query(sqlParts.join(" ")).all(...params) as Array<{
     parentId: string;
     valueText: string;
     valueOrder: number;
@@ -494,23 +503,28 @@ export function searchFieldValues(
 }> {
   const { fieldName, limit = 50 } = options;
 
-  let sql = `
-    SELECT fv.field_name as fieldName, fv.value_text as valueText, fv.parent_id as parentId
+  // Build base FTS query
+  const sqlParts = [
+    `SELECT fv.field_name as fieldName, fv.value_text as valueText, fv.parent_id as parentId
     FROM field_values_fts fts
     JOIN field_values fv ON fts.rowid = fv.id
-    WHERE field_values_fts MATCH ?
-  `;
+    WHERE field_values_fts MATCH ?`,
+  ];
   const params: SQLQueryBindings[] = [query];
 
   if (fieldName) {
-    sql += " AND fv.field_name = ?";
+    sqlParts.push("AND fv.field_name = ?");
     params.push(fieldName);
   }
 
-  sql += " LIMIT ?";
-  params.push(limit);
+  // Use query builder for pagination
+  const pagination = buildPagination({ limit });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as SQLQueryBindings[]));
+  }
 
-  return db.query(sql).all(...params) as Array<{
+  return db.query(sqlParts.join(" ")).all(...params) as Array<{
     fieldName: string;
     valueText: string;
     parentId: string;

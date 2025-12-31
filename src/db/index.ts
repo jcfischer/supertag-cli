@@ -32,3 +32,17 @@ export { withDbRetry, withDbRetrySync } from "./retry";
 
 // Entity detection
 export { isEntity, isEntityById, findNearestEntityAncestor } from "./entity";
+
+// Query builder utilities
+export {
+  // Functions
+  buildPagination,
+  buildWhereClause,
+  buildOrderBy,
+  buildSelectQuery,
+  // Types
+  type PaginationOptions,
+  type SortOptions,
+  type FilterCondition,
+  type BuiltQuery,
+} from "./query-builder";

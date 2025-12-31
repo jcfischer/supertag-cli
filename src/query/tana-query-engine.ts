@@ -11,6 +11,7 @@ import { eq, like, sql, inArray, gt, lt, and, desc } from "drizzle-orm";
 import { nodes, supertags, fields, references } from "../db/schema";
 import type { Node, Supertag, Reference } from "../db/schema";
 import { withDbRetrySync } from "../db/retry";
+import { buildPagination, buildOrderBy } from "../db/query-builder";
 
 export interface NodeQuery {
   name?: string;
@@ -379,7 +380,7 @@ export class TanaQueryEngine {
     // interpreted as column names or operators (AND, OR, NOT, NEAR)
     const escapedQuery = escapeFTS5Query(query);
 
-    // Build WHERE conditions
+    // Build WHERE conditions (FTS MATCH is special, handle separately)
     const conditions = ["nodes_fts MATCH ?"];
     const params: (string | number)[] = [escapedQuery];
 
@@ -400,14 +401,10 @@ export class TanaQueryEngine {
       params.push(options.updatedBefore);
     }
 
-    params.push(limit);
-
-    // Use FTS5 MATCH query
-    const result = withDbRetrySync(
-      () => this.sqlite
-        .query(
-          `
-        SELECT
+    // Build query with pagination
+    const pagination = buildPagination({ limit });
+    const sqlParts = [
+      `SELECT
           nodes.id,
           nodes.name,
           nodes.parent_id as parentId,
@@ -419,11 +416,16 @@ export class TanaQueryEngine {
         FROM nodes_fts
         JOIN nodes ON nodes.id = nodes_fts.id
         WHERE ${conditions.join(" AND ")}
-        ORDER BY rank
-        LIMIT ?
-      `
-        )
-        .all(...params) as SearchResult[],
+        ORDER BY rank`,
+    ];
+
+    if (pagination.sql) {
+      sqlParts.push(pagination.sql);
+      params.push(...(pagination.params as (string | number)[]));
+    }
+
+    const result = withDbRetrySync(
+      () => this.sqlite.query(sqlParts.join(" ")).all(...params) as SearchResult[],
       "searchNodes"
     );
 
@@ -463,13 +465,12 @@ export class TanaQueryEngine {
       params.push(options.updatedBefore);
     }
 
-    params.push(limit);
+    // Build query with ORDER BY and pagination
+    const orderBy = buildOrderBy({ sort: "updated", direction: "DESC" }, []);
+    const pagination = buildPagination({ limit });
 
-    const result = withDbRetrySync(
-      () => this.sqlite
-        .query(
-          `
-        SELECT
+    const sqlParts = [
+      `SELECT
           id,
           name,
           parent_id as parentId,
@@ -478,12 +479,17 @@ export class TanaQueryEngine {
           updated,
           raw_data as rawData
         FROM nodes
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY updated DESC
-        LIMIT ?
-      `
-        )
-        .all(...params) as Node[],
+        WHERE ${conditions.join(" AND ")}`,
+      orderBy.sql,
+    ];
+
+    if (pagination.sql) {
+      sqlParts.push(pagination.sql);
+      params.push(...(pagination.params as number[]));
+    }
+
+    const result = withDbRetrySync(
+      () => this.sqlite.query(sqlParts.join(" ")).all(...params) as Node[],
       "findRecentlyUpdated"
     );
 
@@ -546,7 +552,7 @@ export class TanaQueryEngine {
     }
   ): Promise<Node[]> {
     const limit = options?.limit || 100;
-    const orderBy = options?.orderBy || "created";
+    const orderByCol = options?.orderBy || "created";
 
     // Build WHERE conditions
     const conditions = ["ta.tag_name = ?"];
@@ -569,13 +575,12 @@ export class TanaQueryEngine {
       params.push(options.updatedBefore);
     }
 
-    params.push(limit);
+    // Build query with ORDER BY and pagination
+    const orderBy = buildOrderBy({ sort: `n.${orderByCol}`, direction: "DESC" }, []);
+    const pagination = buildPagination({ limit });
 
-    const result = withDbRetrySync(
-      () => this.sqlite
-        .query(
-          `
-        SELECT
+    const sqlParts = [
+      `SELECT
           n.id,
           n.name,
           n.parent_id as parentId,
@@ -585,12 +590,17 @@ export class TanaQueryEngine {
           n.raw_data as rawData
         FROM nodes n
         INNER JOIN tag_applications ta ON ta.data_node_id = n.id
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY n.${orderBy} DESC
-        LIMIT ?
-      `
-        )
-        .all(...params) as Node[],
+        WHERE ${conditions.join(" AND ")}`,
+      orderBy.sql,
+    ];
+
+    if (pagination.sql) {
+      sqlParts.push(pagination.sql);
+      params.push(...(pagination.params as (string | number)[]));
+    }
+
+    const result = withDbRetrySync(
+      () => this.sqlite.query(sqlParts.join(" ")).all(...params) as Node[],
       "findNodesByTag"
     );
 

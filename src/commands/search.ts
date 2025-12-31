@@ -28,6 +28,7 @@ import {
   formatJsonOutput,
   parseDateRangeOptions,
 } from "./helpers";
+import { buildPagination, buildOrderBy } from "../db/query-builder";
 import {
   tsv,
   EMOJI,
@@ -512,42 +513,48 @@ async function queryNodesWithFieldFilter(
   const { fieldName, operator, value } = fieldFilter;
   const { limit = 20, createdAfter, createdBefore } = options;
 
-  // Build the SQL query to join nodes, tag_applications, and field_values
-  let sql = `
-    SELECT DISTINCT n.id, n.name, n.created
+  // Build base query
+  const sqlParts = [
+    `SELECT DISTINCT n.id, n.name, n.created
     FROM nodes n
     JOIN tag_applications ta ON n.id = ta.node_id
     JOIN field_values fv ON n.id = fv.node_id
     WHERE ta.tag_name = ?
-      AND fv.field_name = ?
-  `;
-
+      AND fv.field_name = ?`,
+  ];
   const params: Array<string | number> = [tagname, fieldName];
 
   // Add value filter based on operator
   if (operator === "=") {
-    sql += ` AND fv.field_value = ?`;
+    sqlParts.push("AND fv.field_value = ?");
     params.push(value);
   } else {
     // Partial match with LIKE
-    sql += ` AND fv.field_value LIKE ?`;
+    sqlParts.push("AND fv.field_value LIKE ?");
     params.push(`%${value}%`);
   }
 
   // Add date filters if provided
   if (createdAfter) {
-    sql += ` AND n.created >= ?`;
+    sqlParts.push("AND n.created >= ?");
     params.push(createdAfter);
   }
   if (createdBefore) {
-    sql += ` AND n.created <= ?`;
+    sqlParts.push("AND n.created <= ?");
     params.push(createdBefore);
   }
 
-  sql += ` ORDER BY n.created DESC LIMIT ?`;
-  params.push(limit);
+  // Use query builders for ORDER BY and pagination
+  const orderBy = buildOrderBy({ sort: "n.created", direction: "DESC" }, []);
+  sqlParts.push(orderBy.sql);
 
-  const results = db.query(sql).all(...params) as Array<{
+  const pagination = buildPagination({ limit });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as (string | number)[]));
+  }
+
+  const results = db.query(sqlParts.join(" ")).all(...params) as Array<{
     id: string;
     name: string;
     created: number | null;

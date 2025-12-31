@@ -176,6 +176,55 @@ interface ResolvedWorkspace {
 
 **MCP cache clear:** Use `tana_cache_clear` tool or call `clearWorkspaceCache()` to refresh workspace data.
 
+### Query Builder Utilities (Spec 055)
+
+**ALWAYS use query builders for SQL construction** - never build LIMIT/OFFSET or ORDER BY manually.
+
+```typescript
+import { buildPagination, buildOrderBy, buildWhereClause } from '../db/query-builder';
+
+// Pagination - returns { sql: "LIMIT ? OFFSET ?", params: [100, 0] }
+const pagination = buildPagination({ limit: 100, offset: 0 });
+
+// Order by - returns { sql: "ORDER BY created DESC", params: [] }
+const orderBy = buildOrderBy({ sort: "created", direction: "DESC" }, []);
+
+// Where clause - returns { sql: "WHERE status = ?", params: ["active"] }
+const where = buildWhereClause([{ column: "status", operator: "=", value: "active" }]);
+```
+
+**Usage pattern with sqlParts array:**
+```typescript
+const sqlParts = ["SELECT * FROM nodes WHERE field_name = ?"];
+const params: SQLQueryBindings[] = [fieldName];
+
+// Add ORDER BY
+const orderBy = buildOrderBy({ sort: "created", direction: "DESC" }, []);
+sqlParts.push(orderBy.sql);
+
+// Add pagination
+const pagination = buildPagination({ limit, offset });
+if (pagination.sql) {
+  sqlParts.push(pagination.sql);
+  params.push(...(pagination.params as SQLQueryBindings[]));
+}
+
+return db.query(sqlParts.join(" ")).all(...params);
+```
+
+**Available functions:**
+- `buildPagination({ limit?, offset? })` - LIMIT/OFFSET with safe defaults
+- `buildOrderBy({ sort, direction }, allowedColumns)` - ORDER BY with column whitelist validation
+- `buildWhereClause(conditions)` - WHERE with =, !=, >, <, LIKE, IN, IS NULL operators
+- `buildSelectQuery(options)` - Complete SELECT query composer
+
+**Key files:**
+- `src/db/query-builder.ts` - Implementation (53 tests, 108 assertions)
+- Files using builders: `field-query.ts`, `field-values.ts`, `tana-query-engine.ts`, `search.ts`
+
+**When NOT to use:**
+- Simple IN clauses already embedded in template literals (e.g., `WHERE id IN (${placeholders})`) - these are already safe with parameterized queries
+
 ### Running from Source vs Binary
 - **Binary**: `./supertag` - Compiled, may not have latest schema changes
 - **Source**: `bun run src/index.ts` - Always has latest code

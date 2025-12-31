@@ -10,6 +10,7 @@
  */
 
 import { Database, type SQLQueryBindings } from "bun:sqlite";
+import { buildPagination, buildOrderBy, type FilterCondition } from "./query-builder";
 
 export interface FieldValueResult {
   tupleId: string;
@@ -70,8 +71,9 @@ export function queryFieldValuesByFieldName(
 ): FieldValueResult[] {
   const { limit = 100, offset = 0, createdAfter, createdBefore } = options;
 
-  let sql = `
-    SELECT
+  // Build base query
+  const sqlParts = [
+    `SELECT
       tuple_id as tupleId,
       parent_id as parentId,
       field_def_id as fieldDefId,
@@ -81,24 +83,31 @@ export function queryFieldValuesByFieldName(
       value_order as valueOrder,
       created
     FROM field_values
-    WHERE field_name = ?
-  `;
+    WHERE field_name = ?`,
+  ];
   const params: SQLQueryBindings[] = [fieldName];
 
+  // Add date range filters
   if (createdAfter !== undefined) {
-    sql += " AND created >= ?";
+    sqlParts.push("AND created >= ?");
     params.push(createdAfter);
   }
-
   if (createdBefore !== undefined) {
-    sql += " AND created <= ?";
+    sqlParts.push("AND created <= ?");
     params.push(createdBefore);
   }
 
-  sql += " ORDER BY created DESC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
+  // Add ORDER BY and pagination using query builders
+  const orderBy = buildOrderBy({ sort: "created", direction: "DESC" }, []);
+  sqlParts.push(orderBy.sql);
 
-  return db.query(sql).all(...params) as FieldValueResult[];
+  const pagination = buildPagination({ limit, offset });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as SQLQueryBindings[]));
+  }
+
+  return db.query(sqlParts.join(" ")).all(...params) as FieldValueResult[];
 }
 
 /**
@@ -118,8 +127,9 @@ export function queryFieldValuesFTS(
   // Sanitize query for FTS5 - escape special characters
   const sanitizedQuery = sanitizeFTSQuery(query);
 
-  let sql = `
-    SELECT
+  // Build base FTS query
+  const sqlParts = [
+    `SELECT
       fv.tuple_id as tupleId,
       fv.parent_id as parentId,
       fv.field_def_id as fieldDefId,
@@ -130,19 +140,23 @@ export function queryFieldValuesFTS(
       fv.created
     FROM field_values_fts fts
     JOIN field_values fv ON fts.rowid = fv.id
-    WHERE field_values_fts MATCH ?
-  `;
+    WHERE field_values_fts MATCH ?`,
+  ];
   const params: SQLQueryBindings[] = [sanitizedQuery];
 
   if (fieldName) {
-    sql += " AND fv.field_name = ?";
+    sqlParts.push("AND fv.field_name = ?");
     params.push(fieldName);
   }
 
-  sql += " LIMIT ?";
-  params.push(limit);
+  // Add pagination using query builder
+  const pagination = buildPagination({ limit });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as SQLQueryBindings[]));
+  }
 
-  return db.query(sql).all(...params) as FieldValueResult[];
+  return db.query(sqlParts.join(" ")).all(...params) as FieldValueResult[];
 }
 
 /**
@@ -166,8 +180,8 @@ export function queryFieldValues(
   // If there's a search query, use FTS join
   if (searchQuery) {
     const sanitizedQuery = sanitizeFTSQuery(searchQuery);
-    let sql = `
-      SELECT
+    const sqlParts = [
+      `SELECT
         fv.tuple_id as tupleId,
         fv.parent_id as parentId,
         fv.field_def_id as fieldDefId,
@@ -178,34 +192,42 @@ export function queryFieldValues(
         fv.created
       FROM field_values_fts fts
       JOIN field_values fv ON fts.rowid = fv.id
-      WHERE field_values_fts MATCH ?
-    `;
+      WHERE field_values_fts MATCH ?`,
+    ];
     const params: SQLQueryBindings[] = [sanitizedQuery];
 
     if (fieldName) {
-      sql += " AND fv.field_name = ?";
+      sqlParts.push("AND fv.field_name = ?");
       params.push(fieldName);
     }
-
     if (createdAfter !== undefined) {
-      sql += " AND fv.created >= ?";
+      sqlParts.push("AND fv.created >= ?");
       params.push(createdAfter);
     }
-
     if (createdBefore !== undefined) {
-      sql += " AND fv.created <= ?";
+      sqlParts.push("AND fv.created <= ?");
       params.push(createdBefore);
     }
 
-    sql += ` ORDER BY fv.${orderBy} ${orderDir.toUpperCase()} LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    // Use query builders for ORDER BY and pagination
+    const order = buildOrderBy(
+      { sort: `fv.${orderBy}`, direction: orderDir.toUpperCase() as "ASC" | "DESC" },
+      []
+    );
+    sqlParts.push(order.sql);
 
-    return db.query(sql).all(...params) as FieldValueResult[];
+    const pagination = buildPagination({ limit, offset });
+    if (pagination.sql) {
+      sqlParts.push(pagination.sql);
+      params.push(...(pagination.params as SQLQueryBindings[]));
+    }
+
+    return db.query(sqlParts.join(" ")).all(...params) as FieldValueResult[];
   }
 
   // Without search query, use simple query
-  let sql = `
-    SELECT
+  const sqlParts = [
+    `SELECT
       tuple_id as tupleId,
       parent_id as parentId,
       field_def_id as fieldDefId,
@@ -215,29 +237,37 @@ export function queryFieldValues(
       value_order as valueOrder,
       created
     FROM field_values
-    WHERE 1=1
-  `;
+    WHERE 1=1`,
+  ];
   const params: SQLQueryBindings[] = [];
 
   if (fieldName) {
-    sql += " AND field_name = ?";
+    sqlParts.push("AND field_name = ?");
     params.push(fieldName);
   }
-
   if (createdAfter !== undefined) {
-    sql += " AND created >= ?";
+    sqlParts.push("AND created >= ?");
     params.push(createdAfter);
   }
-
   if (createdBefore !== undefined) {
-    sql += " AND created <= ?";
+    sqlParts.push("AND created <= ?");
     params.push(createdBefore);
   }
 
-  sql += ` ORDER BY ${orderBy} ${orderDir.toUpperCase()} LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
+  // Use query builders for ORDER BY and pagination
+  const order = buildOrderBy(
+    { sort: orderBy, direction: orderDir.toUpperCase() as "ASC" | "DESC" },
+    []
+  );
+  sqlParts.push(order.sql);
 
-  return db.query(sql).all(...params) as FieldValueResult[];
+  const pagination = buildPagination({ limit, offset });
+  if (pagination.sql) {
+    sqlParts.push(pagination.sql);
+    params.push(...(pagination.params as SQLQueryBindings[]));
+  }
+
+  return db.query(sqlParts.join(" ")).all(...params) as FieldValueResult[];
 }
 
 /**
