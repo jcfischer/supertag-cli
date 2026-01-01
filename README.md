@@ -447,6 +447,45 @@ The `supertag-export` tool requires Playwright for browser automation. See the p
 | "Database not found" | `supertag sync index` |
 | "Chromium not found" | `supertag-export setup` |
 
+### Debug Mode
+
+Use the `--debug` flag for verbose error output with stack traces:
+
+```bash
+supertag search "test" --debug          # Show detailed errors
+supertag create todo "Test" --debug     # Debug node creation
+```
+
+Debug mode shows:
+- Full error codes (e.g., `WORKSPACE_NOT_FOUND`, `DATABASE_NOT_FOUND`)
+- Stack traces for debugging
+- Detailed context about what went wrong
+
+### Error Logging
+
+View and manage error logs with the `errors` command:
+
+```bash
+supertag errors                   # Show recent errors
+supertag errors --last 10         # Show last 10 errors
+supertag errors --json            # Output as JSON
+supertag errors --export          # Export all errors
+supertag errors --clear           # Clear error log
+```
+
+Error logs are stored at `~/.cache/supertag/errors.log` (up to 1000 entries).
+
+### Error Codes
+
+| Code | Meaning | Recovery |
+|------|---------|----------|
+| `WORKSPACE_NOT_FOUND` | Workspace alias not configured | Check `supertag workspace list` |
+| `DATABASE_NOT_FOUND` | Database not indexed | Run `supertag sync index` |
+| `TAG_NOT_FOUND` | Supertag doesn't exist | Check `supertag tags list` |
+| `NODE_NOT_FOUND` | Node ID doesn't exist | Verify node ID |
+| `API_ERROR` | Tana API request failed | Check token & network |
+| `VALIDATION_ERROR` | Invalid input parameters | Check command options |
+
 ### Windows-Specific Issues
 
 #### "Cannot find package 'playwright'" Error

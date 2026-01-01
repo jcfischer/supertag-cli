@@ -504,3 +504,44 @@ supertag search "vacation plans" -w personal
 # Search work workspace
 supertag search "sprint goals" -w work
 ```
+
+### Debugging Errors
+```bash
+# Enable debug mode for verbose errors
+supertag search "test" --debug
+
+# View error log
+supertag errors --last 10
+
+# Export errors for analysis
+supertag errors --export > errors.json
+```
+
+## MCP Error Response Format
+
+When MCP tools encounter errors, they return structured JSON for AI agent recovery:
+
+```json
+{
+  "error": {
+    "code": "WORKSPACE_NOT_FOUND",
+    "message": "Workspace 'books' not found",
+    "details": {
+      "requestedWorkspace": "books",
+      "availableWorkspaces": ["main", "work"]
+    },
+    "suggestion": "Try one of: main, work",
+    "recovery": {
+      "canRetry": false,
+      "alternatives": ["main", "work"]
+    }
+  }
+}
+```
+
+**Error codes for AI agents:**
+- `WORKSPACE_NOT_FOUND` - Try `tana_cache_clear`, then use alternative from `alternatives`
+- `DATABASE_NOT_FOUND` - User needs to run `supertag sync index`
+- `TAG_NOT_FOUND` - Use `tana_supertags` to find correct tag name
+- `NODE_NOT_FOUND` - Use `tana_search` to find correct node ID
+- `VALIDATION_ERROR` - Check parameter requirements in tool schema
