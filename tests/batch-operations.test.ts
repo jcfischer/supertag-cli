@@ -389,3 +389,87 @@ describe('batchCreateNodes', () => {
     expect(results[1].error).toContain('Unknown supertag');
   });
 });
+
+// =============================================================================
+// T-3.2: Batch create validation tests
+// =============================================================================
+
+describe('batchCreateNodes validation', () => {
+  it('should throw VALIDATION_ERROR when more than 50 nodes provided', async () => {
+    const { batchCreateNodes, BATCH_CREATE_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    // Create 51 nodes
+    const tooManyNodes = Array.from({ length: BATCH_CREATE_MAX_NODES + 1 }, (_, i) => ({
+      supertag: 'todo',
+      name: `Task ${i}`,
+    }));
+
+    await expect(batchCreateNodes(tooManyNodes, { dryRun: true })).rejects.toThrow();
+
+    try {
+      await batchCreateNodes(tooManyNodes, { dryRun: true });
+    } catch (error: unknown) {
+      expect((error as Error).message).toContain('50');
+    }
+  });
+
+  it('should accept exactly 50 nodes (boundary test)', async () => {
+    const { batchCreateNodes, BATCH_CREATE_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    // Exactly 50 nodes should work
+    const maxNodes = Array.from({ length: BATCH_CREATE_MAX_NODES }, (_, i) => ({
+      supertag: 'todo',
+      name: `Task ${i}`,
+    }));
+
+    // Should not throw
+    await expect(batchCreateNodes(maxNodes, { dryRun: true })).resolves.toBeDefined();
+  });
+
+  it('should validate node structure: supertag required', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    // Node without supertag
+    const results = await batchCreateNodes([
+      { supertag: '', name: 'No tag' },
+    ] as any, { dryRun: true });
+
+    expect(results[0].error).toBeDefined();
+    expect(results[0].error).toContain('supertag');
+  });
+
+  it('should validate node structure: name required', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    // Node without name
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: '' },
+    ], { dryRun: true });
+
+    expect(results[0].error).toBeDefined();
+    expect(results[0].error).toContain('name');
+  });
+
+  it('should include suggestion in validation error', async () => {
+    const { batchCreateNodes, BATCH_CREATE_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    const tooManyNodes = Array.from({ length: BATCH_CREATE_MAX_NODES + 1 }, (_, i) => ({
+      supertag: 'todo',
+      name: `Task ${i}`,
+    }));
+
+    try {
+      await batchCreateNodes(tooManyNodes, { dryRun: true });
+      expect(true).toBe(false); // Should have thrown
+    } catch (error: unknown) {
+      // Check that error has suggestion property (StructuredError)
+      expect((error as { suggestion?: string }).suggestion).toBeDefined();
+    }
+  });
+});

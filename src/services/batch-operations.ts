@@ -328,17 +328,59 @@ async function validateSupertagExists(
 }
 
 /**
+ * Validate batch create inputs
+ * @throws StructuredError if validation fails
+ */
+function validateBatchCreateInputs(nodes: CreateNodeInput[]): void {
+  // Validate array size
+  if (nodes.length > BATCH_CREATE_MAX_NODES) {
+    throw new StructuredError('VALIDATION_ERROR', `Too many nodes: ${nodes.length} exceeds maximum of ${BATCH_CREATE_MAX_NODES}`, {
+      details: {
+        provided: nodes.length,
+        maximum: BATCH_CREATE_MAX_NODES,
+      },
+      suggestion: `Split your request into multiple batches of ${BATCH_CREATE_MAX_NODES} or fewer nodes`,
+      recovery: {
+        canRetry: true,
+        alternatives: [`Reduce to ${BATCH_CREATE_MAX_NODES} nodes or fewer`],
+      },
+    });
+  }
+}
+
+/**
+ * Validate a single node's structure
+ * Returns error message if invalid, undefined if valid
+ */
+function validateNodeStructure(node: CreateNodeInput, index: number): string | undefined {
+  // Validate supertag
+  if (!node.supertag || node.supertag.trim().length === 0) {
+    return `Node at index ${index}: supertag is required`;
+  }
+
+  // Validate name
+  if (!node.name || node.name.trim().length === 0) {
+    return `Node at index ${index}: name is required`;
+  }
+
+  return undefined;
+}
+
+/**
  * Create multiple nodes via Tana API
  *
  * Processing:
- * 1. Validate all supertags exist
- * 2. Build payloads for valid nodes
- * 3. If dry-run, return validation results
- * 4. Otherwise, post to API in chunks
+ * 1. Validate batch size (max 50)
+ * 2. Validate each node structure
+ * 3. Validate supertags exist
+ * 4. Build payloads for valid nodes
+ * 5. If dry-run, return validation results
+ * 6. Otherwise, post to API in chunks
  *
  * @param nodes - Array of node definitions to create (max 50)
  * @param options - Target, dryRun, workspace options
  * @returns Array of results for each node in input order
+ * @throws StructuredError if batch size exceeds maximum
  */
 export async function batchCreateNodes(
   nodes: CreateNodeInput[],
@@ -348,6 +390,9 @@ export async function batchCreateNodes(
   if (nodes.length === 0) {
     return [];
   }
+
+  // Validate batch size (throws if too many)
+  validateBatchCreateInputs(nodes);
 
   // Lazy imports
   const { existsSync } = await import('fs');
@@ -375,6 +420,14 @@ export async function batchCreateNodes(
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const result: BatchCreateResult = { index: i };
+
+    // Validate node structure
+    const structureError = validateNodeStructure(node, i);
+    if (structureError) {
+      result.error = structureError;
+      results.push(result);
+      continue;
+    }
 
     // Validate supertag exists
     if (dbPath && existsSync(dbPath)) {
