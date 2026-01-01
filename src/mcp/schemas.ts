@@ -286,6 +286,24 @@ export type TranscriptSearchInput = z.infer<typeof transcriptSearchSchema>;
 export const cacheClearSchema = z.object({});
 export type CacheClearInput = z.infer<typeof cacheClearSchema>;
 
+// tana_capabilities (Spec 061: Progressive Disclosure)
+export const capabilitiesSchema = z.object({
+  category: z
+    .enum(['query', 'explore', 'transcript', 'mutate', 'system'])
+    .optional()
+    .describe('Filter to specific category of tools'),
+});
+export type CapabilitiesInput = z.infer<typeof capabilitiesSchema>;
+
+// tana_tool_schema (Spec 061: Progressive Disclosure)
+export const toolSchemaSchema = z.object({
+  tool: z
+    .string()
+    .min(1)
+    .describe('Tool name to get full schema for (e.g., "tana_search")'),
+});
+export type ToolSchemaInput = z.infer<typeof toolSchemaSchema>;
+
 // Zod v4 internal type definition
 interface ZodDef {
   type: string;

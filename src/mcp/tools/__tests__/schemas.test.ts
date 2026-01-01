@@ -13,6 +13,8 @@ import {
   nodeSchema,
   createSchema,
   zodToJsonSchema,
+  capabilitiesSchema,
+  toolSchemaSchema,
 } from '../../schemas';
 
 describe('searchSchema', () => {
@@ -194,5 +196,44 @@ describe('zodToJsonSchema', () => {
     const jsonSchema = zodToJsonSchema(statsSchema);
     // statsSchema only has optional workspace field
     expect(jsonSchema.required).toBeUndefined();
+  });
+});
+
+describe('capabilitiesSchema', () => {
+  it('should validate empty input', () => {
+    const result = capabilitiesSchema.parse({});
+    expect(result.category).toBeUndefined();
+  });
+
+  it('should validate with valid category', () => {
+    const result = capabilitiesSchema.parse({ category: 'query' });
+    expect(result.category).toBe('query');
+  });
+
+  it('should accept all valid categories', () => {
+    const categories = ['query', 'explore', 'transcript', 'mutate', 'system'] as const;
+    for (const category of categories) {
+      const result = capabilitiesSchema.parse({ category });
+      expect(result.category).toBe(category);
+    }
+  });
+
+  it('should reject invalid category', () => {
+    expect(() => capabilitiesSchema.parse({ category: 'invalid' })).toThrow();
+  });
+});
+
+describe('toolSchemaSchema', () => {
+  it('should validate with tool name', () => {
+    const result = toolSchemaSchema.parse({ tool: 'tana_search' });
+    expect(result.tool).toBe('tana_search');
+  });
+
+  it('should reject empty tool name', () => {
+    expect(() => toolSchemaSchema.parse({ tool: '' })).toThrow();
+  });
+
+  it('should reject missing tool name', () => {
+    expect(() => toolSchemaSchema.parse({})).toThrow();
   });
 });
