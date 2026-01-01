@@ -3,6 +3,21 @@
  * Specific error types for better error handling and user feedback
  */
 
+import { formatErrorForCli } from "./error-formatter";
+import type { StructuredError } from "./structured-errors";
+
+/**
+ * Type guard for StructuredError (avoids circular import)
+ */
+function isStructuredError(error: unknown): error is StructuredError {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    "toStructuredData" in error &&
+    typeof (error as StructuredError).toStructuredData === "function"
+  );
+}
+
 /**
  * Base error class for Tana CLI errors
  */
@@ -81,6 +96,11 @@ export class RateLimitError extends TanaError {
  * @returns Formatted error message
  */
 export function formatErrorMessage(error: unknown): string {
+  // Handle StructuredError first (uses new formatting system)
+  if (isStructuredError(error)) {
+    return formatErrorForCli(error);
+  }
+
   if (error instanceof ConfigError) {
     return `❌ Configuration Error:\n${error.message}`;
   }
