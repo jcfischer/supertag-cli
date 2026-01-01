@@ -36,6 +36,8 @@ import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsM
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
 import { createCodegenCommand } from './commands/codegen';
+import { configureGlobalLogger } from './utils/logger';
+import { resolveOutputMode } from './utils/output-formatter';
 
 // Use portable logger (no external dependencies)
 export const logger = createSimpleLogger('tana-skill');
@@ -365,6 +367,22 @@ program
  * Main entry point
  */
 async function main() {
+  // Configure global logger based on CLI options
+  // Note: Commander parses before action, so we check process.argv directly
+  const hasJsonFlag = process.argv.includes('--json');
+  const hasPrettyFlag = process.argv.includes('--pretty');
+  const hasVerboseFlag = process.argv.includes('--verbose') || process.argv.includes('-v');
+
+  const outputMode = resolveOutputMode({
+    json: hasJsonFlag,
+    pretty: hasPrettyFlag,
+  });
+
+  configureGlobalLogger({
+    level: hasVerboseFlag ? 'debug' : 'info',
+    mode: outputMode,
+  });
+
   // Parse and execute commands
   program.parse();
 }
