@@ -36,3 +36,32 @@ describe('tana_capabilities handler', () => {
     }
   });
 });
+
+describe('Token Budget Validation', () => {
+  it('should have capabilities response under 1000 tokens', async () => {
+    const result = await capabilities({});
+    const jsonStr = JSON.stringify(result, null, 2);
+    // Rough token estimate: ~4 chars per token for JSON
+    // Target: much smaller than full tool schemas (~2000 tokens)
+    const estimatedTokens = Math.ceil(jsonStr.length / 4);
+    expect(estimatedTokens).toBeLessThan(1000);
+  });
+
+  it('should have filtered response much smaller', async () => {
+    const full = await capabilities({});
+    const filtered = await capabilities({ category: 'query' });
+    const fullStr = JSON.stringify(full);
+    const filteredStr = JSON.stringify(filtered);
+    // Filtered should be significantly smaller
+    expect(filteredStr.length).toBeLessThan(fullStr.length / 2);
+  });
+
+  it('should be significantly smaller than full MCP tool list', async () => {
+    // The original MCP ListTools response was ~2000 tokens
+    // Our capabilities response should be much smaller
+    const result = await capabilities({});
+    const jsonStr = JSON.stringify(result);
+    // Full tool list with schemas is ~8000 chars, we should be under 4000
+    expect(jsonStr.length).toBeLessThan(4000);
+  });
+});

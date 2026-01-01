@@ -42,3 +42,33 @@ describe('tana_tool_schema handler', () => {
     }
   });
 });
+
+describe('Token Budget Validation', () => {
+  it('should have individual schemas under 500 tokens', async () => {
+    // Simple tools should be compact
+    const tools = ['tana_stats', 'tana_supertags', 'tana_cache_clear'];
+    for (const tool of tools) {
+      const result = await toolSchema({ tool });
+      const jsonStr = JSON.stringify(result.schema, null, 2);
+      // Rough token estimate: ~4 chars per token for JSON
+      const estimatedTokens = Math.ceil(jsonStr.length / 4);
+      expect(estimatedTokens).toBeLessThan(500);
+    }
+  });
+
+  it('should have largest schema (tana_create) under 500 tokens', async () => {
+    // tana_create is the most complex schema
+    const result = await toolSchema({ tool: 'tana_create' });
+    const jsonStr = JSON.stringify(result.schema, null, 2);
+    const estimatedTokens = Math.ceil(jsonStr.length / 4);
+    expect(estimatedTokens).toBeLessThan(500);
+  });
+
+  it('should be much smaller than loading all schemas at once', async () => {
+    // Individual schema should be small fraction of total
+    const singleSchema = await toolSchema({ tool: 'tana_search' });
+    const singleStr = JSON.stringify(singleSchema.schema);
+    // A single schema should be under 2000 chars
+    expect(singleStr.length).toBeLessThan(2000);
+  });
+});
