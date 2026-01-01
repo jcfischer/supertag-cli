@@ -8,6 +8,15 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import type { TanaConfig, WorkspaceConfig, CleanupConfig, EmbeddingConfig } from '../types';
 import { CONFIG_FILE, TANA_CONFIG_DIR, ensureDir } from './paths';
+import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from '../utils/logger';
+
+// Get logger - use global if available, otherwise create a default
+function getLogger(): Logger {
+  if (hasGlobalLogger()) {
+    return getGlobalLogger().child("config");
+  }
+  return createLogger({ level: "info", mode: "pretty" }).child("config");
+}
 
 /**
  * Default cleanup configuration
@@ -72,8 +81,10 @@ export class ConfigManager {
         const fileData = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
         Object.assign(config, fileData);
       } catch (error) {
-        console.error(`Warning: Failed to load config file at ${CONFIG_FILE}`);
-        console.error(error instanceof Error ? error.message : String(error));
+        getLogger().warn('Failed to load config file', {
+          path: CONFIG_FILE,
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     }
 

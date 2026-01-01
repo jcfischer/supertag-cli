@@ -31,20 +31,19 @@ import { supertagInfo } from './tools/supertag-info.js';
 import { transcriptList, transcriptShow, transcriptSearch } from './tools/transcript.js';
 import { cacheClear } from './tools/cache.js';
 import { VERSION } from '../version.js';
+import { createLogger } from '../utils/logger.js';
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
 
 /**
- * MCP-safe logger - writes to stderr to avoid interfering with stdio JSON-RPC
+ * MCP-safe logger - configured to write to stderr to avoid interfering with stdio JSON-RPC
+ * Uses unified logger with explicit stderr stream for MCP protocol compliance
  */
-const logger = {
-  info: (...args: unknown[]) => console.error(`[${SERVICE_NAME}]`, ...args),
-  warn: (...args: unknown[]) => console.error(`[${SERVICE_NAME}] WARN:`, ...args),
-  error: (...args: unknown[]) => console.error(`[${SERVICE_NAME}] ERROR:`, ...args),
-  debug: (...args: unknown[]) => {
-    if (process.env.DEBUG) console.error(`[${SERVICE_NAME}] DEBUG:`, ...args);
-  },
-};
+const logger = createLogger({
+  level: process.env.DEBUG ? 'debug' : 'info',
+  mode: 'unix',  // Clean format without emojis for log processing
+  stream: process.stderr,  // Required for MCP - stdout is reserved for JSON-RPC
+}).child(SERVICE_NAME);
 
 const server = new Server(
   {
@@ -281,12 +280,12 @@ async function main() {
     await server.connect(transport);
     logger.info('Supertag MCP server running');
   } catch (error) {
-    logger.error('Failed to start MCP server', error);
+    logger.error('Failed to start MCP server', { error: String(error) });
     process.exit(1);
   }
 }
 
 main().catch((error) => {
-  logger.error('Fatal error', error);
+  logger.error('Fatal error', { error: String(error) });
   process.exit(1);
 });

@@ -17,6 +17,15 @@ import { TanaIndexer } from "../db/indexer";
 import { existsSync } from "fs";
 import { getDatabasePath } from "../config/paths";
 import { VERSION } from "../version";
+import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
+
+// Get logger - use global if available, otherwise create a default
+function getLogger(): Logger {
+  if (hasGlobalLogger()) {
+    return getGlobalLogger().child("query");
+  }
+  return createLogger({ level: "info", mode: "pretty" }).child("query");
+}
 
 const program = new Command();
 

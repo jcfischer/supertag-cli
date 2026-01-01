@@ -7,6 +7,15 @@ import { getGlobalRateLimiter } from './rateLimit';
 import { ApiError, ValidationError } from '../utils/errors';
 import type { TanaApiPayload, TanaApiResponse, TanaNode, TanaApiNode } from '../types';
 import { tanaNodeToApiNode } from '../formatters/json';
+import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from '../utils/logger';
+
+// Get logger - use global if available, otherwise create a default
+function getLogger(): Logger {
+  if (hasGlobalLogger()) {
+    return getGlobalLogger().child("api");
+  }
+  return createLogger({ level: "debug", mode: "pretty" }).child("api");
+}
 
 const MAX_NODES_PER_REQUEST = 100;
 const MAX_PAYLOAD_SIZE = 5000; // characters (Tana API limit per https://tana.inc/docs/input-api)
@@ -54,10 +63,7 @@ export class TanaApiClient {
     };
 
     if (verbose) {
-      console.error('📤 Posting to Tana API...');
-      console.error(`   Target: ${targetNodeId}`);
-      console.error(`   Nodes: ${nodes.length}`);
-      console.error('');
+      getLogger().debug('Posting to Tana API', { target: targetNodeId, nodes: nodes.length });
     }
 
     // Wait for rate limiter
@@ -65,7 +71,7 @@ export class TanaApiClient {
     await rateLimiter.wait();
 
     if (verbose) {
-      console.error('🌐 Making API request...');
+      getLogger().debug('Making API request');
     }
 
     // Make API request
@@ -98,8 +104,7 @@ export class TanaApiClient {
       const data = await response.json() as { nodeIds?: string[] };
 
       if (verbose) {
-        console.error('✅ Success!');
-        console.error('');
+        getLogger().debug('API request successful');
       }
 
       return {
