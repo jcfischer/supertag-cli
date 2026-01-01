@@ -122,21 +122,32 @@ export function createNodesCommand(): Command {
           console.log(formatNodeOutput(contents));
         } else {
           // Unix mode: YAML-like record format
+          // Apply --select to filter which fields are shown
+          const fieldsToShow = selectFields && selectFields.length > 0
+            ? new Set(selectFields)
+            : null; // null means show all
+
           console.log("---");
-          console.log(`id: ${contents.id}`);
-          console.log(`name: ${contents.name}`);
-          if (contents.tags.length > 0) {
+          if (!fieldsToShow || fieldsToShow.has("id")) {
+            console.log(`id: ${contents.id}`);
+          }
+          if (!fieldsToShow || fieldsToShow.has("name")) {
+            console.log(`name: ${contents.name}`);
+          }
+          if ((!fieldsToShow || fieldsToShow.has("tags")) && contents.tags.length > 0) {
             console.log(`tags: ${contents.tags.join(", ")}`);
           }
-          if (contents.created) {
+          if ((!fieldsToShow || fieldsToShow.has("created")) && contents.created) {
             console.log(`created: ${formatDateISO(contents.created)}`);
           }
-          if (contents.fields.length > 0) {
-            for (const field of contents.fields) {
-              console.log(`${field.fieldName}: ${field.value}`);
+          if (!fieldsToShow || fieldsToShow.has("fields")) {
+            if (contents.fields.length > 0) {
+              for (const field of contents.fields) {
+                console.log(`${field.fieldName}: ${field.value}`);
+              }
             }
           }
-          if (contents.children.length > 0) {
+          if ((!fieldsToShow || fieldsToShow.has("children")) && contents.children.length > 0) {
             console.log(`children: ${contents.children.length}`);
           }
         }

@@ -65,6 +65,26 @@ interface SearchOptions extends StandardOptions {
 }
 
 /**
+ * Build output values based on selected fields
+ * @param data - Record containing all available field values
+ * @param selectFields - Fields to include (undefined = all fields in order)
+ * @param defaultFields - Default field order when no select specified
+ * @returns Array of values to output
+ */
+function buildSelectedOutput(
+  data: Record<string, string | number | null | undefined>,
+  selectFields: string[] | undefined,
+  defaultFields: string[]
+): string[] {
+  const fields = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
+  return fields.map(field => {
+    const value = data[field];
+    if (value === null || value === undefined) return "";
+    return String(value);
+  });
+}
+
+/**
  * Create the unified search command
  */
 export function createSearchCommand(): Command {
@@ -83,7 +103,7 @@ export function createSearchCommand(): Command {
     .option("--created-before <date>", "Filter nodes created before date (YYYY-MM-DD)")
     .option("--updated-after <date>", "Filter nodes updated after date (YYYY-MM-DD)")
     .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)")
-    .option("--select <fields>", "Select specific fields in JSON output (comma-separated, e.g., id,name,fields.Status)");
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., id,name,rank)");
 
   // Add standard options with show and depth
   addStandardOptions(search, {
@@ -281,10 +301,12 @@ async function handleFtsSearch(
         console.log(tip("Use --show for full node content"));
       } else {
         // Unix mode: TSV output, pipe-friendly
-        // Format: id\tname\ttags\trank\tancestor_name
+        // Default fields: id, name, rank, ancestor
+        const selectFields = parseSelectOption(options.select);
+        const defaultFields = ["id", "name", "rank", "ancestor"];
+
         for (const result of results) {
           const tags = options.raw ? [] : engine.getNodeTags(result.id);
-          const tagStr = tags.join(",");
           let ancestorName = "";
 
           if (includeAncestor) {
@@ -294,7 +316,16 @@ async function handleFtsSearch(
             }
           }
 
-          console.log(tsv(result.id, result.name || "", tagStr, result.rank.toFixed(2), ancestorName));
+          const data: Record<string, string | number | null> = {
+            id: result.id,
+            name: result.name || "",
+            tags: tags.join(","),
+            rank: result.rank.toFixed(2),
+            ancestor: ancestorName,
+          };
+
+          const values = buildSelectedOutput(data, selectFields, defaultFields);
+          console.log(tsv(...values));
         }
         // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
         if (outputOpts.verbose) {
@@ -473,9 +504,11 @@ async function handleSemanticSearch(
           console.log(tip("Use --show for full node content"));
         } else {
           // Unix mode: TSV output, pipe-friendly
-          // Format: similarity\tid\tname\ttags\tancestor_name
+          // Default fields: id, name, similarity, ancestor
+          const selectFields = parseSelectOption(options.select);
+          const defaultFields = ["id", "name", "similarity", "ancestor"];
+
           for (const r of results) {
-            const similarity = r.similarity.toFixed(3);
             const tagStr = r.tags ? r.tags.join(",") : "";
             let ancestorName = "";
 
@@ -486,7 +519,16 @@ async function handleSemanticSearch(
               }
             }
 
-            console.log(tsv(similarity, r.nodeId, r.name, tagStr, ancestorName));
+            const data: Record<string, string | number | null> = {
+              id: r.nodeId,
+              name: r.name,
+              similarity: r.similarity.toFixed(3),
+              tags: tagStr,
+              ancestor: ancestorName,
+            };
+
+            const values = buildSelectedOutput(data, selectFields, defaultFields);
+            console.log(tsv(...values));
           }
           // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
           if (outputOpts.verbose) {
@@ -714,10 +756,19 @@ async function handleTaggedSearch(
         console.log(tip("Use --show for full node content"));
       } else {
         // Unix mode: TSV output, pipe-friendly
-        // Format: id\tname\tcreated
+        // Default fields: id, name, created
+        const selectFields = parseSelectOption(options.select);
+        const defaultFields = ["id", "name", "created"];
+
         for (const node of results) {
-          const created = node.created ? formatDateISO(node.created) : "";
-          console.log(tsv(node.id, node.name || "", created));
+          const data: Record<string, string | number | null> = {
+            id: node.id,
+            name: node.name || "",
+            created: node.created ? formatDateISO(node.created) : "",
+          };
+
+          const values = buildSelectedOutput(data, selectFields, defaultFields);
+          console.log(tsv(...values));
         }
       }
     }

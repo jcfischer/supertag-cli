@@ -188,17 +188,28 @@ export function createFieldsCommand(): Command {
           }
         } else {
           // Unix mode: TSV output
+          // Apply --select to filter which fields are shown
+          const selectFields = parseSelectOption(options.select);
+          const defaultFields = outputOpts.verbose
+            ? ["parentId", "created", "valueText"]
+            : ["valueText"];
+
           for (const value of values) {
-            if (outputOpts.verbose) {
-              console.log(
-                tsv(
-                  value.parentId,
-                  value.created ?? "",
-                  value.valueText
-                )
-              );
+            const fieldsToShow = selectFields && selectFields.length > 0
+              ? selectFields
+              : defaultFields;
+
+            const outputValues = fieldsToShow.map(field => {
+              if (field === "parentId") return value.parentId;
+              if (field === "created") return value.created != null ? String(value.created) : "";
+              if (field === "valueText") return value.valueText;
+              return "";
+            });
+
+            if (outputValues.length === 1) {
+              console.log(outputValues[0]);
             } else {
-              console.log(value.valueText);
+              console.log(tsv(...outputValues));
             }
           }
         }
