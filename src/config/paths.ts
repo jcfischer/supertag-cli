@@ -10,6 +10,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import type { WorkspaceContext, TanaConfig } from '../types';
+import { hasGlobalLogger, getGlobalLogger, createLogger } from '../utils/logger';
 
 /**
  * Base directories following XDG conventions
@@ -101,17 +102,51 @@ export function getAllPaths(): Record<string, string> {
 }
 
 /**
- * Simple console logger (no external dependencies)
- * Used as fallback when KAI logger is not available
+ * Simple console logger with unified logger integration
+ * Uses the global unified logger when available, falls back to console
  */
 export function createSimpleLogger(name: string) {
-  const prefix = `[${name}]`;
+  const getLoggerInstance = () => {
+    if (hasGlobalLogger()) {
+      return getGlobalLogger().child(name);
+    }
+    return null;
+  };
+
   return {
-    info: (...args: unknown[]) => console.log(prefix, ...args),
-    warn: (...args: unknown[]) => console.warn(prefix, ...args),
-    error: (...args: unknown[]) => console.error(prefix, ...args),
+    info: (...args: unknown[]) => {
+      const logger = getLoggerInstance();
+      if (logger) {
+        logger.info(args.map(String).join(' '));
+      } else {
+        console.log(`[${name}]`, ...args);
+      }
+    },
+    warn: (...args: unknown[]) => {
+      const logger = getLoggerInstance();
+      if (logger) {
+        logger.warn(args.map(String).join(' '));
+      } else {
+        console.warn(`[${name}]`, ...args);
+      }
+    },
+    error: (...args: unknown[]) => {
+      const logger = getLoggerInstance();
+      if (logger) {
+        logger.error(args.map(String).join(' '));
+      } else {
+        console.error(`[${name}]`, ...args);
+      }
+    },
     debug: (...args: unknown[]) => {
-      if (process.env.DEBUG) console.log(prefix, '[DEBUG]', ...args);
+      const logger = getLoggerInstance();
+      if (logger) {
+        if (logger.isEnabled('debug')) {
+          logger.debug(args.map(String).join(' '));
+        }
+      } else if (process.env.DEBUG) {
+        console.log(`[${name}]`, '[DEBUG]', ...args);
+      }
     },
   };
 }

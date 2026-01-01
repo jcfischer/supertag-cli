@@ -38,6 +38,15 @@ import { extractSupertagMetadata } from "./supertag-metadata";
 import { updateFieldTypesFromValues } from "./value-type-inference";
 import { extractFieldTypesFromDocs, updateFieldTypesFromExport } from "./explicit-type-extraction";
 import type { NodeDump } from "../types/tana-dump";
+import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
+
+// Get logger - use global if available, otherwise create a default
+function getLogger(): Logger {
+  if (hasGlobalLogger()) {
+    return getGlobalLogger().child("indexer");
+  }
+  return createLogger({ level: "info", mode: "pretty" }).child("indexer");
+}
 
 export interface IndexResult {
   nodesIndexed: number;
@@ -487,7 +496,7 @@ export class TanaIndexer {
     const needsFullReindex = nodeCount.count > 0 && checksumCount.count === 0;
 
     if (needsFullReindex) {
-      console.log(`🔄 First-time migration: performing full reindex of ${nodeCount.count.toLocaleString()} existing nodes`);
+      getLogger().info("First-time migration: performing full reindex", { nodeCount: nodeCount.count });
       return this.fullReindex(exportPath, graph, dump.docs);
     }
 
@@ -506,8 +515,12 @@ export class TanaIndexer {
       }
     }
 
-    const embeddingInfo = embeddingsCleared > 0 ? ` 🔄${embeddingsCleared} embeddings` : '';
-    console.log(`📊 Change detection: +${changes.added.size} ~${changes.modified.size} -${changes.deleted.size}${embeddingInfo}`);
+    getLogger().info("Change detection complete", {
+      added: changes.added.size,
+      modified: changes.modified.size,
+      deleted: changes.deleted.size,
+      embeddingsCleared,
+    });
 
     // Use transaction for all operations - wrap in retry for concurrent access
     withDbRetrySync(() => this.sqlite.run("BEGIN TRANSACTION"), "BEGIN indexExport");

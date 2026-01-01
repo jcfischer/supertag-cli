@@ -10,6 +10,15 @@ import { join, basename } from "path";
 import { TanaIndexer, type IndexResult } from "../db/indexer";
 import { UnifiedSchemaService } from "../services/unified-schema-service";
 import { EventEmitter } from "events";
+import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
+
+// Get logger - use global if available, otherwise create a default
+function getLogger(): Logger {
+  if (hasGlobalLogger()) {
+    return getGlobalLogger().child("watcher");
+  }
+  return createLogger({ level: "info", mode: "pretty" }).child("watcher");
+}
 
 export interface WatcherConfig {
   exportDir: string;
@@ -102,7 +111,7 @@ export class TanaExportWatcher extends EventEmitter {
       this.latestExportFile = latestFile;
       return latestFile;
     } catch (error) {
-      console.error("Error finding latest export:", error);
+      getLogger().error("Error finding latest export", { error: String(error) });
       return null;
     }
   }
@@ -133,7 +142,7 @@ export class TanaExportWatcher extends EventEmitter {
           await schemaService.generateSchemaCache(this.config.schemaCachePath);
         } catch (cacheError) {
           // Log but don't fail indexing if cache generation fails
-          console.error("Schema cache generation failed:", cacheError);
+          getLogger().error("Schema cache generation failed", { error: String(cacheError) });
         }
       }
 
@@ -172,11 +181,11 @@ export class TanaExportWatcher extends EventEmitter {
    */
   start(): void {
     if (this.watcher) {
-      console.warn("Watcher already started");
+      getLogger().warn("Watcher already started");
       return;
     }
 
-    console.log(`Starting watcher on: ${this.config.exportDir}`);
+    getLogger().info("Starting watcher", { exportDir: this.config.exportDir });
 
     this.watcher = watch(
       this.config.exportDir,
@@ -189,7 +198,7 @@ export class TanaExportWatcher extends EventEmitter {
           return;
         }
 
-        console.log(`File change detected: ${filename} (${eventType})`);
+        getLogger().info("File change detected", { filename, eventType });
 
         // Debounce: clear existing timer and set new one
         if (this.debounceTimer) {
@@ -211,16 +220,16 @@ export class TanaExportWatcher extends EventEmitter {
 
     // Verify file exists (might have been deleted)
     if (!existsSync(filePath)) {
-      console.log(`File no longer exists: ${filename}`);
+      getLogger().debug("File no longer exists", { filename });
       return;
     }
 
-    console.log(`Indexing new export: ${filename}`);
+    getLogger().info("Indexing new export", { filename });
 
     try {
       await this.indexLatest();
     } catch (error) {
-      console.error(`Error indexing ${filename}:`, error);
+      getLogger().error("Error indexing file", { filename, error: String(error) });
       this.emit("error", error as Error);
     }
   }
@@ -239,7 +248,7 @@ export class TanaExportWatcher extends EventEmitter {
       this.debounceTimer = null;
     }
 
-    console.log("Watcher stopped");
+    getLogger().info("Watcher stopped");
   }
 
   /**
