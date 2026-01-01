@@ -20,16 +20,81 @@ import { getOutputConfig } from "./output-options";
 // ============================================================================
 
 /**
- * Output mode enum - matches existing CLI flag patterns
+ * Output mode enum - matches existing CLI flag patterns (legacy)
+ * @deprecated Use OutputFormat instead for new code
  */
 export type OutputMode = "unix" | "pretty" | "json";
+
+/**
+ * Output format types (Spec 060)
+ *
+ * Extended format options for universal output formatting:
+ * - json: Pretty-printed JSON array (default for pipes)
+ * - table: ASCII table with headers (default for TTY, was "pretty")
+ * - csv: RFC 4180 compliant CSV
+ * - ids: One ID per line, no decoration (for xargs)
+ * - minimal: JSON with only id, name, tags fields
+ * - jsonl: JSON Lines (one object per line, stream-friendly)
+ */
+export type OutputFormat = "json" | "table" | "csv" | "ids" | "minimal" | "jsonl";
+
+/**
+ * Format metadata for help text and validation
+ */
+export interface FormatInfo {
+  format: OutputFormat;
+  description: string;
+  example: string;
+}
+
+/**
+ * Metadata for all supported output formats
+ */
+export const OUTPUT_FORMATS: FormatInfo[] = [
+  {
+    format: "json",
+    description: "Pretty-printed JSON array",
+    example: '--format json (default when piping)',
+  },
+  {
+    format: "table",
+    description: "ASCII table with headers",
+    example: '--format table (default in terminal)',
+  },
+  {
+    format: "csv",
+    description: "RFC 4180 compliant CSV",
+    example: '--format csv > export.csv',
+  },
+  {
+    format: "ids",
+    description: "One ID per line, no decoration",
+    example: '--format ids | xargs supertag nodes show',
+  },
+  {
+    format: "minimal",
+    description: "JSON with only id, name, tags",
+    example: '--format minimal | jq .name',
+  },
+  {
+    format: "jsonl",
+    description: "JSON Lines (one object per line)",
+    example: '--format jsonl | jq -c .',
+  },
+];
 
 /**
  * Options for creating a formatter
  */
 export interface FormatterOptions {
-  /** Output mode: unix (TSV), pretty (human-readable), json (structured) */
-  mode: OutputMode;
+  /** Output mode: unix (TSV), pretty (human-readable), json (structured) - legacy */
+  mode?: OutputMode;
+  /** Output format (Spec 060) - preferred over mode */
+  format?: OutputFormat;
+  /** Suppress header row (table/csv) */
+  noHeader?: boolean;
+  /** Max column width for table */
+  maxWidth?: number;
   /** Use human-readable date format instead of ISO */
   humanDates?: boolean;
   /** Include technical details (IDs, timing, etc.) */

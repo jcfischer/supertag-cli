@@ -12,8 +12,11 @@ import { Writable } from "stream";
 import type {
   OutputFormatter,
   OutputMode,
+  OutputFormat,
   FormatterOptions,
+  FormatInfo,
 } from "../../src/utils/output-formatter";
+import { OUTPUT_FORMATS } from "../../src/utils/output-formatter";
 
 
 // Helper to capture output for testing
@@ -29,7 +32,7 @@ function captureOutput(): { stream: NodeJS.WriteStream; getOutput: () => string 
 }
 
 describe("OutputFormatter Interface (T-1.1)", () => {
-  describe("OutputMode type", () => {
+  describe("OutputMode type (legacy)", () => {
     it("should accept 'unix' as valid mode", () => {
       const mode: OutputMode = "unix";
       expect(mode).toBe("unix");
@@ -46,26 +49,116 @@ describe("OutputFormatter Interface (T-1.1)", () => {
     });
   });
 
+  describe("OutputFormat type (Spec 060)", () => {
+    it("should accept 'json' as valid format", () => {
+      const format: OutputFormat = "json";
+      expect(format).toBe("json");
+    });
+
+    it("should accept 'table' as valid format", () => {
+      const format: OutputFormat = "table";
+      expect(format).toBe("table");
+    });
+
+    it("should accept 'csv' as valid format", () => {
+      const format: OutputFormat = "csv";
+      expect(format).toBe("csv");
+    });
+
+    it("should accept 'ids' as valid format", () => {
+      const format: OutputFormat = "ids";
+      expect(format).toBe("ids");
+    });
+
+    it("should accept 'minimal' as valid format", () => {
+      const format: OutputFormat = "minimal";
+      expect(format).toBe("minimal");
+    });
+
+    it("should accept 'jsonl' as valid format", () => {
+      const format: OutputFormat = "jsonl";
+      expect(format).toBe("jsonl");
+    });
+  });
+
+  describe("OUTPUT_FORMATS metadata (Spec 060)", () => {
+    it("should have metadata for all 6 formats", () => {
+      expect(OUTPUT_FORMATS).toHaveLength(6);
+    });
+
+    it("should include json format info", () => {
+      const jsonInfo = OUTPUT_FORMATS.find(f => f.format === "json");
+      expect(jsonInfo).toBeDefined();
+      expect(jsonInfo?.description).toBeTruthy();
+      expect(jsonInfo?.example).toBeTruthy();
+    });
+
+    it("should include table format info", () => {
+      const tableInfo = OUTPUT_FORMATS.find(f => f.format === "table");
+      expect(tableInfo).toBeDefined();
+      expect(tableInfo?.description).toBeTruthy();
+    });
+
+    it("should include csv format info", () => {
+      const csvInfo = OUTPUT_FORMATS.find(f => f.format === "csv");
+      expect(csvInfo).toBeDefined();
+      expect(csvInfo?.description).toBeTruthy();
+    });
+
+    it("should include ids format info", () => {
+      const idsInfo = OUTPUT_FORMATS.find(f => f.format === "ids");
+      expect(idsInfo).toBeDefined();
+      expect(idsInfo?.description).toBeTruthy();
+    });
+
+    it("should include minimal format info", () => {
+      const minimalInfo = OUTPUT_FORMATS.find(f => f.format === "minimal");
+      expect(minimalInfo).toBeDefined();
+      expect(minimalInfo?.description).toBeTruthy();
+    });
+
+    it("should include jsonl format info", () => {
+      const jsonlInfo = OUTPUT_FORMATS.find(f => f.format === "jsonl");
+      expect(jsonlInfo).toBeDefined();
+      expect(jsonlInfo?.description).toBeTruthy();
+    });
+  });
+
   describe("FormatterOptions interface", () => {
-    it("should require mode property", () => {
+    it("should accept mode property (legacy)", () => {
       const options: FormatterOptions = { mode: "unix" };
       expect(options.mode).toBe("unix");
     });
 
+    it("should accept format property (Spec 060)", () => {
+      const options: FormatterOptions = { format: "csv" };
+      expect(options.format).toBe("csv");
+    });
+
     it("should accept optional humanDates", () => {
-      const options: FormatterOptions = { mode: "pretty", humanDates: true };
+      const options: FormatterOptions = { format: "table", humanDates: true };
       expect(options.humanDates).toBe(true);
     });
 
     it("should accept optional verbose", () => {
-      const options: FormatterOptions = { mode: "pretty", verbose: true };
+      const options: FormatterOptions = { format: "table", verbose: true };
       expect(options.verbose).toBe(true);
     });
 
     it("should accept optional stream", () => {
       const { stream } = captureOutput();
-      const options: FormatterOptions = { mode: "unix", stream };
+      const options: FormatterOptions = { format: "json", stream };
       expect(options.stream).toBe(stream);
+    });
+
+    it("should accept optional noHeader for csv/table", () => {
+      const options: FormatterOptions = { format: "csv", noHeader: true };
+      expect(options.noHeader).toBe(true);
+    });
+
+    it("should accept optional maxWidth for table", () => {
+      const options: FormatterOptions = { format: "table", maxWidth: 80 };
+      expect(options.maxWidth).toBe(80);
     });
   });
 
