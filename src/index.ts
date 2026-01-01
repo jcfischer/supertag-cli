@@ -37,6 +37,7 @@ import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
 import { createCodegenCommand } from './commands/codegen';
 import { createUpdateCommand, checkForUpdatePassive } from './commands/update';
+import { createErrorsCommand } from './commands/errors';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
 
@@ -157,6 +158,7 @@ program.addCommand(createFieldsCommand());     // supertag fields list|values|se
 program.addCommand(createTranscriptCommand()); // supertag transcript list|show|search
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
+program.addCommand(createErrorsCommand());     // supertag errors [--last N] [--clear] [--export] [--json]
 
 /**
  * Help text with examples
@@ -254,6 +256,13 @@ program.on('--help', () => {
   console.log('      --split                      One file per supertag');
   console.log('      --optional <strategy>        option|undefined|nullable');
   console.log('      -d, --dry-run                Preview without writing');
+  console.log('');
+  console.log('  ERRORS:');
+  console.log('    supertag errors                Show recent errors');
+  console.log('    supertag errors --last 10      Show last 10 errors');
+  console.log('    supertag errors --clear        Clear error log');
+  console.log('    supertag errors --export       Export errors as JSON');
+  console.log('    supertag errors --json         Output as JSON');
   console.log('');
   console.log('Examples:');
   console.log('');

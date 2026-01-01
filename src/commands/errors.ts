@@ -6,6 +6,7 @@
  * View, manage, and export error logs.
  */
 
+import { Command } from "commander";
 import {
   readErrorLog,
   clearErrorLog,
@@ -125,4 +126,32 @@ export async function errorsCommand(
   }
 
   output.log(`Log path: ${logPath}`);
+}
+
+// =============================================================================
+// Command Registration
+// =============================================================================
+
+/**
+ * Create the errors command for CLI registration
+ *
+ * @returns Commander Command instance
+ */
+export function createErrorsCommand(): Command {
+  const cmd = new Command("errors")
+    .description("View and manage error logs")
+    .option("-l, --last <n>", "Show last N errors", parseInt)
+    .option("-c, --clear", "Clear the error log")
+    .option("-e, --export", "Export errors as JSON")
+    .option("-j, --json", "Output in JSON format")
+    .action(async (options) => {
+      await errorsCommand({
+        last: options.last,
+        clear: options.clear,
+        export: options.export,
+        json: options.json,
+      });
+    });
+
+  return cmd;
 }
