@@ -845,6 +845,44 @@ describe("installUpdate", () => {
     // Original binary should still work (either unchanged or restored)
     expect(existsSync(testBinaryPath)).toBe(true);
   });
+
+  it("should handle symlink target by unlinking first", async () => {
+    const { installUpdate, createTestZip } = await import("../src/services/update");
+    const { symlinkSync, lstatSync } = await import("fs");
+
+    // Remove the regular file created in beforeEach
+    rmSync(testBinaryPath);
+
+    // Create a symlink as the target (simulates real-world case)
+    const realBinaryPath = join(testInstallDir, "real-supertag");
+    writeFileSync(realBinaryPath, "#!/bin/bash\necho 'real old version'", { mode: 0o755 });
+    symlinkSync(realBinaryPath, testBinaryPath);
+
+    // Verify it's a symlink
+    const statsBefore = lstatSync(testBinaryPath);
+    expect(statsBefore.isSymbolicLink()).toBe(true);
+
+    // Create a valid test zip
+    await createTestZip(testZipPath, "supertag", "#!/bin/bash\necho 'new version'");
+
+    // This should succeed by unlinking the symlink first
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+
+    // The target should now be a regular file, not a symlink
+    const statsAfter = lstatSync(testBinaryPath);
+    expect(statsAfter.isSymbolicLink()).toBe(false);
+    expect(statsAfter.isFile()).toBe(true);
+
+    // Verify content is the new version
+    const content = readFileSync(testBinaryPath, "utf-8");
+    expect(content).toContain("new version");
+  });
 });
 
 // =============================================================================

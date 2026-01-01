@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-01-01
+
+### Fixed
+
+- **Update Install (Spec 058 bugfix)** - Fixed `ENOTSUP: operation not supported on socket` error when installing updates
+  - The `installUpdate` function now properly unlinks the target file before copying
+  - Fixes installation on symlinked binaries and other special file types
+
 ## [1.3.3] - 2026-01-01
 
 ### Added
