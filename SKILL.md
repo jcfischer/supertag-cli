@@ -14,6 +14,50 @@ Supertag CLI provides complete Tana workspace integration through:
 
 ## MCP Tools Reference
 
+### Progressive Disclosure (Start Here)
+
+The MCP server supports progressive disclosure - a two-tier tool discovery pattern that reduces upfront token cost from ~2000 tokens to ~1000 tokens.
+
+**Workflow:**
+1. Call `tana_capabilities` to get a lightweight overview of all tools
+2. Call `tana_tool_schema` to load full schemas for specific tools you need
+3. Execute tools with validated parameters
+
+### tana_capabilities
+Get a lightweight overview of available tools, categorized by function.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | string | No | Filter to specific category (query, explore, transcript, mutate, system) |
+
+**Categories:**
+- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values
+- **explore**: tana_node, tana_stats, tana_supertags, tana_supertag_info
+- **transcript**: tana_transcript_list, tana_transcript_show, tana_transcript_search
+- **mutate**: tana_create
+- **system**: tana_sync, tana_cache_clear, tana_capabilities, tana_tool_schema
+
+**Example:**
+```
+What tools does the Tana MCP server provide?
+Show me query tools for searching content
+```
+
+### tana_tool_schema
+Load the full JSON schema for a specific tool. Use after `tana_capabilities` to get detailed parameter information.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tool` | string | Yes | Tool name (e.g., "tana_search") |
+
+**Example:**
+```
+Get the full schema for tana_search
+What parameters does tana_create accept?
+```
+
 ### tana_search
 Full-text search across Tana workspace using FTS5 indexing.
 
