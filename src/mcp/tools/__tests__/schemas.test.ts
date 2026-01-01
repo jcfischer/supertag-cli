@@ -15,6 +15,7 @@ import {
   zodToJsonSchema,
   capabilitiesSchema,
   toolSchemaSchema,
+  batchGetSchema,
 } from '../../schemas';
 
 describe('searchSchema', () => {
@@ -235,5 +236,58 @@ describe('toolSchemaSchema', () => {
 
   it('should reject missing tool name', () => {
     expect(() => toolSchemaSchema.parse({})).toThrow();
+  });
+});
+
+// Spec 062: Batch Operations
+describe('batchGetSchema', () => {
+  it('should validate minimal input with nodeIds array', () => {
+    const result = batchGetSchema.parse({ nodeIds: ['node1', 'node2'] });
+    expect(result.nodeIds).toEqual(['node1', 'node2']);
+    expect(result.depth).toBe(0); // default
+  });
+
+  it('should validate full input with all options', () => {
+    const result = batchGetSchema.parse({
+      nodeIds: ['node1', 'node2', 'node3'],
+      workspace: 'personal',
+      depth: 2,
+      select: ['id', 'name', 'tags'],
+    });
+    expect(result.nodeIds).toEqual(['node1', 'node2', 'node3']);
+    expect(result.workspace).toBe('personal');
+    expect(result.depth).toBe(2);
+    expect(result.select).toEqual(['id', 'name', 'tags']);
+  });
+
+  it('should reject empty nodeIds array', () => {
+    expect(() => batchGetSchema.parse({ nodeIds: [] })).toThrow();
+  });
+
+  it('should reject more than 100 node IDs', () => {
+    const tooManyIds = Array.from({ length: 101 }, (_, i) => `node${i}`);
+    expect(() => batchGetSchema.parse({ nodeIds: tooManyIds })).toThrow();
+  });
+
+  it('should accept exactly 100 node IDs', () => {
+    const maxIds = Array.from({ length: 100 }, (_, i) => `node${i}`);
+    const result = batchGetSchema.parse({ nodeIds: maxIds });
+    expect(result.nodeIds).toHaveLength(100);
+  });
+
+  it('should reject depth out of range', () => {
+    expect(() => batchGetSchema.parse({ nodeIds: ['node1'], depth: -1 })).toThrow();
+    expect(() => batchGetSchema.parse({ nodeIds: ['node1'], depth: 4 })).toThrow();
+  });
+
+  it('should accept depth values 0, 1, 2, 3', () => {
+    for (const depth of [0, 1, 2, 3]) {
+      const result = batchGetSchema.parse({ nodeIds: ['node1'], depth });
+      expect(result.depth).toBe(depth);
+    }
+  });
+
+  it('should reject missing nodeIds', () => {
+    expect(() => batchGetSchema.parse({})).toThrow();
   });
 });

@@ -304,6 +304,24 @@ export const toolSchemaSchema = z.object({
 });
 export type ToolSchemaInput = z.infer<typeof toolSchemaSchema>;
 
+// tana_batch_get (Spec 062: Batch Operations)
+export const batchGetSchema = z.object({
+  nodeIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(100)
+    .describe('Array of node IDs to fetch (1-100 IDs)'),
+  workspace: workspaceSchema,
+  depth: z
+    .number()
+    .min(0)
+    .max(3)
+    .default(0)
+    .describe('Depth of child traversal (0 = no children, 1 = direct children, etc.). Max 3.'),
+  select: selectSchema,
+});
+export type BatchGetInput = z.infer<typeof batchGetSchema>;
+
 // Zod v4 internal type definition
 interface ZodDef {
   type: string;
