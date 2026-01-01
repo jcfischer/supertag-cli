@@ -32,10 +32,10 @@ Get a lightweight overview of available tools, categorized by function.
 | `category` | string | No | Filter to specific category (query, explore, transcript, mutate, system) |
 
 **Categories:**
-- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values
+- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get
 - **explore**: tana_node, tana_stats, tana_supertags, tana_supertag_info
 - **transcript**: tana_transcript_list, tana_transcript_show, tana_transcript_search
-- **mutate**: tana_create
+- **mutate**: tana_create, tana_batch_create
 - **system**: tana_sync, tana_cache_clear, tana_capabilities, tana_tool_schema
 
 **Example:**
@@ -217,6 +217,51 @@ Reindex my Tana database
 Check when Tana was last synced
 ```
 
+### tana_batch_get
+Fetch multiple nodes by ID in a single request. Efficient for bulk lookups.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodeIds` | array | Yes | Array of node IDs to fetch (max 100) |
+| `depth` | number | No | Child traversal depth 0-3 (default: 0) |
+| `select` | array | No | Fields to include (e.g., ["id", "name", "tags"]) |
+| `workspace` | string | No | Workspace alias |
+
+**Example:**
+```
+Get nodes with IDs abc123, def456, ghi789
+Fetch 5 nodes with their children (depth 1)
+```
+
+### tana_batch_create
+Create multiple nodes in a single request. Supports dry-run mode for validation.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodes` | array | Yes | Array of node objects (max 50), each with supertag and name |
+| `target` | string | No | Default target node ID for all nodes (INBOX, SCHEMA, or node ID) |
+| `dryRun` | boolean | No | Validate without creating (default: false) |
+| `workspace` | string | No | Workspace alias |
+
+**Node object structure:**
+```json
+{
+  "supertag": "todo",
+  "name": "Task name",
+  "fields": {"Status": "Open"},
+  "children": [{"name": "Subtask"}]
+}
+```
+
+**Example:**
+```
+Create 3 todo items: "Task A", "Task B", "Task C"
+Create meeting notes with children for agenda items
+Validate batch create with dry-run before creating
+```
+
 ### tana_field_values
 Query field values extracted from Tana nodes. Fields like "Gestern war gut weil", "Summary", or "Action Items" store structured data in tuple children.
 
@@ -369,6 +414,28 @@ supertag create video,towatch "Tutorial" --url https://example.com
 supertag create todo "Project tasks" \
   --children "First task" \
   --children '{"name": "Reference", "id": "abc123"}'
+```
+
+### Batch Commands
+
+```bash
+# Fetch multiple nodes by ID
+supertag batch get id1 id2 id3
+
+# Pipe from search (get IDs, then fetch full details)
+supertag search "meeting" --format ids | supertag batch get --stdin
+
+# With children (depth 1-3)
+supertag batch get id1 id2 --depth 2
+
+# Create multiple nodes from JSON file
+supertag batch create --file nodes.json
+
+# Create from stdin
+echo '[{"supertag":"todo","name":"Task 1"}]' | supertag batch create --stdin
+
+# Dry-run mode (validate without creating)
+supertag batch create --file nodes.json --dry-run
 ```
 
 ### Workspace Commands

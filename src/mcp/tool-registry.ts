@@ -150,6 +150,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     example: 'Create a new #todo item',
   },
   {
+    name: 'tana_batch_create',
+    description: 'Create multiple nodes in one request',
+    category: 'mutate',
+    example: 'Create 10 #todo items at once',
+  },
+  {
     name: 'tana_sync',
     description: 'Reindex or check sync status',
     category: 'mutate',
@@ -187,6 +193,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_semantic_search: schemas.zodToJsonSchema(schemas.semanticSearchSchema),
   tana_field_values: schemas.zodToJsonSchema(schemas.fieldValuesSchema),
   tana_batch_get: schemas.zodToJsonSchema(schemas.batchGetSchema),
+  tana_batch_create: schemas.zodToJsonSchema(schemas.batchCreateSchema),
   tana_supertags: schemas.zodToJsonSchema(schemas.supertagsSchema),
   tana_stats: schemas.zodToJsonSchema(schemas.statsSchema),
   tana_supertag_info: schemas.zodToJsonSchema(schemas.supertagInfoSchema),

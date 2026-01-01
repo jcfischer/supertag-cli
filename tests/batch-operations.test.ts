@@ -320,6 +320,99 @@ describe('batchGetNodes validation', () => {
 // =============================================================================
 
 describe('batchCreateNodes', () => {
+  let testDir: string;
+  let testDbPath: string;
+
+  beforeEach(() => {
+    // Create temp directory for test database with supertags
+    testDir = join(tmpdir(), `batch-create-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+    testDbPath = join(testDir, 'test.db');
+
+    // Create test database with required schema including supertags
+    const db = new Database(testDbPath);
+    db.run(`
+      CREATE TABLE nodes (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        parent_id TEXT,
+        node_type TEXT,
+        created INTEGER,
+        updated INTEGER,
+        raw_data TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertags (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        color TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE tag_applications (
+        tag_node_id TEXT,
+        data_node_id TEXT,
+        tag_name TEXT,
+        PRIMARY KEY (tag_node_id, data_node_id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE field_definitions (
+        id TEXT PRIMARY KEY,
+        supertag_id TEXT,
+        name TEXT,
+        field_type TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_id TEXT NOT NULL UNIQUE,
+        tag_name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        created_at INTEGER
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_fields (
+        tag_id TEXT NOT NULL,
+        field_name TEXT NOT NULL,
+        field_label_id TEXT NOT NULL,
+        field_order INTEGER DEFAULT 0,
+        normalized_name TEXT,
+        description TEXT,
+        inferred_data_type TEXT,
+        PRIMARY KEY (tag_id, field_label_id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_parents (
+        child_tag_id TEXT NOT NULL,
+        parent_tag_id TEXT NOT NULL,
+        PRIMARY KEY (child_tag_id, parent_tag_id)
+      )
+    `);
+
+    // Insert test supertags into both old and new tables
+    db.run(`INSERT INTO supertags (id, name, color) VALUES (?, ?, ?)`,
+      ['tag_todo', 'todo', '#FF0000']);
+    db.run(`INSERT INTO supertags (id, name, color) VALUES (?, ?, ?)`,
+      ['tag_meeting', 'meeting', '#00FF00']);
+    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES (?, ?, ?, ?)`,
+      ['tag_todo', 'todo', 'todo', '#FF0000']);
+    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES (?, ?, ?, ?)`,
+      ['tag_meeting', 'meeting', 'meeting', '#00FF00']);
+
+    db.close();
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
   it('should accept array of node create requests', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
     expect(typeof batchCreateNodes).toBe('function');
@@ -332,7 +425,7 @@ describe('batchCreateNodes', () => {
     const results = await batchCreateNodes([
       { supertag: 'todo', name: 'Task 1' },
       { supertag: 'todo', name: 'Task 2' },
-    ], { dryRun: true });
+    ], { dryRun: true, _dbPathOverride: testDbPath });
 
     expect(Array.isArray(results)).toBe(true);
     expect(results).toHaveLength(2);
@@ -345,7 +438,7 @@ describe('batchCreateNodes', () => {
 
     const results = await batchCreateNodes([
       { supertag: 'todo', name: 'Task 1' },
-    ], { dryRun: true });
+    ], { dryRun: true, _dbPathOverride: testDbPath });
 
     expect(results[0].payload).toBeDefined();
     expect(results[0].payload?.name).toBe('Task 1');
@@ -358,7 +451,7 @@ describe('batchCreateNodes', () => {
       { supertag: 'todo', name: 'First' },
       { supertag: 'todo', name: 'Second' },
       { supertag: 'todo', name: 'Third' },
-    ], { dryRun: true });
+    ], { dryRun: true, _dbPathOverride: testDbPath });
 
     expect(results[0].payload?.name).toBe('First');
     expect(results[1].payload?.name).toBe('Second');
@@ -368,7 +461,7 @@ describe('batchCreateNodes', () => {
   it('should handle empty input array', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    const results = await batchCreateNodes([], { dryRun: true });
+    const results = await batchCreateNodes([], { dryRun: true, _dbPathOverride: testDbPath });
 
     expect(results).toHaveLength(0);
   });
@@ -376,11 +469,11 @@ describe('batchCreateNodes', () => {
   it('should report errors for individual nodes', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    // Use an invalid supertag that doesn't exist
+    // Use an invalid supertag that doesn't exist in test database
     const results = await batchCreateNodes([
       { supertag: 'todo', name: 'Valid Task' },
       { supertag: 'nonexistent_tag_12345', name: 'Invalid' },
-    ], { dryRun: true });
+    ], { dryRun: true, _dbPathOverride: testDbPath });
 
     // First should succeed, second should fail
     expect(results).toHaveLength(2);

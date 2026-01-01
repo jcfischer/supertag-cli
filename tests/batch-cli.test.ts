@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createBatchCommand, executeBatchGet } from '../src/commands/batch';
+import { createBatchCommand, executeBatchGet, executeBatchCreate } from '../src/commands/batch';
 import { Command } from 'commander';
 import { Database } from 'bun:sqlite';
 import { mkdirSync, rmSync } from 'fs';
@@ -238,5 +238,354 @@ describe('main CLI wiring', () => {
 
     expect(indexContent).toContain("import { createBatchCommand }");
     expect(indexContent).toContain("createBatchCommand()");
+  });
+});
+
+// =============================================================================
+// T-3.6: batch create CLI command tests
+// =============================================================================
+
+describe('batch create subcommand', () => {
+  let createCmd: Command;
+
+  beforeEach(() => {
+    const cmd = createBatchCommand();
+    createCmd = cmd.commands.find((c) => c.name() === 'create')!;
+  });
+
+  it('should exist as a subcommand of batch', () => {
+    expect(createCmd).toBeDefined();
+  });
+
+  it('should have --stdin option for reading from stdin', () => {
+    const options = createCmd.options.map((o) => o.long);
+    expect(options).toContain('--stdin');
+  });
+
+  it('should have --file option for reading from file', () => {
+    const options = createCmd.options.map((o) => o.long);
+    expect(options).toContain('--file');
+  });
+
+  it('should have --dry-run option for validation', () => {
+    const options = createCmd.options.map((o) => o.long);
+    expect(options).toContain('--dry-run');
+  });
+
+  it('should have --target option', () => {
+    const options = createCmd.options.map((o) => o.long);
+    expect(options).toContain('--target');
+  });
+
+  it('should have standard options (--workspace, --json)', () => {
+    const options = createCmd.options.map((o) => o.long);
+    expect(options).toContain('--workspace');
+    expect(options).toContain('--json');
+  });
+});
+
+describe('executeBatchCreate', () => {
+  it('should export executeBatchCreate function', async () => {
+    const { executeBatchCreate } = await import('../src/commands/batch');
+    expect(typeof executeBatchCreate).toBe('function');
+  });
+
+  it('should accept nodes array and return results', async () => {
+    const { executeBatchCreate } = await import('../src/commands/batch');
+
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Task 1' },
+      { supertag: 'todo', name: 'Task 2' },
+    ], { dryRun: true });
+
+    expect(result).toHaveProperty('success');
+    expect(result).toHaveProperty('results');
+    expect(result).toHaveProperty('errors');
+    expect(result).toHaveProperty('dryRun', true);
+  });
+
+  it('should return errors for invalid nodes', async () => {
+    const { executeBatchCreate } = await import('../src/commands/batch');
+
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Valid' },
+      { supertag: '', name: 'Invalid - no supertag' },
+    ], { dryRun: true });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it('should read nodes from stdin content', async () => {
+    const { executeBatchCreate } = await import('../src/commands/batch');
+
+    const stdinContent = JSON.stringify([
+      { supertag: 'todo', name: 'Task from stdin' },
+    ]);
+
+    const result = await executeBatchCreate([], {
+      dryRun: true,
+      stdin: true,
+      _stdinContent: stdinContent,
+    });
+
+    expect(result.results.length).toBe(1);
+  });
+});
+
+// =============================================================================
+// T-4.1: End-to-end integration tests
+// =============================================================================
+
+describe('batch get E2E integration', () => {
+  let testDir: string;
+  let dbPath: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `batch-e2e-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+    dbPath = join(testDir, 'test.db');
+
+    // Create test database
+    const db = new Database(dbPath);
+    db.run(`
+      CREATE TABLE nodes (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        parent_id TEXT,
+        node_type TEXT,
+        created INTEGER,
+        updated INTEGER,
+        raw_data TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE tag_applications (
+        tag_node_id TEXT,
+        data_node_id TEXT,
+        tag_name TEXT,
+        PRIMARY KEY (tag_node_id, data_node_id)
+      )
+    `);
+
+    // Insert test data
+    const now = Date.now();
+    db.run(`INSERT INTO nodes (id, name, created, raw_data) VALUES (?, ?, ?, ?)`,
+      ['id1', 'Node One', now, JSON.stringify({ children: [] })]);
+    db.run(`INSERT INTO nodes (id, name, created, raw_data) VALUES (?, ?, ?, ?)`,
+      ['id2', 'Node Two', now, JSON.stringify({ children: [] })]);
+    db.run(`INSERT INTO nodes (id, name, created, raw_data) VALUES (?, ?, ?, ?)`,
+      ['id3', 'Node Three', now, JSON.stringify({ children: [] })]);
+
+    // Add tags
+    db.run(`INSERT INTO tag_applications (tag_node_id, data_node_id, tag_name) VALUES (?, ?, ?)`,
+      ['tag1', 'id1', 'meeting']);
+    db.run(`INSERT INTO tag_applications (tag_node_id, data_node_id, tag_name) VALUES (?, ?, ?)`,
+      ['tag2', 'id2', 'todo']);
+
+    db.close();
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should fetch multiple nodes via executeBatchGet', async () => {
+    const result = await executeBatchGet(['id1', 'id2', 'id3'], { _dbPath: dbPath });
+
+    expect(result.found).toBe(3);
+    expect(result.missing).toBe(0);
+    expect(result.results.map(r => r.id)).toEqual(['id1', 'id2', 'id3']);
+  });
+
+  it('should support stdin piping for IDs', async () => {
+    // Simulate: echo "id1\nid2" | supertag batch get --stdin
+    const stdinContent = 'id1\nid2\nid3\n';
+    const result = await executeBatchGet([], {
+      _dbPath: dbPath,
+      stdin: true,
+      _stdinContent: stdinContent,
+    });
+
+    expect(result.found).toBe(3);
+    expect(result.results).toHaveLength(3);
+  });
+
+  it('should support combined positional and stdin IDs', async () => {
+    // Simulate: echo "id2\nid3" | supertag batch get id1 --stdin
+    const result = await executeBatchGet(['id1'], {
+      _dbPath: dbPath,
+      stdin: true,
+      _stdinContent: 'id2\nid3\n',
+    });
+
+    expect(result.found).toBe(3);
+    expect(result.results[0].id).toBe('id1'); // positional first
+    expect(result.results[1].id).toBe('id2'); // stdin second
+    expect(result.results[2].id).toBe('id3');
+  });
+
+  it('should handle mixed found/missing nodes gracefully', async () => {
+    const result = await executeBatchGet(['id1', 'nonexistent', 'id3'], { _dbPath: dbPath });
+
+    expect(result.found).toBe(2);
+    expect(result.missing).toBe(1);
+    expect(result.results[0].node).not.toBeNull();
+    expect(result.results[1].node).toBeNull();
+    expect(result.results[1].id).toBe('nonexistent');
+    expect(result.results[2].node).not.toBeNull();
+  });
+});
+
+describe('batch create E2E integration', () => {
+  let testDir: string;
+  let testDbPath: string;
+
+  beforeEach(() => {
+    // Create temp directory for test database with supertags
+    testDir = join(tmpdir(), `batch-create-e2e-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+    testDbPath = join(testDir, 'test.db');
+
+    // Create test database with required schema including supertags
+    const db = new Database(testDbPath);
+    db.run(`
+      CREATE TABLE nodes (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        parent_id TEXT,
+        node_type TEXT,
+        created INTEGER,
+        updated INTEGER,
+        raw_data TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertags (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        color TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE tag_applications (
+        tag_node_id TEXT,
+        data_node_id TEXT,
+        tag_name TEXT,
+        PRIMARY KEY (tag_node_id, data_node_id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE field_definitions (
+        id TEXT PRIMARY KEY,
+        supertag_id TEXT,
+        name TEXT,
+        field_type TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_id TEXT NOT NULL UNIQUE,
+        tag_name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        created_at INTEGER
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_fields (
+        tag_id TEXT NOT NULL,
+        field_name TEXT NOT NULL,
+        field_label_id TEXT NOT NULL,
+        field_order INTEGER DEFAULT 0,
+        normalized_name TEXT,
+        description TEXT,
+        inferred_data_type TEXT,
+        PRIMARY KEY (tag_id, field_label_id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE supertag_parents (
+        child_tag_id TEXT NOT NULL,
+        parent_tag_id TEXT NOT NULL,
+        PRIMARY KEY (child_tag_id, parent_tag_id)
+      )
+    `);
+
+    // Insert test supertags into both old and new tables
+    db.run(`INSERT INTO supertags (id, name, color) VALUES (?, ?, ?)`,
+      ['tag_todo', 'todo', '#FF0000']);
+    db.run(`INSERT INTO supertags (id, name, color) VALUES (?, ?, ?)`,
+      ['tag_meeting', 'meeting', '#00FF00']);
+    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES (?, ?, ?, ?)`,
+      ['tag_todo', 'todo', 'todo', '#FF0000']);
+    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES (?, ?, ?, ?)`,
+      ['tag_meeting', 'meeting', 'meeting', '#00FF00']);
+
+    db.close();
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should create multiple nodes via executeBatchCreate', async () => {
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Task 1' },
+      { supertag: 'todo', name: 'Task 2' },
+      { supertag: 'todo', name: 'Task 3' },
+    ], { dryRun: true, _dbPath: testDbPath });
+
+    expect(result.results).toHaveLength(3);
+    expect(result.dryRun).toBe(true);
+  });
+
+  it('should support stdin JSON array input', async () => {
+    // Simulate: echo '[{"supertag":"todo","name":"Task 1"}]' | supertag batch create --stdin
+    const stdinContent = JSON.stringify([
+      { supertag: 'todo', name: 'Task A' },
+      { supertag: 'todo', name: 'Task B' },
+    ]);
+
+    const result = await executeBatchCreate([], {
+      dryRun: true,
+      stdin: true,
+      _stdinContent: stdinContent,
+      _dbPath: testDbPath,
+    });
+
+    expect(result.results).toHaveLength(2);
+  });
+
+  it('should report per-node errors without failing entire batch', async () => {
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Valid Task' },
+      { supertag: '', name: 'Invalid - no supertag' },
+      { supertag: 'todo', name: 'Another Valid' },
+    ], { dryRun: true, _dbPath: testDbPath });
+
+    expect(result.results).toHaveLength(3);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0].index).toBe(1); // The invalid one
+  });
+
+  it('should support complex nodes with fields and children', async () => {
+    const result = await executeBatchCreate([
+      {
+        supertag: 'todo',
+        name: 'Task with details',
+        fields: { Status: 'In Progress', Priority: 'High' },
+        children: [
+          { name: 'Subtask 1' },
+          { name: 'Subtask 2' },
+        ],
+      },
+    ], { dryRun: true, _dbPath: testDbPath });
+
+    expect(result.results).toHaveLength(1);
+    // The payload should include the children
+    expect(result.results[0].payload).toBeDefined();
   });
 });

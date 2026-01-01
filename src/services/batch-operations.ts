@@ -152,7 +152,7 @@ function validateBatchGetInputs(
 ): void {
   // Validate array size
   if (nodeIds.length > BATCH_GET_MAX_NODES) {
-    throw new StructuredError('VALIDATION_ERROR', `Too many node IDs: ${nodeIds.length} exceeds maximum of ${BATCH_GET_MAX_NODES}`, {
+    throw new StructuredError('INVALID_PARAMETER', `Too many node IDs: ${nodeIds.length} exceeds maximum of ${BATCH_GET_MAX_NODES}`, {
       details: {
         provided: nodeIds.length,
         maximum: BATCH_GET_MAX_NODES,
@@ -171,7 +171,7 @@ function validateBatchGetInputs(
 
     // Check for empty strings
     if (!id || id.length === 0) {
-      throw new StructuredError('VALIDATION_ERROR', `Empty node ID at index ${i}`, {
+      throw new StructuredError('INVALID_PARAMETER', `Empty node ID at index ${i}`, {
         details: { index: i },
         suggestion: 'Remove empty strings from your node IDs array',
         recovery: { canRetry: true },
@@ -180,7 +180,7 @@ function validateBatchGetInputs(
 
     // Check for invalid characters
     if (!NODE_ID_PATTERN.test(id)) {
-      throw new StructuredError('VALIDATION_ERROR', `Invalid node ID format at index ${i}: "${id}"`, {
+      throw new StructuredError('INVALID_PARAMETER', `Invalid node ID format at index ${i}: "${id}"`, {
         details: { index: i, invalidId: id },
         suggestion: 'Node IDs should contain only alphanumeric characters, underscores, and hyphens',
         recovery: { canRetry: true },
@@ -191,7 +191,7 @@ function validateBatchGetInputs(
   // Validate depth option
   if (options?.depth !== undefined) {
     if (options.depth < 0 || options.depth > MAX_DEPTH) {
-      throw new StructuredError('VALIDATION_ERROR', `Invalid depth: ${options.depth}. Must be between 0 and ${MAX_DEPTH}`, {
+      throw new StructuredError('INVALID_PARAMETER', `Invalid depth: ${options.depth}. Must be between 0 and ${MAX_DEPTH}`, {
         details: { provided: options.depth, minimum: 0, maximum: MAX_DEPTH },
         suggestion: `Use a depth value between 0 and ${MAX_DEPTH}`,
         recovery: { canRetry: true },
@@ -334,7 +334,7 @@ async function validateSupertagExists(
 function validateBatchCreateInputs(nodes: CreateNodeInput[]): void {
   // Validate array size
   if (nodes.length > BATCH_CREATE_MAX_NODES) {
-    throw new StructuredError('VALIDATION_ERROR', `Too many nodes: ${nodes.length} exceeds maximum of ${BATCH_CREATE_MAX_NODES}`, {
+    throw new StructuredError('INVALID_PARAMETER', `Too many nodes: ${nodes.length} exceeds maximum of ${BATCH_CREATE_MAX_NODES}`, {
       details: {
         provided: nodes.length,
         maximum: BATCH_CREATE_MAX_NODES,
@@ -468,12 +468,50 @@ export async function batchCreateNodes(
     return results;
   }
 
-  // TODO: Implement actual API posting in chunks (T-3.2+)
-  // For now, mark all nodes as not-yet-created
-  for (const result of results) {
-    if (result.success && !result.nodeId) {
-      result.success = false;
-      result.error = 'API posting not implemented yet';
+  // Import createNode from node-builder to reuse existing API posting logic
+  const { createNode } = await import('./node-builder');
+
+  // Determine target (same logic as createNode)
+  const target = options?.target || config.defaultTargetNode || 'INBOX';
+
+  // Post each successfully validated node using createNode
+  // Process in chunks to respect rate limits
+  const validIndices = results
+    .map((r, i) => (r.success ? i : -1))
+    .filter((i) => i >= 0);
+
+  for (let chunkStart = 0; chunkStart < validIndices.length; chunkStart += BATCH_CREATE_CHUNK_SIZE) {
+    const chunkIndices = validIndices.slice(chunkStart, chunkStart + BATCH_CREATE_CHUNK_SIZE);
+
+    // Process chunk sequentially (createNode handles rate limiting internally)
+    for (const index of chunkIndices) {
+      const node = nodes[index];
+      const result = results[index];
+
+      try {
+        const createResult = await createNode({
+          supertag: node.supertag,
+          name: node.name,
+          fields: node.fields,
+          children: node.children,
+          target,
+          dryRun: false,
+          _dbPathOverride: options?._dbPathOverride,
+        });
+
+        if (createResult.success) {
+          result.success = true;
+          if (createResult.nodeId) {
+            result.nodeId = createResult.nodeId;
+          }
+        } else {
+          result.success = false;
+          result.error = createResult.error || 'API request failed';
+        }
+      } catch (error) {
+        result.success = false;
+        result.error = (error as Error).message;
+      }
     }
   }
 

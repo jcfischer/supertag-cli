@@ -26,16 +26,16 @@ import {
   parseSelectPaths,
   applyProjection,
 } from '../utils/select-projection';
-import { batchGetNodes } from '../services/batch-operations';
+import { batchGetNodes, batchCreateNodes, type BatchCreateResult, type BatchError } from '../services/batch-operations';
 import { resolveOutputFormat } from '../utils/output-options';
 import { createFormatter, type OutputFormat } from '../utils/output-formatter';
 import { formatDateISO } from '../utils/format';
-import type { StandardOptions } from '../types';
+import type { StandardOptions, ChildNodeInput } from '../types';
 
-export interface BatchGetOptions extends StandardOptions {
+export interface BatchGetOptions extends Omit<StandardOptions, 'depth'> {
   stdin?: boolean;
   select?: string;
-  depth?: string;
+  depth?: string; // String from CLI, parsed to number internally
   format?: OutputFormat;
   header?: boolean;
   // Test-only options (internal)
@@ -51,6 +51,36 @@ export interface BatchGetResponse {
   }>;
   found: number;
   missing: number;
+}
+
+export interface BatchCreateOptions extends StandardOptions {
+  stdin?: boolean;
+  file?: string;
+  dryRun?: boolean;
+  target?: string;
+  format?: OutputFormat;
+  header?: boolean;
+  // Test-only options (internal)
+  _stdinContent?: string;
+  _dbPath?: string;
+}
+
+export interface BatchCreateResponse {
+  success: boolean;
+  created: number;
+  results: BatchCreateResult[];
+  errors: BatchError[];
+  dryRun: boolean;
+}
+
+/**
+ * Node input for batch create (matches schema)
+ */
+export interface BatchCreateNodeInput {
+  supertag: string;
+  name: string;
+  fields?: Record<string, string | string[]>;
+  children?: ChildNodeInput[];
 }
 
 /**
@@ -139,6 +169,92 @@ export async function executeBatchGet(
 }
 
 /**
+ * Read file content
+ */
+async function readFile(filePath: string): Promise<string> {
+  const file = Bun.file(filePath);
+  return file.text();
+}
+
+/**
+ * Parse JSON content for batch create
+ */
+function parseNodesJson(content: string): BatchCreateNodeInput[] {
+  const parsed = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    throw new Error('Input must be a JSON array of nodes');
+  }
+  return parsed;
+}
+
+/**
+ * Execute batch create operation
+ * Exported for testing and reuse
+ */
+export async function executeBatchCreate(
+  nodes: BatchCreateNodeInput[],
+  options: BatchCreateOptions
+): Promise<BatchCreateResponse> {
+  // Collect all nodes (direct + stdin + file)
+  let allNodes = [...nodes];
+
+  if (options.stdin) {
+    const stdinContent = await readStdin(options._stdinContent);
+    const stdinNodes = parseNodesJson(stdinContent);
+    allNodes = [...allNodes, ...stdinNodes];
+  }
+
+  if (options.file) {
+    const fileContent = await readFile(options.file);
+    const fileNodes = parseNodesJson(fileContent);
+    allNodes = [...allNodes, ...fileNodes];
+  }
+
+  // Call the batch operations service
+  const results = await batchCreateNodes(
+    allNodes.map((n) => ({
+      supertag: n.supertag,
+      name: n.name,
+      fields: n.fields,
+      children: n.children,
+    })),
+    {
+      target: options.target,
+      dryRun: options.dryRun ?? false,
+      workspace: options.workspace,
+      _dbPathOverride: options._dbPath,
+    }
+  );
+
+  // Collect errors
+  const errors: BatchError[] = [];
+  let created = 0;
+
+  for (const result of results) {
+    if (result.error) {
+      errors.push({
+        index: result.index,
+        message: result.error,
+      });
+    }
+    if (result.success) {
+      created++;
+    }
+  }
+
+  // Success if no errors
+  const success = errors.length === 0;
+
+  return {
+    success,
+    created,
+    results,
+    errors,
+    dryRun: options.dryRun ?? false,
+  };
+}
+
+/**
  * Create the batch command group
  */
 export function createBatchCommand(): Command {
@@ -153,9 +269,7 @@ export function createBatchCommand(): Command {
     .option('--select <fields>', 'Select specific fields (comma-separated, e.g., id,name,tags)')
     .option('-d, --depth <n>', 'Depth of child traversal (0-3)', '0');
 
-  addStandardOptions(getCmd, {
-    includeLimit: false, // No limit needed - max 100 enforced by validation
-  });
+  addStandardOptions(getCmd);
 
   getCmd.action(async (ids: string[], options: BatchGetOptions) => {
     // Validate database exists
@@ -232,6 +346,97 @@ export function createBatchCommand(): Command {
           r.node ? 'true' : 'false',
         ];
       });
+
+      formatter.table(headers, rows);
+      formatter.finalize();
+    } catch (error) {
+      console.error(`❌ Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+  // batch create
+  const createCmd = batch
+    .command('create')
+    .description('Create multiple nodes in a single request')
+    .option('--stdin', 'Read nodes JSON from stdin')
+    .option('-f, --file <path>', 'Read nodes JSON from file')
+    .option('--dry-run', 'Validate without actually creating nodes')
+    .option('--target <nodeId>', 'Default target node ID for all nodes (INBOX, SCHEMA, or specific node ID)');
+
+  addStandardOptions(createCmd);
+
+  createCmd.action(async (options: BatchCreateOptions) => {
+    try {
+      // Read nodes from stdin or file
+      const result = await executeBatchCreate([], options);
+      const format = resolveOutputFormat(options);
+
+      // JSON formats
+      if (format === 'json' || format === 'jsonl' || format === 'minimal') {
+        if (format === 'jsonl') {
+          // JSON Lines: one result per line
+          for (const r of result.results) {
+            console.log(JSON.stringify(r));
+          }
+        } else if (format === 'minimal') {
+          // Minimal: just index, nodeId, success
+          const minimal = result.results.map((r) => ({
+            index: r.index,
+            nodeId: r.nodeId,
+            success: !r.error,
+          }));
+          console.log(formatJsonOutput(minimal));
+        } else {
+          // Full JSON
+          console.log(formatJsonOutput(result));
+        }
+        return;
+      }
+
+      // IDs format: just output created node IDs
+      if (format === 'ids') {
+        for (const r of result.results) {
+          if (r.nodeId) {
+            console.log(r.nodeId);
+          }
+        }
+        return;
+      }
+
+      // Table format: pretty output
+      if (format === 'table') {
+        const status = result.dryRun ? '(dry-run)' : '';
+        if (result.success) {
+          console.log(`\n✅ Batch Create ${status}: ${result.created} nodes created\n`);
+        } else {
+          console.log(`\n⚠️ Batch Create ${status}: ${result.created} created, ${result.errors.length} errors\n`);
+        }
+
+        for (const r of result.results) {
+          if (r.success) {
+            const nodeInfo = r.nodeId ? r.nodeId : 'created';
+            console.log(`✓ [${r.index}] ${nodeInfo}`);
+          } else if (r.error) {
+            console.log(`✗ [${r.index}] ${r.error}`);
+          }
+        }
+        return;
+      }
+
+      // CSV format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+      });
+
+      const headers = ['index', 'nodeId', 'success', 'error'];
+      const rows = result.results.map((r) => [
+        String(r.index),
+        r.nodeId || '',
+        r.error ? 'false' : 'true',
+        r.error || '',
+      ]);
 
       formatter.table(headers, rows);
       formatter.finalize();
