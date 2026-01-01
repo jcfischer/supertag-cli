@@ -226,3 +226,17 @@ describe('executeBatchGet', () => {
     expect(result.results[2].id).toBe('node3');
   });
 });
+
+// =============================================================================
+// T-2.6: Main CLI wiring tests
+// =============================================================================
+
+describe('main CLI wiring', () => {
+  it('should be wired into main CLI program', async () => {
+    // Read index.ts and verify batch command is imported and added
+    const indexContent = await Bun.file('./src/index.ts').text();
+
+    expect(indexContent).toContain("import { createBatchCommand }");
+    expect(indexContent).toContain("createBatchCommand()");
+  });
+});

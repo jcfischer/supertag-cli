@@ -32,6 +32,7 @@ import { createTagsCommand } from './commands/tags';
 import { createStatsCommand } from './commands/stats';
 import { createFieldsCommand } from './commands/fields';
 import { createTranscriptCommand } from './commands/transcript';
+import { createBatchCommand } from './commands/batch';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -158,6 +159,7 @@ program.addCommand(createTagsCommand());       // supertag tags list|top|show
 program.addCommand(createStatsCommand());      // supertag stats [--db] [--embed] [--filter]
 program.addCommand(createFieldsCommand());     // supertag fields list|values|search
 program.addCommand(createTranscriptCommand()); // supertag transcript list|show|search
+program.addCommand(createBatchCommand());      // supertag batch get|create
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
 program.addCommand(createErrorsCommand());     // supertag errors [--last N] [--clear] [--export] [--json]
