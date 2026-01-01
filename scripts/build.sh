@@ -4,9 +4,10 @@
 # Compiles TypeScript to standalone binaries and symlinks to ~/bin
 #
 # Usage:
-#   ./scripts/build.sh           # Build if source changed
-#   ./scripts/build.sh --force   # Force rebuild
-#   ./scripts/build.sh --check   # Check if rebuild needed (exit 1 if yes)
+#   ./scripts/build.sh              # Build if source changed
+#   ./scripts/build.sh --force      # Force rebuild
+#   ./scripts/build.sh --check      # Check if rebuild needed (exit 1 if yes)
+#   ./scripts/build.sh --skip-test  # Skip running tests before build
 #
 # Builds:
 #   - supertag        Main CLI (query, create, sync, server)
@@ -138,11 +139,15 @@ do_build() {
     log_info "Building supertag CLI tools..."
     cd "$PROJECT_DIR"
 
-    # Run tests first (skip slow tests for faster builds)
-    log_step "Running tests..."
-    if ! bun test ./tests/*.test.ts ./src/**/*.test.ts --timeout 120000 2>&1; then
-        log_error "Tests failed! Aborting build."
-        exit 1
+    # Run tests first (unless skipped)
+    if [[ "$SKIP_TESTS" == "true" ]]; then
+        log_warn "Skipping tests (--skip-test flag)"
+    else
+        log_step "Running tests..."
+        if ! bun test ./tests/*.test.ts ./src/**/*.test.ts --timeout 120000 2>&1; then
+            log_error "Tests failed! Aborting build."
+            exit 1
+        fi
     fi
 
     # Build each binary
@@ -173,6 +178,7 @@ do_build() {
 main() {
     local force=false
     local check_only=false
+    local skip_tests=false
 
     for arg in "$@"; do
         case $arg in
@@ -182,10 +188,14 @@ main() {
             --check|-c)
                 check_only=true
                 ;;
+            --skip-test|--skip-tests|-s)
+                skip_tests=true
+                ;;
             --help|-h)
-                echo "Usage: $0 [--force] [--check]"
-                echo "  --force, -f   Force rebuild even if binaries are up to date"
-                echo "  --check, -c   Check if rebuild needed (exit 1 if yes)"
+                echo "Usage: $0 [--force] [--check] [--skip-test]"
+                echo "  --force, -f       Force rebuild even if binaries are up to date"
+                echo "  --check, -c       Check if rebuild needed (exit 1 if yes)"
+                echo "  --skip-test, -s   Skip running tests before build"
                 echo ""
                 echo "Builds: supertag, supertag-export, supertag-mcp"
                 echo "Symlinks to: ~/bin/"
@@ -193,6 +203,9 @@ main() {
                 ;;
         esac
     done
+
+    # Export skip_tests for do_build
+    export SKIP_TESTS=$skip_tests
 
     if $check_only; then
         if needs_rebuild; then

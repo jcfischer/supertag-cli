@@ -277,31 +277,41 @@ async function handleFtsSearch(
       verbose: outputOpts.verbose,
     });
 
-    // Table format: use rich pretty output
+    // Table format: use actual table output
     if (format === "table") {
       const headerText = outputOpts.verbose
         ? `Search results for "${query}" (${results.length}) in ${searchTime.toFixed(0)}ms`
         : `Search results for "${query}" (${results.length})`;
       console.log(`\n${header(EMOJI.search, headerText)}:\n`);
-      results.forEach((result, i) => {
+
+      // Build table rows
+      const tableHeaders = ["#", "Name", "ID", "Tags", "Rank", "Ancestor"];
+      const tableRows = results.map((result, i) => {
         const tags = options.raw ? [] : engine.getNodeTags(result.id);
-        const tagStr = tags.length > 0 ? ` #${tags.join(" #")}` : "";
+        const tagStr = tags.length > 0 ? `#${tags.join(" #")}` : "";
 
-        console.log(`${i + 1}. ${result.name || "(unnamed)"}${tagStr}`);
-        console.log(`   ID: ${result.id}`);
-        console.log(`   Rank: ${result.rank.toFixed(2)}`);
-
+        let ancestorName = "";
         if (includeAncestor) {
           const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
           if (ancestorResult && ancestorResult.depth > 0) {
             const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-            console.log(`   📂 ${ancestorResult.ancestor.name} ${ancestorTags}`);
+            ancestorName = `${ancestorResult.ancestor.name} ${ancestorTags}`;
           }
         }
-        console.log();
+
+        return [
+          String(i + 1),
+          (result.name || "(unnamed)").substring(0, 40),
+          result.id,
+          tagStr.substring(0, 30),
+          result.rank.toFixed(2),
+          ancestorName.substring(0, 40),
+        ];
       });
+
+      console.log(table(tableHeaders, tableRows, { align: ["right", "left", "left", "left", "right", "left"] }));
       if (outputOpts.verbose) {
-        console.log(`Query time: ${searchTime.toFixed(1)}ms`);
+        console.log(`\nQuery time: ${searchTime.toFixed(1)}ms`);
       }
       console.log(tip("Use --show for full node content"));
       return;
@@ -485,30 +495,42 @@ async function handleSemanticSearch(
         verbose: outputOpts.verbose,
       });
 
-      // Table format: use rich pretty output
+      // Table format: use actual table output
       if (format === "table") {
         const headerText = outputOpts.verbose
           ? `Results (${results.length}) in ${searchTime.toFixed(0)}ms`
           : `Results (${results.length})`;
         console.log(headerText);
         console.log("");
-        for (const r of results) {
-          const similarity = (r.similarity * 100).toFixed(1);
-          const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
-          console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
-          console.log(`        ID: ${r.nodeId}`);
 
+        // Build table rows
+        const tableHeaders = ["#", "Similarity", "Name", "ID", "Tags", "Ancestor"];
+        const tableRows = results.map((r, i) => {
+          const similarity = (r.similarity * 100).toFixed(1) + "%";
+          const tagStr = r.tags ? `#${r.tags.join(" #")}` : "";
+
+          let ancestorName = "";
           if (includeAncestor) {
             const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
             if (ancestorResult && ancestorResult.depth > 0) {
               const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-              console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
+              ancestorName = `${ancestorResult.ancestor.name} ${ancestorTagStr}`;
             }
           }
-        }
+
+          return [
+            String(i + 1),
+            similarity,
+            r.name.substring(0, 40),
+            r.nodeId,
+            tagStr.substring(0, 30),
+            ancestorName.substring(0, 40),
+          ];
+        });
+
+        console.log(table(tableHeaders, tableRows, { align: ["right", "right", "left", "left", "left", "left"] }));
         if (outputOpts.verbose) {
-          console.log("");
-          console.log(`Query time: ${searchTime.toFixed(1)}ms`);
+          console.log(`\nQuery time: ${searchTime.toFixed(1)}ms`);
         }
         console.log(tip("Use --show for full node content"));
         return;
@@ -765,20 +787,28 @@ async function handleTaggedSearch(
       verbose: outputOpts.verbose,
     });
 
-    // Table format: use rich pretty output
+    // Table format: use actual table output
     if (format === "table") {
       console.log(`\n${header(EMOJI.tags, `Nodes tagged with #${tagname} (${results.length})`)}:\n`);
-      results.forEach((node, i) => {
-        console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
-        console.log(`   ID: ${node.id}`);
-        if (node.created) {
-          const dateStr = outputOpts.humanDates
+
+      // Build table rows
+      const tableHeaders = ["#", "Name", "ID", "Created"];
+      const tableRows = results.map((node, i) => {
+        const dateStr = node.created
+          ? (outputOpts.humanDates
             ? new Date(node.created).toLocaleDateString()
-            : formatDateISO(node.created);
-          console.log(`   Created: ${dateStr}`);
-        }
-        console.log();
+            : formatDateISO(node.created))
+          : "";
+
+        return [
+          String(i + 1),
+          (node.name || "(unnamed)").substring(0, 50),
+          node.id,
+          dateStr,
+        ];
       });
+
+      console.log(table(tableHeaders, tableRows, { align: ["right", "left", "left", "left"] }));
       console.log(tip("Use --show for full node content"));
       return;
     }
