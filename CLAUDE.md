@@ -261,3 +261,78 @@ The build script:
 1. Runs fast tests first (fails build if tests fail)
 2. Only rebuilds if source files changed (unless --force)
 3. Compiles to standalone `supertag` binary
+
+### Error Handling System (Spec 073)
+
+**Structured Errors** - All errors extend `StructuredError` with consistent structure:
+
+```typescript
+import { StructuredError } from '../utils/structured-errors';
+
+// Creating errors
+throw new StructuredError("WORKSPACE_NOT_FOUND", "Workspace 'test' not found", {
+  details: { requestedWorkspace: "test", availableWorkspaces: ["main"] },
+  suggestion: "Try one of: main",
+  recovery: { canRetry: false, alternatives: ["main"] },
+});
+
+// For workspace errors, use specialized classes:
+import { WorkspaceNotFoundError, WorkspaceDatabaseMissingError } from '../config/workspace-resolver';
+throw new WorkspaceNotFoundError("test", ["main", "books"]);
+throw new WorkspaceDatabaseMissingError("test", "/path/to/db");
+```
+
+**Error Codes:**
+- `WORKSPACE_NOT_FOUND` - Workspace alias not in config
+- `DATABASE_NOT_FOUND` - Database file missing
+- `TAG_NOT_FOUND` - Supertag doesn't exist
+- `NODE_NOT_FOUND` - Node ID not found
+- `API_ERROR` - Tana API request failed
+- `VALIDATION_ERROR` - Input validation failed
+- `CONFIG_NOT_FOUND` - Config file missing
+- `UNKNOWN_ERROR` - Unclassified error
+
+**Formatting for different contexts:**
+
+```typescript
+import { formatErrorForCli, formatErrorForMcp } from '../utils/error-formatter';
+
+// CLI output (human-readable with colors)
+console.error(formatErrorForCli(error));
+
+// MCP output (structured JSON for AI agents)
+return { error: formatErrorForMcp(error) };
+```
+
+**Debug mode:**
+
+```typescript
+import { isDebugMode, setDebugMode, formatDebugError } from '../utils/debug';
+
+// Enable debug mode (shows stack traces)
+setDebugMode(true);
+
+// Format with debug info when in debug mode
+console.error(formatDebugError(error));
+```
+
+**MCP error handling:**
+
+```typescript
+import { handleMcpError } from '../mcp/error-handler';
+
+try {
+  const result = await someOperation();
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+} catch (error) {
+  return handleMcpError(error);  // Returns { isError: true, content: [...] }
+}
+```
+
+**Key files:**
+- `src/utils/structured-errors.ts` - StructuredError class
+- `src/utils/error-formatter.ts` - CLI and MCP formatters
+- `src/utils/error-registry.ts` - Error code registry
+- `src/utils/debug.ts` - Debug mode utilities
+- `src/mcp/error-handler.ts` - MCP error handling
+- `src/config/workspace-resolver.ts` - Workspace error classes

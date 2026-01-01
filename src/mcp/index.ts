@@ -32,6 +32,7 @@ import { transcriptList, transcriptShow, transcriptSearch } from './tools/transc
 import { cacheClear } from './tools/cache.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
+import { handleMcpError } from './error-handler.js';
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
 
@@ -265,7 +266,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Tool execution failed', { tool: name, error: message });
-    throw error;
+
+    // Return structured error response instead of throwing
+    return handleMcpError(error);
   }
 });
 
