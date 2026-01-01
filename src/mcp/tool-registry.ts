@@ -7,6 +7,9 @@
  * Spec: 061-progressive-disclosure
  */
 
+import { VERSION } from '../version.js';
+import * as schemas from './schemas.js';
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -167,3 +170,100 @@ export const TOOL_METADATA: ToolMetadata[] = [
     example: 'Load detailed tana_search schema',
   },
 ];
+
+// =============================================================================
+// Schema Registry (maps tool names to their Zod schemas)
+// =============================================================================
+
+const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> = {
+  tana_search: schemas.zodToJsonSchema(schemas.searchSchema),
+  tana_tagged: schemas.zodToJsonSchema(schemas.taggedSchema),
+  tana_semantic_search: schemas.zodToJsonSchema(schemas.semanticSearchSchema),
+  tana_field_values: schemas.zodToJsonSchema(schemas.fieldValuesSchema),
+  tana_supertags: schemas.zodToJsonSchema(schemas.supertagsSchema),
+  tana_stats: schemas.zodToJsonSchema(schemas.statsSchema),
+  tana_supertag_info: schemas.zodToJsonSchema(schemas.supertagInfoSchema),
+  tana_node: schemas.zodToJsonSchema(schemas.nodeSchema),
+  tana_transcript_list: schemas.zodToJsonSchema(schemas.transcriptListSchema),
+  tana_transcript_show: schemas.zodToJsonSchema(schemas.transcriptShowSchema),
+  tana_transcript_search: schemas.zodToJsonSchema(schemas.transcriptSearchSchema),
+  tana_create: schemas.zodToJsonSchema(schemas.createSchema),
+  tana_sync: schemas.zodToJsonSchema(schemas.syncSchema),
+  tana_cache_clear: schemas.zodToJsonSchema(schemas.cacheClearSchema),
+  tana_capabilities: schemas.zodToJsonSchema(schemas.capabilitiesSchema),
+  tana_tool_schema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
+};
+
+// =============================================================================
+// Schema Cache (session-level caching)
+// =============================================================================
+
+const schemaCache = new Map<string, Record<string, unknown>>();
+
+// =============================================================================
+// Public API
+// =============================================================================
+
+/**
+ * Get lightweight capabilities inventory
+ */
+export function getCapabilities(filter?: { category?: CategoryName }): CapabilitiesResponse {
+  const categoryNames: CategoryName[] = ['query', 'explore', 'transcript', 'mutate', 'system'];
+  const filteredCategories = filter?.category ? [filter.category] : categoryNames;
+
+  const categories: ToolCategory[] = filteredCategories.map((categoryName) => {
+    const tools = TOOL_METADATA.filter((t) => t.category === categoryName).map(
+      (t): ToolSummary => ({
+        name: t.name,
+        description: t.description,
+        example: t.example,
+      })
+    );
+
+    return {
+      name: categoryName,
+      description: CATEGORY_DESCRIPTIONS[categoryName],
+      tools,
+    };
+  });
+
+  return {
+    version: VERSION,
+    categories,
+    quickActions: QUICK_ACTIONS,
+  };
+}
+
+/**
+ * Get full JSON schema for a tool (cached)
+ */
+export function getToolSchema(toolName: string): Record<string, unknown> | null {
+  // Check cache first
+  if (schemaCache.has(toolName)) {
+    return schemaCache.get(toolName)!;
+  }
+
+  // Get schema from registry
+  const schema = TOOL_SCHEMAS[toolName];
+  if (!schema) {
+    return null;
+  }
+
+  // Cache and return
+  schemaCache.set(toolName, schema);
+  return schema;
+}
+
+/**
+ * Check if tool exists
+ */
+export function hasTools(toolName: string): boolean {
+  return TOOL_METADATA.some((t) => t.name === toolName);
+}
+
+/**
+ * List all tool names
+ */
+export function listToolNames(): string[] {
+  return TOOL_METADATA.map((t) => t.name);
+}

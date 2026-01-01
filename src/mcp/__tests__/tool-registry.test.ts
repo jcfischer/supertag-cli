@@ -12,7 +12,15 @@ import type {
   ToolMetadata,
   CapabilitiesResponse,
 } from '../tool-registry';
-import { TOOL_METADATA, CATEGORY_DESCRIPTIONS, QUICK_ACTIONS } from '../tool-registry';
+import {
+  TOOL_METADATA,
+  CATEGORY_DESCRIPTIONS,
+  QUICK_ACTIONS,
+  getCapabilities,
+  getToolSchema,
+  hasTools,
+  listToolNames,
+} from '../tool-registry';
 
 describe('Tool Registry Types', () => {
   describe('ToolSummary', () => {
@@ -189,5 +197,110 @@ describe('QUICK_ACTIONS', () => {
   it('should have 3-5 quick actions', () => {
     expect(QUICK_ACTIONS.length).toBeGreaterThanOrEqual(3);
     expect(QUICK_ACTIONS.length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('getCapabilities', () => {
+  it('should return all categories when no filter', () => {
+    const result = getCapabilities();
+    expect(result.categories).toHaveLength(5);
+    expect(result.version).toBeDefined();
+    expect(result.quickActions).toBeArray();
+  });
+
+  it('should return version string', () => {
+    const result = getCapabilities();
+    expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('should include quick actions', () => {
+    const result = getCapabilities();
+    expect(result.quickActions).toContain('search');
+    expect(result.quickActions).toContain('create');
+  });
+
+  it('should filter by category', () => {
+    const result = getCapabilities({ category: 'query' });
+    expect(result.categories).toHaveLength(1);
+    expect(result.categories[0].name).toBe('query');
+    expect(result.categories[0].tools.length).toBeGreaterThan(0);
+  });
+
+  it('should include tools with summaries in each category', () => {
+    const result = getCapabilities();
+    for (const category of result.categories) {
+      expect(category.tools.length).toBeGreaterThan(0);
+      for (const tool of category.tools) {
+        expect(tool.name).toStartWith('tana_');
+        expect(tool.description.length).toBeGreaterThan(5);
+        expect(tool.example).toBeDefined();
+      }
+    }
+  });
+
+  it('should have category descriptions', () => {
+    const result = getCapabilities();
+    for (const category of result.categories) {
+      expect(category.description.length).toBeGreaterThan(5);
+    }
+  });
+});
+
+describe('getToolSchema', () => {
+  it('should return schema for valid tool', () => {
+    const schema = getToolSchema('tana_search');
+    expect(schema).not.toBeNull();
+    expect(schema!.type).toBe('object');
+    expect(schema!.properties).toBeDefined();
+  });
+
+  it('should return null for unknown tool', () => {
+    const schema = getToolSchema('invalid_tool');
+    expect(schema).toBeNull();
+  });
+
+  it('should return schema with required fields', () => {
+    const schema = getToolSchema('tana_search');
+    expect(schema!.required).toContain('query');
+  });
+
+  it('should cache schema on second call', () => {
+    // First call
+    const schema1 = getToolSchema('tana_tagged');
+    // Second call should return same object (cached)
+    const schema2 = getToolSchema('tana_tagged');
+    expect(schema1).toBe(schema2); // Same reference
+  });
+
+  it('should return schemas for all tools in metadata', () => {
+    for (const tool of TOOL_METADATA) {
+      // Skip capabilities and tool_schema as they're self-referential
+      if (tool.name === 'tana_capabilities' || tool.name === 'tana_tool_schema') {
+        continue;
+      }
+      const schema = getToolSchema(tool.name);
+      expect(schema).not.toBeNull();
+    }
+  });
+});
+
+describe('hasTools', () => {
+  it('should return true for valid tool', () => {
+    expect(hasTools('tana_search')).toBe(true);
+    expect(hasTools('tana_create')).toBe(true);
+  });
+
+  it('should return false for invalid tool', () => {
+    expect(hasTools('invalid_tool')).toBe(false);
+    expect(hasTools('')).toBe(false);
+  });
+});
+
+describe('listToolNames', () => {
+  it('should return all tool names', () => {
+    const names = listToolNames();
+    expect(names).toContain('tana_search');
+    expect(names).toContain('tana_capabilities');
+    expect(names.length).toBe(TOOL_METADATA.length);
   });
 });
