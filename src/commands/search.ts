@@ -42,7 +42,8 @@ import {
   formatDateISO,
   tip,
 } from "../utils/format";
-import { resolveOutputOptions } from "../utils/output-options";
+import { resolveOutputOptions, resolveOutputFormat } from "../utils/output-options";
+import { createFormatter, type OutputFormat } from "../utils/output-formatter";
 import {
   getNodeContents,
   getNodeContentsWithDepth,
@@ -62,6 +63,8 @@ interface SearchOptions extends StandardOptions {
   updatedAfter?: string;
   updatedBefore?: string;
   select?: string;
+  format?: OutputFormat;
+  header?: boolean;
 }
 
 /**
@@ -174,6 +177,7 @@ async function handleFtsSearch(
   const depth = options.depth ? parseInt(String(options.depth)) : 0;
   const includeAncestor = options.ancestor !== false && !options.raw;
   const outputOpts = resolveOutputOptions(options);
+  const format = resolveOutputFormat(options);
   const startTime = performance.now();
 
   await withQueryEngine({ dbPath }, async (ctx) => {
@@ -193,54 +197,8 @@ async function handleFtsSearch(
     });
     const searchTime = performance.now() - startTime;
 
-    if (options.json) {
-      // JSON output
-      const enriched = results.map((result) => {
-        const item: Record<string, unknown> = {
-          id: result.id,
-          name: result.name,
-          rank: result.rank,
-        };
-
-        if (!options.raw) {
-          item.tags = engine.getNodeTags(result.id);
-        }
-
-        if (includeAncestor) {
-          const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-          if (ancestorResult && ancestorResult.depth > 0) {
-            item.ancestor = ancestorResult.ancestor;
-            item.pathFromAncestor = ancestorResult.path;
-            item.depthFromAncestor = ancestorResult.depth;
-          }
-        }
-
-        // Add full content if --show
-        if (options.show) {
-          if (depth > 0) {
-            const contents = getNodeContentsWithDepth(engine.rawDb, result.id, 0, depth);
-            if (contents) {
-              item.contents = contents;
-            }
-          } else {
-            const contents = getNodeContents(engine.rawDb, result.id);
-            if (contents) {
-              item.contents = contents;
-            }
-          }
-        }
-
-        return item;
-      });
-
-      // Apply field projection if --select is specified
-      const selectFields = parseSelectOption(options.select);
-      const projection = parseSelectPaths(selectFields);
-      const projectedResults = applyProjectionToArray(enriched, projection);
-
-      console.log(formatJsonOutput(projectedResults));
-    } else if (options.show) {
-      // Rich output with full node contents
+    // Handle --show separately (rich output with full node contents)
+    if (options.show && format === "table") {
       console.log(`\n🔍 Search results for "${query}" (${results.length}):\n`);
 
       for (let i = 0; i < results.length; i++) {
@@ -270,68 +228,114 @@ async function handleFtsSearch(
         }
         console.log();
       }
-    } else {
-      if (outputOpts.pretty) {
-        // Pretty mode: emoji header, result list
-        const headerText = outputOpts.verbose
-          ? `Search results for "${query}" (${results.length}) in ${searchTime.toFixed(0)}ms`
-          : `Search results for "${query}" (${results.length})`;
-        console.log(`\n${header(EMOJI.search, headerText)}:\n`);
-        results.forEach((result, i) => {
-          const tags = options.raw ? [] : engine.getNodeTags(result.id);
-          const tagStr = tags.length > 0 ? ` #${tags.join(" #")}` : "";
+      return;
+    }
 
-          console.log(`${i + 1}. ${result.name || "(unnamed)"}${tagStr}`);
-          console.log(`   ID: ${result.id}`);
-          console.log(`   Rank: ${result.rank.toFixed(2)}`);
+    // Build enriched data for all formats
+    const enriched = results.map((result) => {
+      const tags = options.raw ? [] : engine.getNodeTags(result.id);
+      let ancestorName = "";
 
-          if (includeAncestor) {
-            const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-            if (ancestorResult && ancestorResult.depth > 0) {
-              const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-              console.log(`   📂 ${ancestorResult.ancestor.name} ${ancestorTags}`);
-            }
-          }
-          console.log();
-        });
-        if (outputOpts.verbose) {
-          console.log(`Query time: ${searchTime.toFixed(1)}ms`);
-        }
-        // Show tip in pretty mode (not when --show is used)
-        console.log(tip("Use --show for full node content"));
-      } else {
-        // Unix mode: TSV output, pipe-friendly
-        // Default fields: id, name, rank, ancestor
-        const selectFields = parseSelectOption(options.select);
-        const defaultFields = ["id", "name", "rank", "ancestor"];
-
-        for (const result of results) {
-          const tags = options.raw ? [] : engine.getNodeTags(result.id);
-          let ancestorName = "";
-
-          if (includeAncestor) {
-            const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-            if (ancestorResult && ancestorResult.depth > 0) {
-              ancestorName = ancestorResult.ancestor.name;
-            }
-          }
-
-          const data: Record<string, string | number | null> = {
-            id: result.id,
-            name: result.name || "",
-            tags: tags.join(","),
-            rank: result.rank.toFixed(2),
-            ancestor: ancestorName,
-          };
-
-          const values = buildSelectedOutput(data, selectFields, defaultFields);
-          console.log(tsv(...values));
-        }
-        // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
-        if (outputOpts.verbose) {
-          console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
+      if (includeAncestor) {
+        const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
+        if (ancestorResult && ancestorResult.depth > 0) {
+          ancestorName = ancestorResult.ancestor.name;
         }
       }
+
+      const item: Record<string, unknown> = {
+        id: result.id,
+        name: result.name || "",
+        tags: tags.join(", "),
+        rank: result.rank.toFixed(2),
+        ancestor: ancestorName,
+      };
+
+      // Add full content if --show (for JSON formats)
+      if (options.show) {
+        if (depth > 0) {
+          const contents = getNodeContentsWithDepth(engine.rawDb, result.id, 0, depth);
+          if (contents) {
+            item.contents = contents;
+          }
+        } else {
+          const contents = getNodeContents(engine.rawDb, result.id);
+          if (contents) {
+            item.contents = contents;
+          }
+        }
+      }
+
+      return item;
+    });
+
+    // Create formatter and output based on format
+    const formatter = createFormatter({
+      format,
+      noHeader: options.header === false,
+      humanDates: outputOpts.humanDates,
+      verbose: outputOpts.verbose,
+    });
+
+    // Table format: use rich pretty output
+    if (format === "table") {
+      const headerText = outputOpts.verbose
+        ? `Search results for "${query}" (${results.length}) in ${searchTime.toFixed(0)}ms`
+        : `Search results for "${query}" (${results.length})`;
+      console.log(`\n${header(EMOJI.search, headerText)}:\n`);
+      results.forEach((result, i) => {
+        const tags = options.raw ? [] : engine.getNodeTags(result.id);
+        const tagStr = tags.length > 0 ? ` #${tags.join(" #")}` : "";
+
+        console.log(`${i + 1}. ${result.name || "(unnamed)"}${tagStr}`);
+        console.log(`   ID: ${result.id}`);
+        console.log(`   Rank: ${result.rank.toFixed(2)}`);
+
+        if (includeAncestor) {
+          const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
+          if (ancestorResult && ancestorResult.depth > 0) {
+            const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
+            console.log(`   📂 ${ancestorResult.ancestor.name} ${ancestorTags}`);
+          }
+        }
+        console.log();
+      });
+      if (outputOpts.verbose) {
+        console.log(`Query time: ${searchTime.toFixed(1)}ms`);
+      }
+      console.log(tip("Use --show for full node content"));
+      return;
+    }
+
+    // All other formats: use formatter with table data
+    // Use lowercase headers for backward-compatible JSON keys
+    const headers = ["id", "name", "tags", "rank", "ancestor"];
+    const rows = enriched.map((item) => [
+      String(item.id),
+      String(item.name),
+      String(item.tags),
+      String(item.rank),
+      String(item.ancestor),
+    ]);
+
+    // Apply field projection if --select is specified
+    const selectFields = parseSelectOption(options.select);
+    if (selectFields && selectFields.length > 0) {
+      // For JSON formats with --select, use projection
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        const projection = parseSelectPaths(selectFields);
+        const projectedResults = applyProjectionToArray(enriched, projection);
+        console.log(formatJsonOutput(projectedResults));
+        return;
+      }
+    }
+
+    formatter.table(headers, rows);
+    formatter.finalize();
+
+    // Verbose mode: add timing to stderr (table format already returned above)
+    if (outputOpts.verbose) {
+      console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
     }
   });
 }
@@ -351,6 +355,7 @@ async function handleSemanticSearch(
     requireDatabase: false, // Check LanceDB separately below
   });
   const outputOpts = resolveOutputOptions(options);
+  const format = resolveOutputFormat(options);
   const startTime = performance.now();
 
   const limit = options.limit ? parseInt(String(options.limit)) : 10;
@@ -376,7 +381,8 @@ async function handleSemanticSearch(
   });
 
   try {
-    if (!options.json) {
+    // Show progress indicator for non-machine formats
+    if (format === "table") {
       console.log(`🔍 Searching: "${query}" [${wsContext.alias}]`);
       console.log("");
     }
@@ -391,60 +397,18 @@ async function handleSemanticSearch(
       const searchTime = performance.now() - startTime;
 
       if (results.length === 0) {
-        if (options.json) {
+        if (format === "json" || format === "jsonl" || format === "minimal") {
           console.log("[]");
+        } else if (format === "ids" || format === "csv") {
+          // Empty output for machine formats
         } else {
           console.log("No results found");
         }
         return;
       }
 
-      if (options.json) {
-        const enriched = results.map((r) => {
-          let result: Record<string, unknown>;
-          if (options.show && depth > 0) {
-            const contents = getNodeContentsWithDepth(db, r.nodeId, 0, depth);
-            result = {
-              ...contents,
-              distance: r.distance,
-              similarity: r.similarity,
-            };
-          } else if (options.show) {
-            const contents = getNodeContents(db, r.nodeId);
-            result = {
-              ...contents,
-              distance: r.distance,
-              similarity: r.similarity,
-            };
-          } else {
-            result = {
-              nodeId: r.nodeId,
-              name: r.name,
-              tags: r.tags,
-              distance: r.distance,
-              similarity: r.similarity,
-            };
-          }
-
-          if (includeAncestor) {
-            const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-            if (ancestorResult && ancestorResult.depth > 0) {
-              result.ancestor = ancestorResult.ancestor;
-              result.pathFromAncestor = ancestorResult.path;
-              result.depthFromAncestor = ancestorResult.depth;
-            }
-          }
-
-          return result;
-        });
-
-        // Apply field projection if --select is specified
-        const selectFields = parseSelectOption(options.select);
-        const projection = parseSelectPaths(selectFields);
-        const projectedResults = applyProjectionToArray(enriched, projection);
-
-        console.log(formatJsonOutput(projectedResults));
-      } else if (options.show) {
+      // Handle --show separately for table format (rich output)
+      if (options.show && format === "table") {
         console.log(`Results (${results.length}):`);
         console.log("");
         for (let i = 0; i < results.length; i++) {
@@ -474,67 +438,111 @@ async function handleSemanticSearch(
           }
           console.log("");
         }
-      } else {
-        if (outputOpts.pretty) {
-          // Pretty mode: results list with similarity percentage
-          const headerText = outputOpts.verbose
-            ? `Results (${results.length}) in ${searchTime.toFixed(0)}ms`
-            : `Results (${results.length})`;
-          console.log(headerText);
-          console.log("");
-          for (const r of results) {
-            const similarity = (r.similarity * 100).toFixed(1);
-            const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
-            console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
-            console.log(`        ID: ${r.nodeId}`);
+        return;
+      }
 
-            if (includeAncestor) {
-              const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-              if (ancestorResult && ancestorResult.depth > 0) {
-                const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-                console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
-              }
-            }
-          }
-          if (outputOpts.verbose) {
-            console.log("");
-            console.log(`Query time: ${searchTime.toFixed(1)}ms`);
-          }
-          // Show tip in pretty mode (not when --show is used)
-          console.log(tip("Use --show for full node content"));
-        } else {
-          // Unix mode: TSV output, pipe-friendly
-          // Default fields: id, name, similarity, ancestor
-          const selectFields = parseSelectOption(options.select);
-          const defaultFields = ["id", "name", "similarity", "ancestor"];
-
-          for (const r of results) {
-            const tagStr = r.tags ? r.tags.join(",") : "";
-            let ancestorName = "";
-
-            if (includeAncestor) {
-              const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
-              if (ancestorResult && ancestorResult.depth > 0) {
-                ancestorName = ancestorResult.ancestor.name;
-              }
-            }
-
-            const data: Record<string, string | number | null> = {
-              id: r.nodeId,
-              name: r.name,
-              similarity: r.similarity.toFixed(3),
-              tags: tagStr,
-              ancestor: ancestorName,
-            };
-
-            const values = buildSelectedOutput(data, selectFields, defaultFields);
-            console.log(tsv(...values));
-          }
-          // Verbose mode: add timing to stderr (to not interfere with TSV parsing)
-          if (outputOpts.verbose) {
-            console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
+      // Build enriched data for all formats
+      const enriched = results.map((r) => {
+        let ancestorName = "";
+        if (includeAncestor) {
+          const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
+          if (ancestorResult && ancestorResult.depth > 0) {
+            ancestorName = ancestorResult.ancestor.name;
           }
         }
+
+        const item: Record<string, unknown> = {
+          id: r.nodeId,
+          name: r.name,
+          tags: r.tags ? r.tags.join(", ") : "",
+          similarity: r.similarity.toFixed(3),
+          ancestor: ancestorName,
+        };
+
+        // Add full content if --show (for JSON formats)
+        if (options.show) {
+          if (depth > 0) {
+            const contents = getNodeContentsWithDepth(db, r.nodeId, 0, depth);
+            if (contents) {
+              item.contents = contents;
+            }
+          } else {
+            const contents = getNodeContents(db, r.nodeId);
+            if (contents) {
+              item.contents = contents;
+            }
+          }
+        }
+
+        return item;
+      });
+
+      // Create formatter and output based on format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Table format: use rich pretty output
+      if (format === "table") {
+        const headerText = outputOpts.verbose
+          ? `Results (${results.length}) in ${searchTime.toFixed(0)}ms`
+          : `Results (${results.length})`;
+        console.log(headerText);
+        console.log("");
+        for (const r of results) {
+          const similarity = (r.similarity * 100).toFixed(1);
+          const tagStr = r.tags ? ` #${r.tags.join(" #")}` : "";
+          console.log(`  ${similarity}%  ${r.name.substring(0, 50)}${tagStr}`);
+          console.log(`        ID: ${r.nodeId}`);
+
+          if (includeAncestor) {
+            const ancestorResult = findMeaningfulAncestor(db, r.nodeId);
+            if (ancestorResult && ancestorResult.depth > 0) {
+              const ancestorTagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
+              console.log(`        📂 ${ancestorResult.ancestor.name} ${ancestorTagStr}`);
+            }
+          }
+        }
+        if (outputOpts.verbose) {
+          console.log("");
+          console.log(`Query time: ${searchTime.toFixed(1)}ms`);
+        }
+        console.log(tip("Use --show for full node content"));
+        return;
+      }
+
+      // All other formats: use formatter with table data
+      // Use lowercase headers for backward-compatible JSON keys
+      const headers = ["id", "name", "tags", "similarity", "ancestor"];
+      const rows = enriched.map((item) => [
+        String(item.id),
+        String(item.name),
+        String(item.tags),
+        String(item.similarity),
+        String(item.ancestor),
+      ]);
+
+      // Apply field projection if --select is specified
+      const selectFields = parseSelectOption(options.select);
+      if (selectFields && selectFields.length > 0) {
+        // For JSON formats with --select, use projection
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const projection = parseSelectPaths(selectFields);
+          const projectedResults = applyProjectionToArray(enriched, projection);
+          console.log(formatJsonOutput(projectedResults));
+          return;
+        }
+      }
+
+      formatter.table(headers, rows);
+      formatter.finalize();
+
+      // Verbose mode: add timing to stderr (table format already returned above)
+      if (outputOpts.verbose) {
+        console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
       }
     });
   } finally {
@@ -639,6 +647,8 @@ async function handleTaggedSearch(
   const limit = options.limit ? parseInt(String(options.limit)) : 10;
   const depth = options.depth ? parseInt(String(options.depth)) : 0;
   const dateRange = parseDateRangeOptions(options);
+  const outputOpts = resolveOutputOptions(options);
+  const format = resolveOutputFormat(options);
 
   // Parse field filter if provided
   const fieldFilter = options.field ? parseFieldFilter(options.field) : null;
@@ -690,8 +700,10 @@ async function handleTaggedSearch(
     }
 
     if (results.length === 0) {
-      if (options.json) {
+      if (format === "json" || format === "jsonl" || format === "minimal") {
         console.log("[]");
+      } else if (format === "ids" || format === "csv") {
+        // Empty output for machine formats
       } else {
         console.log(`❌ No nodes found with tag "#${tagname}"`);
         console.log(`   Check available tags with: supertag tags list`);
@@ -699,27 +711,8 @@ async function handleTaggedSearch(
       return;
     }
 
-    if (options.json) {
-      // Apply field projection if --select is specified
-      const selectFields = parseSelectOption(options.select);
-      const projection = parseSelectPaths(selectFields);
-
-      if (options.show) {
-        // Full content for each node
-        const enriched = results.map((node) => {
-          if (depth > 0) {
-            return getNodeContentsWithDepth(engine.rawDb, node.id, 0, depth);
-          } else {
-            return getNodeContents(engine.rawDb, node.id);
-          }
-        }).filter(Boolean);
-        const projectedResults = applyProjectionToArray(enriched, projection);
-        console.log(formatJsonOutput(projectedResults));
-      } else {
-        const projectedResults = applyProjectionToArray(results, projection);
-        console.log(formatJsonOutput(projectedResults));
-      }
-    } else if (options.show) {
+    // Handle --show separately for table format (rich output)
+    if (options.show && format === "table") {
       console.log(`\n🏷️  Nodes tagged with #${tagname} (${results.length}):\n`);
       for (const node of results) {
         if (depth > 0) {
@@ -735,42 +728,83 @@ async function handleTaggedSearch(
         }
         console.log();
       }
-    } else {
-      const outputOpts = resolveOutputOptions(options);
+      return;
+    }
 
-      if (outputOpts.pretty) {
-        // Pretty mode: emoji header, result list
-        console.log(`\n${header(EMOJI.tags, `Nodes tagged with #${tagname} (${results.length})`)}:\n`);
-        results.forEach((node, i) => {
-          console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
-          console.log(`   ID: ${node.id}`);
-          if (node.created) {
-            const dateStr = outputOpts.humanDates
-              ? new Date(node.created).toLocaleDateString()
-              : formatDateISO(node.created);
-            console.log(`   Created: ${dateStr}`);
+    // Build enriched data for all formats
+    const enriched = results.map((node) => {
+      const item: Record<string, unknown> = {
+        id: node.id,
+        name: node.name || "",
+        created: node.created ? formatDateISO(node.created) : "",
+      };
+
+      // Add full content if --show (for JSON formats)
+      if (options.show) {
+        if (depth > 0) {
+          const contents = getNodeContentsWithDepth(engine.rawDb, node.id, 0, depth);
+          if (contents) {
+            item.contents = contents;
           }
-          console.log();
-        });
-        // Show tip in pretty mode (not when --show is used)
-        console.log(tip("Use --show for full node content"));
-      } else {
-        // Unix mode: TSV output, pipe-friendly
-        // Default fields: id, name, created
-        const selectFields = parseSelectOption(options.select);
-        const defaultFields = ["id", "name", "created"];
-
-        for (const node of results) {
-          const data: Record<string, string | number | null> = {
-            id: node.id,
-            name: node.name || "",
-            created: node.created ? formatDateISO(node.created) : "",
-          };
-
-          const values = buildSelectedOutput(data, selectFields, defaultFields);
-          console.log(tsv(...values));
+        } else {
+          const contents = getNodeContents(engine.rawDb, node.id);
+          if (contents) {
+            item.contents = contents;
+          }
         }
       }
+
+      return item;
+    });
+
+    // Create formatter and output based on format
+    const formatter = createFormatter({
+      format,
+      noHeader: options.header === false,
+      humanDates: outputOpts.humanDates,
+      verbose: outputOpts.verbose,
+    });
+
+    // Table format: use rich pretty output
+    if (format === "table") {
+      console.log(`\n${header(EMOJI.tags, `Nodes tagged with #${tagname} (${results.length})`)}:\n`);
+      results.forEach((node, i) => {
+        console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
+        console.log(`   ID: ${node.id}`);
+        if (node.created) {
+          const dateStr = outputOpts.humanDates
+            ? new Date(node.created).toLocaleDateString()
+            : formatDateISO(node.created);
+          console.log(`   Created: ${dateStr}`);
+        }
+        console.log();
+      });
+      console.log(tip("Use --show for full node content"));
+      return;
     }
+
+    // All other formats: use formatter with table data
+    // Use lowercase headers for backward-compatible JSON keys
+    const headers = ["id", "name", "created"];
+    const rows = enriched.map((item) => [
+      String(item.id),
+      String(item.name),
+      String(item.created),
+    ]);
+
+    // Apply field projection if --select is specified
+    const selectFields = parseSelectOption(options.select);
+    if (selectFields && selectFields.length > 0) {
+      // For JSON formats with --select, use projection
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        const projection = parseSelectPaths(selectFields);
+        const projectedResults = applyProjectionToArray(enriched, projection);
+        console.log(formatJsonOutput(projectedResults));
+        return;
+      }
+    }
+
+    formatter.table(headers, rows);
+    formatter.finalize();
   });
 }

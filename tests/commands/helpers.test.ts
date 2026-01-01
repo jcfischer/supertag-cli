@@ -99,6 +99,52 @@ describe("addStandardOptions", () => {
     expect(options).toContain("--show");
     expect(options).toContain("--depth");
   });
+
+  // T-3.1: --format option (Spec 060)
+  describe("--format option (Spec 060)", () => {
+    it("should add --format option (no short alias to avoid conflicts)", () => {
+      const cmd = new Command("test");
+      addStandardOptions(cmd);
+
+      const options = cmd.options;
+      const formatOpt = options.find(o => o.long === "--format");
+
+      expect(formatOpt).toBeDefined();
+      // No short alias (-f) because it conflicts with -f/--field in search command
+      expect(formatOpt?.short).toBeUndefined();
+    });
+
+    it("should include format description with valid choices", () => {
+      const cmd = new Command("test");
+      addStandardOptions(cmd);
+
+      const formatOpt = cmd.options.find(o => o.long === "--format");
+      const description = formatOpt?.description ?? "";
+
+      expect(description).toContain("json");
+      expect(description).toContain("table");
+      expect(description).toContain("csv");
+      expect(description).toContain("ids");
+      expect(description).toContain("minimal");
+      expect(description).toContain("jsonl");
+    });
+
+    it("should add --no-header option", () => {
+      const cmd = new Command("test");
+      addStandardOptions(cmd);
+
+      const options = cmd.options.map(o => o.long);
+      expect(options).toContain("--no-header");
+    });
+
+    it("should allow disabling format option via config", () => {
+      const cmd = new Command("test");
+      addStandardOptions(cmd, { includeFormat: false });
+
+      const options = cmd.options.map(o => o.long);
+      expect(options).not.toContain("--format");
+    });
+  });
 });
 
 describe("formatJsonOutput", () => {

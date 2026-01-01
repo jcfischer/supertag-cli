@@ -94,7 +94,7 @@ describe("--select parameter support", () => {
       expect(parsed).not.toHaveProperty("fields");
     });
 
-    testFn("should filter Unix output to selected fields only", async () => {
+    testFn("should filter output to selected fields only (non-TTY defaults to JSON)", async () => {
       // First get a tag name
       const tagsResult = await $`bun run src/index.ts tags list --json --limit 1`.text();
       const tags = JSON.parse(tagsResult);
@@ -103,10 +103,11 @@ describe("--select parameter support", () => {
       const tagName = tags[0].tagName;
       const result = await $`bun run src/index.ts tags show ${tagName} --select id,name`.text();
 
-      // Should show id and name but not color
-      expect(result).toContain("id:");
-      expect(result).toContain("name:");
-      expect(result).not.toContain("Color:");
+      // Non-TTY now defaults to JSON format per Spec 060
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("id");
+      expect(parsed).toHaveProperty("name");
+      expect(parsed).not.toHaveProperty("color");
     });
   });
 

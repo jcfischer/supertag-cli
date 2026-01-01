@@ -18,6 +18,7 @@ import {
   WorkspaceDatabaseMissingError,
 } from "../config/workspace-resolver";
 import type { StandardOptions } from "../types";
+import { OUTPUT_FORMATS } from "../utils/output-formatter";
 
 // Default database path - uses XDG with legacy fallback
 const DEFAULT_DB_PATH = getDatabasePath();
@@ -72,6 +73,8 @@ export interface AddStandardOptionsConfig {
   includeDepth?: boolean;
   /** Include --db-path flag (default: true) */
   includeDbPath?: boolean;
+  /** Include --format/-f flag (default: true) - Spec 060 */
+  includeFormat?: boolean;
   /** Default limit value (default: "10") */
   defaultLimit?: string;
 }
@@ -88,6 +91,7 @@ export function addStandardOptions(
     includeShow = false,
     includeDepth = false,
     includeDbPath = true,
+    includeFormat = true,
     defaultLimit = "10",
   } = config;
 
@@ -101,6 +105,14 @@ export function addStandardOptions(
   cmd.option("--no-pretty", "Force Unix output (overrides config)");
   cmd.option("--human-dates", "Human-readable date format");
   cmd.option("--verbose", "Include technical details");
+
+  // Format option (Spec 060) - takes precedence over --json/--pretty
+  // Note: No short alias (-f) because it conflicts with -f/--field in search command
+  if (includeFormat) {
+    const formatChoices = OUTPUT_FORMATS.map((f) => f.format).join(", ");
+    cmd.option("--format <type>", `Output format: ${formatChoices}`);
+    cmd.option("--no-header", "Suppress header row (table/csv formats)");
+  }
 
   // Optional db-path (usually included for backward compatibility)
   if (includeDbPath) {

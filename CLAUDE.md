@@ -271,6 +271,53 @@ The build script:
 2. Only rebuilds if source files changed (unless --force)
 3. Compiles to standalone `supertag` binary
 
+### Universal Format Options (Spec 060)
+
+**All query commands support 6 output formats** via `--format <type>`:
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| `table` | Human-readable with emojis | Interactive terminal use |
+| `json` | Pretty-printed JSON array | API integration, jq processing |
+| `csv` | RFC 4180 compliant CSV | Excel, spreadsheets |
+| `ids` | One ID per line | `xargs` piping |
+| `minimal` | JSON with id, name, tags only | Quick lookups |
+| `jsonl` | JSON Lines (streaming) | Log processing, large datasets |
+
+**Format resolution priority:**
+1. `--format <type>` flag (highest)
+2. `--json` flag (legacy, maps to json)
+3. `--pretty` flag (legacy, maps to table)
+4. `SUPERTAG_FORMAT` environment variable
+5. Config file `output.format` setting
+6. TTY detection: `table` for terminals, `json` for pipes (lowest)
+
+**Example usage:**
+```bash
+# CSV export for spreadsheet
+supertag search "meeting" --format csv > meetings.csv
+
+# IDs for batch processing
+supertag search --tag todo --format ids | xargs -I{} supertag nodes show {}
+
+# JSON Lines for streaming
+supertag nodes recent --format jsonl | while read -r line; do echo "$line" | jq .name; done
+
+# Disable header row in CSV
+supertag tags list --format csv --no-header
+```
+
+**Commands supporting --format:**
+- `search` (all modes: FTS, semantic, tagged)
+- `nodes show`, `nodes refs`, `nodes recent`
+- `tags list`, `tags top`, `tags show`, `tags inheritance`, `tags fields`
+- `fields list`, `fields values`, `fields search`
+
+**Key files:**
+- `src/utils/output-formatter.ts` - Formatter implementations
+- `src/utils/output-options.ts` - Format resolution logic
+- `tests/format-integration.test.ts` - E2E format tests
+
 ### Error Handling System (Spec 073)
 
 **Structured Errors** - All errors extend `StructuredError` with consistent structure:

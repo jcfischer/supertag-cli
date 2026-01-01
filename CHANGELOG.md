@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Universal Format Options (Spec 060)** - Extended output formatting from 3 modes to 6 formats
+  - New `--format <type>` option on all standard commands
+  - Formats: `json`, `table`, `csv`, `ids`, `minimal`, `jsonl`
+  - Smart TTY detection: `table` format for terminals, `json` for pipes
+  - `SUPERTAG_FORMAT` environment variable for default format
+  - Config file support via `output.format` setting
+  - Backward compatible with `--json` and `--pretty` flags
+  - New formatters:
+    - `CsvFormatter`: RFC 4180 compliant CSV with proper escaping
+    - `IdsFormatter`: One ID per line for `xargs` piping
+    - `MinimalFormatter`: JSON projection to id, name, tags only
+    - `JsonlFormatter`: JSON Lines format for streaming
+  - `--no-header` option for CSV/table formats
+  - 24 new integration tests
+
 ## [1.3.4] - 2026-01-01
 
 ### Fixed

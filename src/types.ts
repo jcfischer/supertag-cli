@@ -123,6 +123,18 @@ export interface EmbeddingConfig {
  * Configuration for Tana CLI
  * Loaded from env vars, config file, or defaults
  */
+/**
+ * Output configuration (Spec 060)
+ */
+export interface OutputConfigSettings {
+  /** Default output format: json, table, csv, ids, minimal, jsonl */
+  format?: 'json' | 'table' | 'csv' | 'ids' | 'minimal' | 'jsonl';
+  /** Enable pretty formatting by default */
+  pretty?: boolean;
+  /** Enable human-readable dates by default */
+  humanDates?: boolean;
+}
+
 export interface TanaConfig {
   /** API token for authentication */
   apiToken?: string;
@@ -142,6 +154,8 @@ export interface TanaConfig {
   firebaseApiKey?: string;
   /** Update check mode: enabled (default), disabled, or manual */
   updateCheck?: 'enabled' | 'disabled' | 'manual';
+  /** Output formatting configuration (Spec 060) */
+  output?: OutputConfigSettings;
 }
 
 /**

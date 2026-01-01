@@ -308,19 +308,30 @@ See [Workspaces Documentation](./docs/workspaces.md) for details.
 
 ### OUTPUT - Display Formatting
 
-Commands support multiple output formats for different use cases:
+All commands support `--format <type>` with these options:
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| `table` | Human-readable with emojis | Interactive terminal use |
+| `json` | Pretty-printed JSON array | API integration, jq processing |
+| `csv` | RFC 4180 compliant CSV | Excel, spreadsheets |
+| `ids` | One ID per line | xargs piping, scripting |
+| `minimal` | Compact JSON (id, name, tags) | Quick lookups |
+| `jsonl` | JSON Lines (streaming) | Log processing, large datasets |
 
 ```bash
-# Default: Unix-style TSV (pipe-friendly)
-supertag search "meeting"              # id\tname\ttags\trank
-supertag tags top                      # tagname\tcount
+# Explicit format selection
+supertag search "meeting" --format csv > meetings.csv
+supertag tags list --format ids | xargs -I{} supertag tags show {}
+supertag search "project" --format jsonl >> results.jsonl
 
-# Pretty mode: Human-friendly with emojis
-supertag search "meeting" --pretty     # Formatted list with headers
-supertag tags top --pretty             # Table with alignment
+# TTY auto-detection (interactive terminal gets table output)
+supertag search "meeting"                  # Rich table in terminal
+supertag search "meeting" | jq '.[0]'      # JSON when piped
 
-# JSON mode: Structured data
-supertag search "meeting" --json       # Full JSON output
+# Shortcuts (legacy support)
+supertag search "meeting" --pretty         # Same as --format table
+supertag search "meeting" --json           # Same as --format json
 
 # Select specific fields (reduces output)
 supertag search "meeting" --json --select id,name,tags
@@ -332,16 +343,25 @@ supertag search "meeting" --verbose    # Adds timing info
 supertag tags top --verbose            # Adds tag IDs
 ```
 
+**Format Resolution Priority:**
+
+1. `--format <type>` flag (explicit)
+2. `--json` or `--pretty` flags (shortcuts)
+3. `SUPERTAG_FORMAT` environment variable
+4. Config file (`output.format`)
+5. TTY detection: `table` for interactive, `json` for pipes/scripts
+
 **Output Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--pretty` | Human-friendly output with emojis and formatting |
-| `--no-pretty` | Force Unix TSV output (overrides config) |
-| `--json` | Structured JSON output |
+| `--format <type>` | Output format (table, json, csv, ids, minimal, jsonl) |
+| `--pretty` | Shortcut for `--format table` |
+| `--json` | Shortcut for `--format json` |
 | `--select <fields>` | Select specific fields in JSON output (comma-separated) |
 | `--verbose` | Include technical details (timing, IDs) |
 | `--human-dates` | Localized date format (Dec 23, 2025) |
+| `--no-header` | Omit header row in CSV output |
 
 **Configuration:**
 
@@ -350,13 +370,17 @@ Set defaults in `~/.config/supertag/config.json`:
 ```json
 {
   "output": {
-    "pretty": true,
+    "format": "table",
     "humanDates": false
   }
 }
 ```
 
-**Precedence:** CLI flags > Config file > Built-in defaults
+**Environment Variable:**
+
+```bash
+export SUPERTAG_FORMAT=csv  # Default to CSV output
+```
 
 ---
 

@@ -197,7 +197,7 @@ describe("OutputFormatter Interface (T-1.1)", () => {
 // T-1.2: UnixFormatter Tests
 // ============================================================================
 
-import { UnixFormatter, PrettyFormatter, JsonFormatter, createFormatter, resolveOutputMode } from "../../src/utils/output-formatter";
+import { UnixFormatter, PrettyFormatter, TableFormatter, JsonFormatter, CsvFormatter, IdsFormatter, MinimalFormatter, JsonlFormatter, createFormatter, resolveOutputMode } from "../../src/utils/output-formatter";
 import { setOutputConfig, clearOutputConfigOverride } from "../../src/utils/output-options";
 
 describe("UnixFormatter (T-1.2)", () => {
@@ -602,6 +602,42 @@ describe("PrettyFormatter (T-1.3)", () => {
 });
 
 // ============================================================================
+// T-1.3a: TableFormatter Tests (Spec 060 - renamed from PrettyFormatter)
+// ============================================================================
+
+describe("TableFormatter (T-1.3a - Spec 060)", () => {
+  it("should be exported as TableFormatter", () => {
+    expect(TableFormatter).toBeDefined();
+  });
+
+  it("should be the same class as PrettyFormatter (backward compat)", () => {
+    // TableFormatter is the new name, PrettyFormatter kept for backward compatibility
+    expect(TableFormatter).toBe(PrettyFormatter);
+  });
+
+  it("should work with format 'table' option", () => {
+    const { stream, getOutput } = captureOutput();
+    const formatter = new TableFormatter({ format: "table", stream });
+
+    formatter.header("Test Results", "search");
+    expect(getOutput()).toContain("Test Results");
+  });
+
+  it("should produce same output as PrettyFormatter", () => {
+    const { stream: stream1, getOutput: getOutput1 } = captureOutput();
+    const { stream: stream2, getOutput: getOutput2 } = captureOutput();
+
+    const tableFormatter = new TableFormatter({ format: "table", stream: stream1 });
+    const prettyFormatter = new PrettyFormatter({ mode: "pretty", stream: stream2 });
+
+    tableFormatter.table(["ID", "Name"], [["abc", "Node 1"]]);
+    prettyFormatter.table(["ID", "Name"], [["abc", "Node 1"]]);
+
+    expect(getOutput1()).toBe(getOutput2());
+  });
+});
+
+// ============================================================================
 // T-1.4: JsonFormatter Tests
 // ============================================================================
 
@@ -871,49 +907,107 @@ describe("JsonFormatter (T-1.4)", () => {
 // ============================================================================
 
 describe("createFormatter factory (T-1.5)", () => {
-  it("should create UnixFormatter for mode 'unix'", () => {
-    const { stream } = captureOutput();
-    const formatter = createFormatter({ mode: "unix", stream });
-    expect(formatter).toBeInstanceOf(UnixFormatter);
+  describe("legacy mode option", () => {
+    it("should create UnixFormatter for mode 'unix'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ mode: "unix", stream });
+      expect(formatter).toBeInstanceOf(UnixFormatter);
+    });
+
+    it("should create PrettyFormatter for mode 'pretty'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ mode: "pretty", stream });
+      expect(formatter).toBeInstanceOf(PrettyFormatter);
+    });
+
+    it("should create JsonFormatter for mode 'json'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ mode: "json", stream });
+      expect(formatter).toBeInstanceOf(JsonFormatter);
+    });
   });
 
-  it("should create PrettyFormatter for mode 'pretty'", () => {
-    const { stream } = captureOutput();
-    const formatter = createFormatter({ mode: "pretty", stream });
-    expect(formatter).toBeInstanceOf(PrettyFormatter);
+  describe("format option (Spec 060)", () => {
+    it("should create JsonFormatter for format 'json'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "json", stream });
+      expect(formatter).toBeInstanceOf(JsonFormatter);
+    });
+
+    it("should create TableFormatter for format 'table'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "table", stream });
+      expect(formatter).toBeInstanceOf(TableFormatter);
+    });
+
+    it("should create CsvFormatter for format 'csv'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "csv", stream });
+      expect(formatter).toBeInstanceOf(CsvFormatter);
+    });
+
+    it("should create IdsFormatter for format 'ids'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "ids", stream });
+      expect(formatter).toBeInstanceOf(IdsFormatter);
+    });
+
+    it("should create MinimalFormatter for format 'minimal'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "minimal", stream });
+      expect(formatter).toBeInstanceOf(MinimalFormatter);
+    });
+
+    it("should create JsonlFormatter for format 'jsonl'", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ format: "jsonl", stream });
+      expect(formatter).toBeInstanceOf(JsonlFormatter);
+    });
+
+    it("should prefer format over mode when both provided", () => {
+      const { stream } = captureOutput();
+      // format: csv should win over mode: json
+      const formatter = createFormatter({ format: "csv", mode: "json", stream });
+      expect(formatter).toBeInstanceOf(CsvFormatter);
+    });
   });
 
-  it("should create JsonFormatter for mode 'json'", () => {
-    const { stream } = captureOutput();
-    const formatter = createFormatter({ mode: "json", stream });
-    expect(formatter).toBeInstanceOf(JsonFormatter);
-  });
+  describe("common options", () => {
+    it("should pass through humanDates option", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ mode: "unix", stream, humanDates: true });
+      // Formatter should be created successfully
+      expect(formatter).toBeInstanceOf(UnixFormatter);
+    });
 
-  it("should pass through humanDates option", () => {
-    const { stream } = captureOutput();
-    const formatter = createFormatter({ mode: "unix", stream, humanDates: true });
-    // Formatter should be created successfully
-    expect(formatter).toBeInstanceOf(UnixFormatter);
-  });
+    it("should pass through verbose option", () => {
+      const { stream } = captureOutput();
+      const formatter = createFormatter({ mode: "unix", stream, verbose: true });
+      // Formatter should be created successfully
+      expect(formatter).toBeInstanceOf(UnixFormatter);
+    });
 
-  it("should pass through verbose option", () => {
-    const { stream } = captureOutput();
-    const formatter = createFormatter({ mode: "unix", stream, verbose: true });
-    // Formatter should be created successfully
-    expect(formatter).toBeInstanceOf(UnixFormatter);
-  });
+    it("should pass through stream option", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = createFormatter({ mode: "unix", stream });
+      formatter.value("test");
+      expect(getOutput()).toBe("test\n");
+    });
 
-  it("should pass through stream option", () => {
-    const { stream, getOutput } = captureOutput();
-    const formatter = createFormatter({ mode: "unix", stream });
-    formatter.value("test");
-    expect(getOutput()).toBe("test\n");
-  });
+    it("should default to stdout when no stream provided", () => {
+      // Just verify it doesn't throw
+      const formatter = createFormatter({ mode: "unix" });
+      expect(formatter).toBeInstanceOf(UnixFormatter);
+    });
 
-  it("should default to stdout when no stream provided", () => {
-    // Just verify it doesn't throw
-    const formatter = createFormatter({ mode: "unix" });
-    expect(formatter).toBeInstanceOf(UnixFormatter);
+    it("should pass through noHeader option to CsvFormatter", () => {
+      const { stream, getOutput } = captureOutput();
+      const formatter = createFormatter({ format: "csv", stream, noHeader: true });
+      formatter.table(["ID", "Name"], [["abc", "Node 1"]]);
+      formatter.finalize();
+      // With noHeader, should not include header row
+      expect(getOutput()).toBe("abc,Node 1\n");
+    });
   });
 });
 

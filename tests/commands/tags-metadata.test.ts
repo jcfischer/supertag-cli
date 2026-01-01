@@ -178,7 +178,8 @@ describe("Tags Metadata CLI Commands", () => {
     });
 
     it("should show field IDs matching tags show format", async () => {
-      const result = await $`bun run src/index.ts tags fields contact --db-path ${dbPath}`.text();
+      // Use --format table to explicitly request table output (non-TTY defaults to JSON)
+      const result = await $`bun run src/index.ts tags fields contact --format table --db-path ${dbPath}`.text();
 
       // Should show field IDs like tags show does
       expect(result).toContain("(l1)"); // Email field ID
@@ -192,7 +193,8 @@ describe("Tags Metadata CLI Commands", () => {
       db.run(`UPDATE supertag_fields SET inferred_data_type = 'text' WHERE field_name = 'Phone'`);
       db.close();
 
-      const result = await $`bun run src/index.ts tags fields contact --db-path ${dbPath}`.text();
+      // Use --format table to explicitly request table output (non-TTY defaults to JSON)
+      const result = await $`bun run src/index.ts tags fields contact --format table --db-path ${dbPath}`.text();
 
       // Should show field types like tags show does
       expect(result).toContain("Type: email");
@@ -200,7 +202,8 @@ describe("Tags Metadata CLI Commands", () => {
     });
 
     it("should show inherited field origin with ID and type", async () => {
-      const result = await $`bun run src/index.ts tags fields manager --all --db-path ${dbPath}`.text();
+      // Use --format table to explicitly request table output (non-TTY defaults to JSON)
+      const result = await $`bun run src/index.ts tags fields manager --all --format table --db-path ${dbPath}`.text();
 
       // Should show field IDs for inherited fields with origin: "(id, from origin)"
       expect(result).toContain("(l1, from contact)"); // Email field ID with origin
@@ -211,7 +214,8 @@ describe("Tags Metadata CLI Commands", () => {
 
   describe("tags show <tagname> --all", () => {
     it("should show own fields by default", async () => {
-      const result = await $`bun run src/index.ts tags show manager --db-path ${dbPath}`.text();
+      // Use --format table to explicitly request table output (non-TTY defaults to JSON)
+      const result = await $`bun run src/index.ts tags show manager --format table --db-path ${dbPath}`.text();
 
       // Should show own field
       expect(result).toContain("Team");
@@ -221,7 +225,8 @@ describe("Tags Metadata CLI Commands", () => {
     });
 
     it("should show all fields including inherited with --all", async () => {
-      const result = await $`bun run src/index.ts tags show manager --all --db-path ${dbPath}`.text();
+      // Use --format table to explicitly request table output (non-TTY defaults to JSON)
+      const result = await $`bun run src/index.ts tags show manager --all --format table --db-path ${dbPath}`.text();
 
       // Should show own field
       expect(result).toContain("Team");

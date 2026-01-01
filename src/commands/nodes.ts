@@ -40,16 +40,21 @@ import {
   header,
   formatDateISO,
 } from "../utils/format";
-import { resolveOutputOptions } from "../utils/output-options";
+import { resolveOutputOptions, resolveOutputFormat } from "../utils/output-options";
+import { createFormatter, type OutputFormat } from "../utils/output-formatter";
 import type { StandardOptions } from "../types";
 
 interface NodeShowOptions extends StandardOptions {
   // depth is included via addStandardOptions
   select?: string;
+  format?: OutputFormat;
+  header?: boolean;
 }
 
 interface NodeRefsOptions extends StandardOptions {
   select?: string;
+  format?: OutputFormat;
+  header?: boolean;
 }
 
 interface NodeRecentOptions extends StandardOptions {
@@ -58,6 +63,8 @@ interface NodeRecentOptions extends StandardOptions {
   updatedAfter?: string;
   updatedBefore?: string;
   select?: string;
+  format?: OutputFormat;
+  header?: boolean;
 }
 
 /**
@@ -87,73 +94,65 @@ export function createNodesCommand(): Command {
 
     const depth = options.depth ? parseInt(String(options.depth)) : 0;
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
 
     // Parse select option for field projection
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
 
     await withDatabase({ dbPath, readonly: true }, (ctx) => {
-      if (depth > 0) {
-        if (options.json) {
-          const contents = getNodeContentsWithDepth(ctx.db, nodeId, 0, depth);
-          if (!contents) {
-            console.error(`❌ Node not found: ${nodeId}`);
-            process.exit(1);
-          }
-          const projected = applyProjection(contents, projection);
-          console.log(formatJsonOutput(projected));
-        } else {
-          const output = formatNodeWithDepth(ctx.db, nodeId, 0, depth);
-          if (!output) {
-            console.error(`❌ Node not found: ${nodeId}`);
-            process.exit(1);
-          }
-          console.log(output);
-        }
-      } else {
-        const contents = getNodeContents(ctx.db, nodeId);
-        if (!contents) {
-          console.error(`❌ Node not found: ${nodeId}`);
-          process.exit(1);
-        }
+      // Get node contents (with or without depth)
+      const contents = depth > 0
+        ? getNodeContentsWithDepth(ctx.db, nodeId, 0, depth)
+        : getNodeContents(ctx.db, nodeId);
 
-        if (options.json) {
-          const projected = applyProjection(contents, projection);
-          console.log(formatJsonOutput(projected));
-        } else if (outputOpts.pretty) {
-          console.log(formatNodeOutput(contents));
-        } else {
-          // Unix mode: YAML-like record format
-          // Apply --select to filter which fields are shown
-          const fieldsToShow = selectFields && selectFields.length > 0
-            ? new Set(selectFields)
-            : null; // null means show all
-
-          console.log("---");
-          if (!fieldsToShow || fieldsToShow.has("id")) {
-            console.log(`id: ${contents.id}`);
-          }
-          if (!fieldsToShow || fieldsToShow.has("name")) {
-            console.log(`name: ${contents.name}`);
-          }
-          if ((!fieldsToShow || fieldsToShow.has("tags")) && contents.tags.length > 0) {
-            console.log(`tags: ${contents.tags.join(", ")}`);
-          }
-          if ((!fieldsToShow || fieldsToShow.has("created")) && contents.created) {
-            console.log(`created: ${formatDateISO(contents.created)}`);
-          }
-          if (!fieldsToShow || fieldsToShow.has("fields")) {
-            if (contents.fields.length > 0) {
-              for (const field of contents.fields) {
-                console.log(`${field.fieldName}: ${field.value}`);
-              }
-            }
-          }
-          if ((!fieldsToShow || fieldsToShow.has("children")) && contents.children.length > 0) {
-            console.log(`children: ${contents.children.length}`);
-          }
-        }
+      if (!contents) {
+        console.error(`❌ Node not found: ${nodeId}`);
+        process.exit(1);
       }
+
+      // Table format: use rich pretty output
+      if (format === "table") {
+        if (depth > 0) {
+          const output = formatNodeWithDepth(ctx.db, nodeId, 0, depth);
+          if (output) {
+            console.log(output);
+          }
+        } else {
+          // For depth=0, contents is NodeContents type
+          const nodeContents = getNodeContents(ctx.db, nodeId);
+          if (nodeContents) {
+            console.log(formatNodeOutput(nodeContents));
+          }
+        }
+        return;
+      }
+
+      // JSON formats: use projection and format output
+      if (format === "json" || format === "jsonl" || format === "minimal") {
+        const projected = applyProjection(contents, projection);
+        console.log(formatJsonOutput(projected));
+        return;
+      }
+
+      // CSV and IDs formats: extract single record data
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // For single-node show, use record() instead of table()
+      formatter.record({
+        id: contents.id,
+        name: contents.name,
+        tags: contents.tags.join(", "),
+        created: contents.created ? formatDateISO(contents.created) : "",
+        fields: contents.fields.map(f => `${f.fieldName}=${f.value}`).join("; "),
+        children: contents.children.length,
+      });
+      formatter.finalize();
     });
   });
 
@@ -172,6 +171,7 @@ export function createNodesCommand(): Command {
     }
 
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
 
@@ -179,10 +179,26 @@ export function createNodesCommand(): Command {
       await withQueryEngine({ dbPath }, async (ctx) => {
         const graph = await ctx.engine.getReferenceGraph(nodeId, 1);
 
-        if (options.json) {
-          const projected = applyProjection(graph, projection);
-          console.log(formatJsonOutput(projected));
-        } else if (outputOpts.pretty) {
+        // Build enriched data for all formats
+        const allRefs = [
+          ...graph.outbound.map(ref => ({
+            direction: "out",
+            fromId: nodeId,
+            toId: ref.reference.toNode,
+            type: ref.reference.referenceType,
+            name: ref.node?.name || "",
+          })),
+          ...graph.inbound.map(ref => ({
+            direction: "in",
+            fromId: ref.reference.fromNode,
+            toId: nodeId,
+            type: ref.reference.referenceType,
+            name: ref.node?.name || "",
+          })),
+        ];
+
+        // Table format: use rich pretty output
+        if (format === "table") {
           console.log(`\n${header(EMOJI.link, `References for: ${graph.node.name || nodeId}`)}:\n`);
 
           console.log(`📤 Outbound references (${graph.outbound.length}):`);
@@ -196,42 +212,38 @@ export function createNodesCommand(): Command {
             console.log(`  ← ${ref.node?.name || ref.reference.fromNode}`);
             console.log(`     Type: ${ref.reference.referenceType}`);
           });
-        } else {
-          // Unix mode: TSV output with --select support
-          // Default fields: direction, fromId, toId, type, name
-          const defaultFields = ["direction", "fromId", "toId", "type", "name"];
+          return;
+        }
 
-          const allRefs = [
-            ...graph.outbound.map(ref => ({
-              direction: "out",
-              fromId: nodeId,
-              toId: ref.reference.toNode,
-              type: ref.reference.referenceType,
-              name: ref.node?.name || "",
-            })),
-            ...graph.inbound.map(ref => ({
-              direction: "in",
-              fromId: ref.reference.fromNode,
-              toId: nodeId,
-              type: ref.reference.referenceType,
-              name: ref.node?.name || "",
-            })),
-          ];
-
-          for (const ref of allRefs) {
-            const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
-            const values = fieldsToOutput.map(field => {
-              const value = ref[field as keyof typeof ref];
-              return value !== undefined ? String(value) : "";
-            });
-
-            if (values.length === 1) {
-              console.log(values[0]);
-            } else {
-              console.log(tsv(...values));
-            }
+        // Apply field projection for JSON formats with --select
+        if (selectFields && selectFields.length > 0) {
+          if (format === "json" || format === "minimal" || format === "jsonl") {
+            const projected = applyProjection(graph, projection);
+            console.log(formatJsonOutput(projected));
+            return;
           }
         }
+
+        // Create formatter and output based on format
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        // Use lowercase headers for backward-compatible JSON keys
+        const headers = ["direction", "fromId", "toId", "type", "name"];
+        const rows = allRefs.map((ref) => [
+          ref.direction,
+          ref.fromId,
+          ref.toId,
+          ref.type,
+          ref.name,
+        ]);
+
+        formatter.table(headers, rows);
+        formatter.finalize();
       });
     } catch (error) {
       console.error(`❌ Error: ${(error as Error).message}`);
@@ -260,16 +272,22 @@ export function createNodesCommand(): Command {
     const limit = options.limit ? parseInt(String(options.limit)) : 10;
     const dateRange = parseDateRangeOptions(options);
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const results = await ctx.engine.findRecentlyUpdated(limit, dateRange);
 
-      if (options.json) {
-        const projectedResults = applyProjectionToArray(results, projection);
-        console.log(formatJsonOutput(projectedResults));
-      } else if (outputOpts.pretty) {
+      // Build enriched data for all formats
+      const enriched = results.map((node) => ({
+        id: node.id,
+        name: node.name || "",
+        updated: node.updated ? formatDateISO(new Date(node.updated)) : "",
+      }));
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(`\n${header(EMOJI.recent, `Recently updated (${results.length})`)}:\n`);
         results.forEach((node, i) => {
           console.log(`${i + 1}. ${node.name || "(unnamed)"}`);
@@ -279,28 +297,36 @@ export function createNodesCommand(): Command {
           }
           console.log();
         });
-      } else {
-        // Unix mode: TSV output with --select support
-        const defaultFields = ["id", "name", "updated"];
-        for (const node of results) {
-          const data: Record<string, string> = {
-            id: node.id,
-            name: node.name || "",
-            updated: node.updated ? formatDateISO(new Date(node.updated)) : "",
-          };
-          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
-          const values = fieldsToOutput.map(field => {
-            const value = data[field];
-            return value !== undefined ? String(value) : "";
-          });
+        return;
+      }
 
-          if (values.length === 1) {
-            console.log(values[0]);
-          } else {
-            console.log(tsv(...values));
-          }
+      // Apply field projection for JSON formats with --select
+      if (selectFields && selectFields.length > 0) {
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const projectedResults = applyProjectionToArray(results, projection);
+          console.log(formatJsonOutput(projectedResults));
+          return;
         }
       }
+
+      // Create formatter and output based on format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Use lowercase headers for backward-compatible JSON keys
+      const headers = ["id", "name", "updated"];
+      const rows = enriched.map((item) => [
+        item.id,
+        item.name,
+        item.updated,
+      ]);
+
+      formatter.table(headers, rows);
+      formatter.finalize();
     });
   });
 

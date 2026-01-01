@@ -395,15 +395,34 @@ supertag embed stats
 
 ## Output Formats
 
+All commands support `--format <type>` with these options:
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| `table` | Human-readable with emojis | Interactive terminal use |
+| `json` | Pretty-printed JSON array | API integration, jq processing |
+| `csv` | RFC 4180 compliant CSV | Excel, spreadsheets |
+| `ids` | One ID per line | xargs piping, scripting |
+| `minimal` | Compact JSON (id, name, tags) | Quick lookups |
+| `jsonl` | JSON Lines (streaming) | Log processing, large datasets |
+
+**Format resolution priority:**
+1. `--format <type>` flag (explicit)
+2. `--json` or `--pretty` flags (shortcuts)
+3. `SUPERTAG_FORMAT` environment variable
+4. Config file (`output.format`)
+5. TTY detection: `table` for interactive, `json` for pipes/scripts
+
 ```bash
-# Default: Unix TSV (pipe-friendly)
+# Explicit format
+supertag search "meeting" --format csv > meetings.csv
+supertag tags list --format ids | xargs -I{} supertag tags show {}
+
+# TTY detection (interactive terminal gets table output)
 supertag search "meeting"
 
-# Human-friendly with emojis
-supertag search "meeting" --pretty
-
-# JSON output
-supertag search "meeting" --json
+# Piped output gets JSON (machine-readable)
+supertag search "meeting" | jq '.[] | .name'
 
 # JSON with field selection (reduces output)
 supertag search "meeting" --json --select id,name,tags
@@ -446,7 +465,7 @@ Config file: `~/.config/supertag/config.json`
 ```json
 {
   "output": {
-    "pretty": true,
+    "format": "table",
     "humanDates": false
   },
   "embedding": {
@@ -455,6 +474,8 @@ Config file: `~/.config/supertag/config.json`
   }
 }
 ```
+
+**Output format options:** `table`, `json`, `csv`, `ids`, `minimal`, `jsonl`
 
 ## Prerequisites
 
@@ -469,6 +490,7 @@ Config file: `~/.config/supertag/config.json`
 |----------|-------------|
 | `TANA_API_TOKEN` | Tana Input API token |
 | `TANA_WORKSPACE` | Default workspace alias |
+| `SUPERTAG_FORMAT` | Default output format (table, json, csv, ids, minimal, jsonl) |
 | `DEBUG` | Enable debug logging |
 
 ## Data Locations

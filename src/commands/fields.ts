@@ -37,7 +37,8 @@ import {
   formatNumber,
   tip,
 } from "../utils/format";
-import { resolveOutputOptions } from "../utils/output-options";
+import { resolveOutputOptions, resolveOutputFormat } from "../utils/output-options";
+import { createFormatter, type OutputFormat } from "../utils/output-formatter";
 
 /**
  * Create the fields command group
@@ -53,22 +54,29 @@ export function createFieldsCommand(): Command {
 
   addStandardOptions(listCmd, { defaultLimit: "50" });
 
-  listCmd.action(async (options: StandardOptions) => {
+  listCmd.action(async (options: StandardOptions & { format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
     }
 
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
     const limit = options.limit ? parseInt(String(options.limit)) : 50;
 
     await withDatabase({ dbPath, readonly: true }, (ctx) => {
       const allFields = getAvailableFieldNames(ctx.db);
       const limitedFields = allFields.slice(0, limit);
 
-      if (options.json) {
-        console.log(formatJsonOutput(limitedFields));
-      } else if (outputOpts.pretty) {
+      // Build enriched data for all formats
+      const enriched = limitedFields.map((field, i) => ({
+        rank: i + 1,
+        fieldName: field.fieldName,
+        count: field.count,
+      }));
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(
           `\n${header(EMOJI.search, `Field Names (${limitedFields.length}${allFields.length > limit ? ` of ${allFields.length}` : ""})`)}\n`
         );
@@ -84,12 +92,33 @@ export function createFieldsCommand(): Command {
         console.log(
           tip("Use 'fields values <name>' to see values for a field")
         );
-      } else {
-        // Unix mode: TSV output
-        for (const field of limitedFields) {
-          console.log(tsv(field.fieldName, field.count));
-        }
+        return;
       }
+
+      // JSON formats: return full data
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        console.log(formatJsonOutput(limitedFields));
+        return;
+      }
+
+      // Create formatter and output based on format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Use lowercase headers for backward-compatible JSON keys
+      const headers = ["rank", "fieldName", "count"];
+      const rows = enriched.map((item) => [
+        String(item.rank),
+        item.fieldName,
+        String(item.count),
+      ]);
+
+      formatter.table(headers, rows);
+      formatter.finalize();
     });
   });
 
@@ -112,6 +141,8 @@ export function createFieldsCommand(): Command {
         before?: string;
         offset?: string;
         select?: string;
+        format?: OutputFormat;
+        header?: boolean;
       }
     ) => {
       const dbPath = resolveDbPath(options);
@@ -120,6 +151,7 @@ export function createFieldsCommand(): Command {
       }
 
       const outputOpts = resolveOutputOptions(options);
+      const format = resolveOutputFormat(options);
 
       // Build query options before database access
       const queryOptions: {
@@ -153,13 +185,15 @@ export function createFieldsCommand(): Command {
       await withDatabase({ dbPath, readonly: true }, (ctx) => {
         const values = queryFieldValuesByFieldName(ctx.db, name, queryOptions);
 
-        if (options.json) {
-          // Apply field projection if --select is specified
-          const selectFields = parseSelectOption(options.select);
-          const projection = parseSelectPaths(selectFields);
-          const projectedResults = applyProjectionToArray(values, projection);
-          console.log(formatJsonOutput(projectedResults));
-        } else if (outputOpts.pretty) {
+        // Build enriched data for all formats
+        const enriched = values.map((value) => ({
+          parentId: value.parentId,
+          valueText: value.valueText,
+          created: value.created != null ? String(value.created) : "",
+        }));
+
+        // Table format: use rich pretty output
+        if (format === "table") {
           console.log(
             `\n${header(EMOJI.node, `Field: ${name} (${values.length} values)`)}\n`
           );
@@ -186,33 +220,36 @@ export function createFieldsCommand(): Command {
               );
             }
           }
-        } else {
-          // Unix mode: TSV output
-          // Apply --select to filter which fields are shown
-          const selectFields = parseSelectOption(options.select);
-          const defaultFields = outputOpts.verbose
-            ? ["parentId", "created", "valueText"]
-            : ["valueText"];
-
-          for (const value of values) {
-            const fieldsToShow = selectFields && selectFields.length > 0
-              ? selectFields
-              : defaultFields;
-
-            const outputValues = fieldsToShow.map(field => {
-              if (field === "parentId") return value.parentId;
-              if (field === "created") return value.created != null ? String(value.created) : "";
-              if (field === "valueText") return value.valueText;
-              return "";
-            });
-
-            if (outputValues.length === 1) {
-              console.log(outputValues[0]);
-            } else {
-              console.log(tsv(...outputValues));
-            }
-          }
+          return;
         }
+
+        // JSON formats with optional projection
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const selectFields = parseSelectOption(options.select);
+          const projection = parseSelectPaths(selectFields);
+          const projectedResults = applyProjectionToArray(values, projection);
+          console.log(formatJsonOutput(projectedResults));
+          return;
+        }
+
+        // Create formatter and output based on format
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        // Use lowercase headers for backward-compatible JSON keys
+        const headers = ["parentId", "valueText", "created"];
+        const rows = enriched.map((item) => [
+          item.parentId,
+          item.valueText,
+          item.created,
+        ]);
+
+        formatter.table(headers, rows);
+        formatter.finalize();
       });
     }
   );
@@ -228,7 +265,7 @@ export function createFieldsCommand(): Command {
   searchCmd.action(
     async (
       query: string,
-      options: StandardOptions & { field?: string }
+      options: StandardOptions & { field?: string; format?: OutputFormat; header?: boolean }
     ) => {
       const dbPath = resolveDbPath(options);
       if (!checkDb(dbPath, options.workspace)) {
@@ -236,6 +273,7 @@ export function createFieldsCommand(): Command {
       }
 
       const outputOpts = resolveOutputOptions(options);
+      const format = resolveOutputFormat(options);
       const limit = options.limit ? parseInt(String(options.limit)) : 50;
 
       await withDatabase({ dbPath, readonly: true }, (ctx) => {
@@ -244,9 +282,15 @@ export function createFieldsCommand(): Command {
           limit,
         });
 
-        if (options.json) {
-          console.log(formatJsonOutput(results));
-        } else if (outputOpts.pretty) {
+        // Build enriched data for all formats
+        const enriched = results.map((result) => ({
+          parentId: result.parentId,
+          fieldName: result.fieldName,
+          valueText: result.valueText,
+        }));
+
+        // Table format: use rich pretty output
+        if (format === "table") {
           const fieldFilter = options.field ? ` in "${options.field}"` : "";
           console.log(
             `\n${header(EMOJI.search, `Search: "${query}"${fieldFilter} (${results.length} results)`)}\n`
@@ -265,22 +309,33 @@ export function createFieldsCommand(): Command {
               console.log();
             }
           }
-        } else {
-          // Unix mode: TSV output
-          for (const result of results) {
-            if (outputOpts.verbose) {
-              console.log(
-                tsv(
-                  result.parentId,
-                  result.fieldName,
-                  result.valueText
-                )
-              );
-            } else {
-              console.log(tsv(result.fieldName, result.valueText));
-            }
-          }
+          return;
         }
+
+        // JSON formats: return full data
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          console.log(formatJsonOutput(results));
+          return;
+        }
+
+        // Create formatter and output based on format
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        // Use lowercase headers for backward-compatible JSON keys
+        const headers = ["parentId", "fieldName", "valueText"];
+        const rows = enriched.map((item) => [
+          item.parentId,
+          item.fieldName,
+          item.valueText,
+        ]);
+
+        formatter.table(headers, rows);
+        formatter.finalize();
       });
     }
   );

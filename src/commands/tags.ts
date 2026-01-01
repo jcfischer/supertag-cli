@@ -57,7 +57,8 @@ import {
   formatNumber,
   tip,
 } from "../utils/format";
-import { resolveOutputOptions } from "../utils/output-options";
+import { resolveOutputOptions, resolveOutputFormat } from "../utils/output-options";
+import { createFormatter, type OutputFormat } from "../utils/output-formatter";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
 import { VisualizationService } from "../visualization/service";
 import { render, supportedFormats, isFormatSupported } from "../visualization/renderers";
@@ -224,7 +225,7 @@ export function createTagsCommand(): Command {
 
   addStandardOptions(listCmd, { defaultLimit: "50" });
 
-  listCmd.action(async (options: StandardOptions & { select?: string }) => {
+  listCmd.action(async (options: StandardOptions & { select?: string; format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -234,44 +235,56 @@ export function createTagsCommand(): Command {
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const allTags = await ctx.engine.getTopSupertags(limit);
 
-      if (options.json) {
-        const projectedResults = applyProjectionToArray(allTags, projection);
-        console.log(formatJsonOutput(projectedResults));
-      } else if (outputOpts.pretty) {
+      // Build enriched data for all formats
+      const enriched = allTags.map((tag) => ({
+        tagName: tag.tagName,
+        tagId: tag.tagId,
+        count: tag.count,
+      }));
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(`\n🏷️  Supertags (${allTags.length}):\n`);
         allTags.forEach((tag, i) => {
           console.log(`${i + 1}. ${tag.tagName} (${tag.count} nodes)`);
           console.log(`   ID: ${tag.tagId}`);
           console.log();
         });
-      } else {
-        // Unix mode: TSV output with --select support
-        const defaultFields = ["tagName", "tagId", "count"];
+        return;
+      }
 
-        for (const tag of allTags) {
-          const data: Record<string, string | number> = {
-            tagName: tag.tagName,
-            tagId: tag.tagId,
-            count: tag.count,
-          };
-
-          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
-          const values = fieldsToOutput.map(field => {
-            const value = data[field];
-            return value !== undefined ? String(value) : "";
-          });
-
-          if (values.length === 1) {
-            console.log(values[0]);
-          } else {
-            console.log(tsv(...values));
-          }
+      // Apply field projection for JSON formats with --select
+      if (selectFields && selectFields.length > 0) {
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const projectedResults = applyProjectionToArray(allTags, projection);
+          console.log(formatJsonOutput(projectedResults));
+          return;
         }
       }
+
+      // Create formatter and output based on format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Use lowercase headers for backward-compatible JSON keys
+      const headers = ["tagName", "tagId", "count"];
+      const rows = enriched.map((item) => [
+        item.tagName,
+        item.tagId,
+        String(item.count),
+      ]);
+
+      formatter.table(headers, rows);
+      formatter.finalize();
     });
   });
 
@@ -283,7 +296,7 @@ export function createTagsCommand(): Command {
 
   addStandardOptions(topCmd, { defaultLimit: "20" });
 
-  topCmd.action(async (options: StandardOptions & { select?: string }) => {
+  topCmd.action(async (options: StandardOptions & { select?: string; format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -291,17 +304,23 @@ export function createTagsCommand(): Command {
 
     const limit = options.limit ? parseInt(String(options.limit)) : 20;
     const outputOpts = resolveOutputOptions(options);
+    const format = resolveOutputFormat(options);
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const topTags = await ctx.engine.getTopTagsByUsage(limit);
 
-      if (options.json) {
-        const projectedResults = applyProjectionToArray(topTags, projection);
-        console.log(formatJsonOutput(projectedResults));
-      } else if (outputOpts.pretty) {
-        // Pretty mode: emojis, table formatting
+      // Build enriched data for all formats
+      const enriched = topTags.map((tag, i) => ({
+        rank: i + 1,
+        tagName: tag.tagName,
+        tagId: tag.tagId,
+        count: tag.count,
+      }));
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(`\n${header(EMOJI.tags, `Top ${topTags.length} supertags by usage`)}\n`);
         const headers = outputOpts.verbose
           ? ['Rank', 'Tag', 'Count', 'ID']
@@ -322,32 +341,37 @@ export function createTagsCommand(): Command {
           : ['right', 'left', 'right'] as const;
         console.log(table(headers, rows, { align: [...align] }));
         console.log(tip("Use 'search --tag <name>' to find nodes with a tag"));
-      } else {
-        // Unix mode: TSV output with --select support
-        const defaultFields = outputOpts.verbose
-          ? ["tagId", "tagName", "count"]
-          : ["tagName", "count"];
+        return;
+      }
 
-        for (const tag of topTags) {
-          const data: Record<string, string | number> = {
-            tagName: tag.tagName,
-            tagId: tag.tagId,
-            count: tag.count,
-          };
-
-          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
-          const values = fieldsToOutput.map(field => {
-            const value = data[field];
-            return value !== undefined ? String(value) : "";
-          });
-
-          if (values.length === 1) {
-            console.log(values[0]);
-          } else {
-            console.log(tsv(...values));
-          }
+      // Apply field projection for JSON formats with --select
+      if (selectFields && selectFields.length > 0) {
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const projectedResults = applyProjectionToArray(topTags, projection);
+          console.log(formatJsonOutput(projectedResults));
+          return;
         }
       }
+
+      // Create formatter and output based on format
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Use lowercase headers for backward-compatible JSON keys
+      const headers = ["rank", "tagName", "tagId", "count"];
+      const rows = enriched.map((item) => [
+        String(item.rank),
+        item.tagName,
+        item.tagId,
+        String(item.count),
+      ]);
+
+      formatter.table(headers, rows);
+      formatter.finalize();
     });
   });
 
@@ -360,7 +384,7 @@ export function createTagsCommand(): Command {
 
   addStandardOptions(showCmd, { defaultLimit: "1" });
 
-  showCmd.action(async (tagname: string, options: TagsMetadataOptions & { select?: string }) => {
+  showCmd.action(async (tagname: string, options: TagsMetadataOptions & { select?: string; format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -425,12 +449,13 @@ export function createTagsCommand(): Command {
       const selectFields = parseSelectOption(options.select);
       const projection = parseSelectPaths(selectFields);
       const outputOpts = resolveOutputOptions(options);
+      const format = resolveOutputFormat(options);
 
-      if (options.json) {
-        const result = { id: tagId, name: displayName, color, fields };
-        const projected = applyProjection(result, projection);
-        console.log(formatJsonOutput(projected));
-      } else if (outputOpts.pretty) {
+      // Build result data for all formats
+      const result = { id: tagId, name: displayName, color, fields };
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(`\n🏷️  ${displayName}`);
         console.log(`   ID: ${tagId}`);
         console.log(`   Color: ${color || "(none)"}`);
@@ -454,34 +479,51 @@ export function createTagsCommand(): Command {
           console.log(`\n   No fields defined`);
         }
         console.log();
-      } else {
-        // Unix mode: YAML-like output with --select support
-        const fieldsToShow = selectFields && selectFields.length > 0
-          ? new Set(selectFields)
-          : null;
+        return;
+      }
 
-        console.log("---");
-        if (!fieldsToShow || fieldsToShow.has("id")) {
-          console.log(`id: ${tagId}`);
+      // Apply field projection for JSON formats with --select
+      if (selectFields && selectFields.length > 0) {
+        if (format === "json" || format === "minimal" || format === "jsonl") {
+          const projected = applyProjection(result, projection);
+          console.log(formatJsonOutput(projected));
+          return;
         }
-        if (!fieldsToShow || fieldsToShow.has("name")) {
-          console.log(`name: ${displayName}`);
-        }
-        if ((!fieldsToShow || fieldsToShow.has("color")) && color) {
-          console.log(`color: ${color}`);
-        }
-        if (!fieldsToShow || fieldsToShow.has("fields")) {
-          if (fields.length > 0) {
-            console.log(`fields: ${fields.length}`);
-            for (const field of fields) {
-              if (field.inherited && field.origin) {
-                console.log(`  - ${field.name} (from ${field.origin})`);
-              } else {
-                console.log(`  - ${field.name}`);
-              }
-            }
-          }
-        }
+      }
+
+      // JSON formats without --select
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        console.log(formatJsonOutput(result));
+        return;
+      }
+
+      // CSV format: flatten fields into rows
+      if (format === "csv") {
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        const headers = ["fieldName", "fieldId", "dataType", "inherited", "origin"];
+        const rows = fields.map((field) => [
+          field.name,
+          field.id,
+          field.dataType || "",
+          String(field.inherited),
+          field.origin || "",
+        ]);
+
+        formatter.table(headers, rows);
+        formatter.finalize();
+        return;
+      }
+
+      // IDs format: output tag ID
+      if (format === "ids") {
+        console.log(tagId);
+        return;
       }
     });
   });
@@ -494,7 +536,7 @@ export function createTagsCommand(): Command {
 
   addStandardOptions(inheritanceCmd, { defaultLimit: "1" });
 
-  inheritanceCmd.action(async (tagname: string, options: TagsMetadataOptions) => {
+  inheritanceCmd.action(async (tagname: string, options: TagsMetadataOptions & { format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -510,29 +552,67 @@ export function createTagsCommand(): Command {
       }
       const { tagId, displayName } = resolved;
 
-      if (options.json) {
-        const chain = service.getInheritanceChain(tagId);
-        console.log(formatJsonOutput(chain));
-      } else if (options.flat) {
-        // Flattened list of ancestors with depth
-        const ancestors = service.getAncestors(tagId);
+      const outputOpts = resolveOutputOptions(options);
+      const format = resolveOutputFormat(options);
+
+      // Get inheritance data
+      const chain = service.getInheritanceChain(tagId);
+      const ancestors = service.getAncestors(tagId);
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         console.log(`\n🏷️  ${displayName} inheritance:\n`);
-        if (ancestors.length === 0) {
-          console.log("   (no parent supertags)");
-        } else {
-          for (const ancestor of ancestors) {
-            // Use getTagName which falls back to nodes table for tagDefs without fields
-            const name = service.getTagName(ancestor.tagId) || ancestor.tagId;
-            console.log(`   ${"  ".repeat(ancestor.depth - 1)}↳ ${name} (depth: ${ancestor.depth})`);
+        if (options.flat) {
+          // Flattened list of ancestors with depth
+          if (ancestors.length === 0) {
+            console.log("   (no parent supertags)");
+          } else {
+            for (const ancestor of ancestors) {
+              // Use getTagName which falls back to nodes table for tagDefs without fields
+              const name = service.getTagName(ancestor.tagId) || ancestor.tagId;
+              console.log(`   ${"  ".repeat(ancestor.depth - 1)}↳ ${name} (depth: ${ancestor.depth})`);
+            }
           }
+        } else {
+          // Tree view
+          printInheritanceTree(chain, 0);
         }
         console.log();
-      } else {
-        // Tree view
-        const chain = service.getInheritanceChain(tagId);
-        console.log(`\n🏷️  ${displayName} inheritance:\n`);
-        printInheritanceTree(chain, 0);
-        console.log();
+        return;
+      }
+
+      // JSON formats: return chain structure
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        console.log(formatJsonOutput(chain));
+        return;
+      }
+
+      // CSV format: flatten ancestors into rows
+      if (format === "csv") {
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        const headers = ["tagId", "tagName", "depth"];
+        const rows = ancestors.map((ancestor) => {
+          const name = service.getTagName(ancestor.tagId) || ancestor.tagId;
+          return [ancestor.tagId, name, String(ancestor.depth)];
+        });
+
+        formatter.table(headers, rows);
+        formatter.finalize();
+        return;
+      }
+
+      // IDs format: output ancestor IDs
+      if (format === "ids") {
+        for (const ancestor of ancestors) {
+          console.log(ancestor.tagId);
+        }
+        return;
       }
     });
   });
@@ -547,7 +627,7 @@ export function createTagsCommand(): Command {
 
   addStandardOptions(fieldsCmd, { defaultLimit: "100" });
 
-  fieldsCmd.action(async (tagname: string, options: TagsMetadataOptions) => {
+  fieldsCmd.action(async (tagname: string, options: TagsMetadataOptions & { format?: OutputFormat; header?: boolean }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -562,6 +642,9 @@ export function createTagsCommand(): Command {
         process.exit(1);
       }
       const { tagId, displayName } = resolved;
+
+      const outputOpts = resolveOutputOptions(options);
+      const format = resolveOutputFormat(options);
 
       let fields: Array<{
         fieldName: string;
@@ -602,9 +685,11 @@ export function createTagsCommand(): Command {
         }));
       }
 
-      if (options.json) {
-        console.log(formatJsonOutput({ tagId, tagName: displayName, fields }));
-      } else {
+      // Build result data for all formats
+      const result = { tagId, tagName: displayName, fields };
+
+      // Table format: use rich pretty output
+      if (format === "table") {
         const modeLabel = options.all ? "all" : options.inherited ? "inherited" : "own";
         console.log(`\n🏷️  ${displayName} (${tagId}) fields (${modeLabel}):\n`);
         if (fields.length === 0) {
@@ -624,6 +709,44 @@ export function createTagsCommand(): Command {
           }
         }
         console.log();
+        return;
+      }
+
+      // JSON formats: return full result
+      if (format === "json" || format === "minimal" || format === "jsonl") {
+        console.log(formatJsonOutput(result));
+        return;
+      }
+
+      // CSV format: flatten fields into rows
+      if (format === "csv") {
+        const formatter = createFormatter({
+          format,
+          noHeader: options.header === false,
+          humanDates: outputOpts.humanDates,
+          verbose: outputOpts.verbose,
+        });
+
+        const headers = ["fieldName", "fieldLabelId", "dataType", "depth", "originTagName"];
+        const rows = fields.map((field) => [
+          field.fieldName,
+          field.fieldLabelId,
+          field.inferredDataType || "",
+          String(field.depth),
+          field.originTagName,
+        ]);
+
+        formatter.table(headers, rows);
+        formatter.finalize();
+        return;
+      }
+
+      // IDs format: output field label IDs
+      if (format === "ids") {
+        for (const field of fields) {
+          console.log(field.fieldLabelId);
+        }
+        return;
       }
     });
   });
@@ -648,7 +771,8 @@ export function createTagsCommand(): Command {
     .option("--layout <layout>", "3D layout: force, hierarchical (3D format only)", "force")
     .option("--size-by-usage", "Scale node size by usage count (3D format only)");
 
-  addStandardOptions(visualizeCmd, { defaultLimit: "1000" });
+  // Note: includeFormat: false because visualize has its own --format for output format
+  addStandardOptions(visualizeCmd, { defaultLimit: "1000", includeFormat: false });
 
   visualizeCmd.action(async (options: VisualizeOptions) => {
     const dbPath = resolveDbPath(options);
