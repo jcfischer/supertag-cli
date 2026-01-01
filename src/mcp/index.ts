@@ -30,6 +30,8 @@ import { fieldValues } from './tools/field-values.js';
 import { supertagInfo } from './tools/supertag-info.js';
 import { transcriptList, transcriptShow, transcriptSearch } from './tools/transcript.js';
 import { cacheClear } from './tools/cache.js';
+import { capabilities } from './tools/capabilities.js';
+import { toolSchema } from './tools/tool-schema.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -172,6 +174,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Clear the workspace resolver cache. Use when workspace configuration might have changed (e.g., after adding/removing workspaces or after sync).',
         inputSchema: schemas.zodToJsonSchema(schemas.cacheClearSchema),
       },
+      {
+        name: 'tana_capabilities',
+        description:
+          'List available Tana tools with categories and examples. Use this first to discover available operations, then use tana_tool_schema to get full schema for specific tools. Supports filtering by category: query, explore, transcript, mutate, system.',
+        inputSchema: schemas.zodToJsonSchema(schemas.capabilitiesSchema),
+      },
+      {
+        name: 'tana_tool_schema',
+        description:
+          'Get the full JSON schema for a specific Tana tool. Use after tana_capabilities to load detailed parameter information for tools you need.',
+        inputSchema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
+      },
     ],
   };
 });
@@ -253,6 +267,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_cache_clear': {
         const validated = schemas.cacheClearSchema.parse(args);
         result = await cacheClear(validated);
+        break;
+      }
+      case 'tana_capabilities': {
+        const validated = schemas.capabilitiesSchema.parse(args);
+        result = await capabilities(validated);
+        break;
+      }
+      case 'tana_tool_schema': {
+        const validated = schemas.toolSchemaSchema.parse(args);
+        result = await toolSchema(validated);
         break;
       }
       default:
