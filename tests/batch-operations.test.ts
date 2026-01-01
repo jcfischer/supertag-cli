@@ -208,3 +208,109 @@ describe('batchGetNodes', () => {
     expect(results.every((r) => r.node !== null)).toBe(true);
   });
 });
+
+// =============================================================================
+// T-1.3: Batch get validation tests
+// =============================================================================
+
+describe('batchGetNodes validation', () => {
+  let testDir: string;
+  let dbPath: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `batch-ops-validation-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+    dbPath = join(testDir, 'test.db');
+
+    const db = new Database(dbPath);
+    db.run(`CREATE TABLE nodes (id TEXT PRIMARY KEY, name TEXT, created INTEGER, raw_data TEXT)`);
+    db.run(`CREATE TABLE tag_applications (tag_node_id TEXT, data_node_id TEXT, tag_name TEXT)`);
+    db.close();
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should throw VALIDATION_ERROR when more than 100 node IDs provided', async () => {
+    const { batchGetNodes, BATCH_GET_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    // Create 101 node IDs
+    const tooManyIds = Array.from({ length: BATCH_GET_MAX_NODES + 1 }, (_, i) => `node${i}`);
+
+    expect(() => batchGetNodes(dbPath, tooManyIds)).toThrow();
+
+    try {
+      batchGetNodes(dbPath, tooManyIds);
+    } catch (error: unknown) {
+      expect((error as Error).message).toContain('100');
+    }
+  });
+
+  it('should throw VALIDATION_ERROR for invalid node ID format', async () => {
+    const { batchGetNodes } = await import('../src/services/batch-operations');
+
+    // IDs with invalid characters
+    const invalidIds = ['node1', 'node with space', 'node3'];
+
+    expect(() => batchGetNodes(dbPath, invalidIds)).toThrow();
+  });
+
+  it('should throw VALIDATION_ERROR for empty string node ID', async () => {
+    const { batchGetNodes } = await import('../src/services/batch-operations');
+
+    const idsWithEmpty = ['node1', '', 'node3'];
+
+    expect(() => batchGetNodes(dbPath, idsWithEmpty)).toThrow();
+  });
+
+  it('should accept exactly 100 node IDs (boundary test)', async () => {
+    const { batchGetNodes, BATCH_GET_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    // Exactly 100 IDs should work
+    const maxIds = Array.from({ length: BATCH_GET_MAX_NODES }, (_, i) => `node${i}`);
+
+    // Should not throw
+    expect(() => batchGetNodes(dbPath, maxIds)).not.toThrow();
+  });
+
+  it('should validate depth option is between 0-3', async () => {
+    const { batchGetNodes } = await import('../src/services/batch-operations');
+
+    // Depth 4 should throw
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: 4 })).toThrow();
+
+    // Depth -1 should throw
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: -1 })).toThrow();
+  });
+
+  it('should accept depth values 0, 1, 2, 3', async () => {
+    const { batchGetNodes } = await import('../src/services/batch-operations');
+
+    // All valid depths should not throw
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: 0 })).not.toThrow();
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: 1 })).not.toThrow();
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: 2 })).not.toThrow();
+    expect(() => batchGetNodes(dbPath, ['node1'], { depth: 3 })).not.toThrow();
+  });
+
+  it('should include suggestion in validation error', async () => {
+    const { batchGetNodes, BATCH_GET_MAX_NODES } = await import(
+      '../src/services/batch-operations'
+    );
+
+    const tooManyIds = Array.from({ length: BATCH_GET_MAX_NODES + 1 }, (_, i) => `node${i}`);
+
+    try {
+      batchGetNodes(dbPath, tooManyIds);
+      expect(true).toBe(false); // Should have thrown
+    } catch (error: unknown) {
+      // Check that error has suggestion property (StructuredError)
+      expect((error as { suggestion?: string }).suggestion).toBeDefined();
+    }
+  });
+});

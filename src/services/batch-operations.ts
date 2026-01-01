@@ -11,6 +11,7 @@ import { Database } from 'bun:sqlite';
 import type { NodeContents } from '../mcp/tools/node.js';
 import type { CreateNodeInput, TanaApiNode } from '../types.js';
 import { withDbRetrySync } from '../db/retry.js';
+import { StructuredError } from '../utils/structured-errors.js';
 
 // =============================================================================
 // Constants
@@ -116,6 +117,74 @@ interface TagData {
 }
 
 // =============================================================================
+// Validation Functions
+// =============================================================================
+
+/** Valid node ID pattern: alphanumeric, underscores, hyphens */
+const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/** Maximum allowed depth for child traversal */
+const MAX_DEPTH = 3;
+
+/**
+ * Validate batch get inputs
+ * @throws StructuredError if validation fails
+ */
+function validateBatchGetInputs(
+  nodeIds: string[],
+  options?: { depth?: number; select?: string[] }
+): void {
+  // Validate array size
+  if (nodeIds.length > BATCH_GET_MAX_NODES) {
+    throw new StructuredError('VALIDATION_ERROR', `Too many node IDs: ${nodeIds.length} exceeds maximum of ${BATCH_GET_MAX_NODES}`, {
+      details: {
+        provided: nodeIds.length,
+        maximum: BATCH_GET_MAX_NODES,
+      },
+      suggestion: `Split your request into multiple batches of ${BATCH_GET_MAX_NODES} or fewer node IDs`,
+      recovery: {
+        canRetry: true,
+        alternatives: [`Reduce to ${BATCH_GET_MAX_NODES} IDs or fewer`],
+      },
+    });
+  }
+
+  // Validate each node ID
+  for (let i = 0; i < nodeIds.length; i++) {
+    const id = nodeIds[i];
+
+    // Check for empty strings
+    if (!id || id.length === 0) {
+      throw new StructuredError('VALIDATION_ERROR', `Empty node ID at index ${i}`, {
+        details: { index: i },
+        suggestion: 'Remove empty strings from your node IDs array',
+        recovery: { canRetry: true },
+      });
+    }
+
+    // Check for invalid characters
+    if (!NODE_ID_PATTERN.test(id)) {
+      throw new StructuredError('VALIDATION_ERROR', `Invalid node ID format at index ${i}: "${id}"`, {
+        details: { index: i, invalidId: id },
+        suggestion: 'Node IDs should contain only alphanumeric characters, underscores, and hyphens',
+        recovery: { canRetry: true },
+      });
+    }
+  }
+
+  // Validate depth option
+  if (options?.depth !== undefined) {
+    if (options.depth < 0 || options.depth > MAX_DEPTH) {
+      throw new StructuredError('VALIDATION_ERROR', `Invalid depth: ${options.depth}. Must be between 0 and ${MAX_DEPTH}`, {
+        details: { provided: options.depth, minimum: 0, maximum: MAX_DEPTH },
+        suggestion: `Use a depth value between 0 and ${MAX_DEPTH}`,
+        recovery: { canRetry: true },
+      });
+    }
+  }
+}
+
+// =============================================================================
 // Service Functions
 // =============================================================================
 
@@ -141,6 +210,9 @@ export function batchGetNodes(
   if (nodeIds.length === 0) {
     return [];
   }
+
+  // Validate inputs
+  validateBatchGetInputs(nodeIds, options);
 
   const db = new Database(dbPath, { readonly: true });
 
