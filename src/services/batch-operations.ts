@@ -71,10 +71,26 @@ export interface BatchCreateRequest {
 }
 
 /**
- * Result of batch create operation
+ * Result for a single node in batch create
  */
 export interface BatchCreateResult {
-  /** Overall success status */
+  /** Index in the input array (0-based) */
+  index: number;
+  /** Whether this node was created/validated successfully */
+  success?: boolean;
+  /** Created node ID (only present if actually created) */
+  nodeId?: string;
+  /** Validated payload (always present for valid nodes) */
+  payload?: TanaApiNode;
+  /** Error message if this node failed */
+  error?: string;
+}
+
+/**
+ * Summary result of batch create operation
+ */
+export interface BatchCreateSummary {
+  /** Overall success status (all nodes succeeded) */
   success: boolean;
   /** Number of successfully created nodes */
   created: number;
@@ -281,24 +297,132 @@ export function batchGetNodes(
 }
 
 /**
+ * Validate a single node's supertag using UnifiedSchemaService
+ * Returns error message if invalid, undefined if valid
+ */
+async function validateSupertagExists(
+  dbPath: string,
+  supertag: string
+): Promise<string | undefined> {
+  const { existsSync } = await import('fs');
+  const { withDatabase } = await import('../db/with-database');
+  const { UnifiedSchemaService } = await import('./unified-schema-service');
+
+  if (!existsSync(dbPath)) {
+    return `Database not found: ${dbPath}`;
+  }
+
+  return withDatabase({ dbPath, readonly: true }, (ctx) => {
+    const schemaService = new UnifiedSchemaService(ctx.db);
+    const schema = schemaService.getSupertag(supertag);
+    if (!schema) {
+      // Get similar supertags for suggestion
+      const similar = schemaService.searchSupertags(supertag);
+      const suggestion = similar.length > 0
+        ? `. Did you mean: ${similar.slice(0, 3).map((s) => s.name).join(', ')}?`
+        : '';
+      return `Unknown supertag: ${supertag}${suggestion}`;
+    }
+    return undefined;
+  });
+}
+
+/**
  * Create multiple nodes via Tana API
+ *
+ * Processing:
+ * 1. Validate all supertags exist
+ * 2. Build payloads for valid nodes
+ * 3. If dry-run, return validation results
+ * 4. Otherwise, post to API in chunks
  *
  * @param nodes - Array of node definitions to create (max 50)
  * @param options - Target, dryRun, workspace options
- * @returns Creation result with node IDs or errors
+ * @returns Array of results for each node in input order
  */
 export async function batchCreateNodes(
   nodes: CreateNodeInput[],
-  options?: { target?: string; dryRun?: boolean; workspace?: string }
-): Promise<BatchCreateResult> {
-  // Skeleton implementation - to be completed in T-3.1
-  return {
-    success: false,
-    created: 0,
-    nodeIds: nodes.map(() => null),
-    payloads: [],
-    target: options?.target || 'INBOX',
-    dryRun: options?.dryRun || false,
-    errors: [{ index: -1, message: 'Not implemented yet' }],
-  };
+  options?: { target?: string; dryRun?: boolean; workspace?: string; _dbPathOverride?: string }
+): Promise<BatchCreateResult[]> {
+  // Handle empty input
+  if (nodes.length === 0) {
+    return [];
+  }
+
+  // Lazy imports
+  const { existsSync } = await import('fs');
+  const { ConfigManager } = await import('../config/manager');
+  const { resolveWorkspace } = await import('../config/paths');
+
+  // Get configuration
+  const configManager = ConfigManager.getInstance();
+  const config = configManager.getConfig();
+
+  // Determine database path
+  let dbPath: string | undefined = options?._dbPathOverride;
+  if (!dbPath) {
+    try {
+      const workspace = resolveWorkspace(options?.workspace, config);
+      dbPath = workspace.dbPath;
+    } catch {
+      // Workspace resolution failed
+    }
+  }
+
+  const results: BatchCreateResult[] = [];
+
+  // Process each node
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const result: BatchCreateResult = { index: i };
+
+    // Validate supertag exists
+    if (dbPath && existsSync(dbPath)) {
+      const error = await validateSupertagExists(dbPath, node.supertag);
+      if (error) {
+        result.error = error;
+        results.push(result);
+        continue;
+      }
+    }
+
+    // Build payload
+    try {
+      const { buildNodePayloadFromDatabase } = await import('./node-builder');
+
+      if (dbPath && existsSync(dbPath)) {
+        const payload = await buildNodePayloadFromDatabase(dbPath, node);
+        result.success = true;
+        result.payload = payload;
+      } else {
+        // Fallback: use schema registry
+        const { getSchemaRegistry } = await import('../commands/schema');
+        const { buildNodePayload } = await import('./node-builder');
+        const registry = getSchemaRegistry();
+        const payload = buildNodePayload(registry, node);
+        result.success = true;
+        result.payload = payload;
+      }
+    } catch (error) {
+      result.error = (error as Error).message;
+    }
+
+    results.push(result);
+  }
+
+  // If dry-run, we're done after validation
+  if (options?.dryRun) {
+    return results;
+  }
+
+  // TODO: Implement actual API posting in chunks (T-3.2+)
+  // For now, mark all nodes as not-yet-created
+  for (const result of results) {
+    if (result.success && !result.nodeId) {
+      result.success = false;
+      result.error = 'API posting not implemented yet';
+    }
+  }
+
+  return results;
 }

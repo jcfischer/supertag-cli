@@ -314,3 +314,78 @@ describe('batchGetNodes validation', () => {
     }
   });
 });
+
+// =============================================================================
+// T-3.1: batchCreateNodes implementation tests
+// =============================================================================
+
+describe('batchCreateNodes', () => {
+  it('should accept array of node create requests', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+    expect(typeof batchCreateNodes).toBe('function');
+  });
+
+  it('should return array of BatchCreateResult', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    // Dry run mode - no actual API calls
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: 'Task 1' },
+      { supertag: 'todo', name: 'Task 2' },
+    ], { dryRun: true });
+
+    expect(Array.isArray(results)).toBe(true);
+    expect(results).toHaveLength(2);
+    expect(results[0].index).toBe(0);
+    expect(results[1].index).toBe(1);
+  });
+
+  it('should include payload in dry run results', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: 'Task 1' },
+    ], { dryRun: true });
+
+    expect(results[0].payload).toBeDefined();
+    expect(results[0].payload?.name).toBe('Task 1');
+  });
+
+  it('should preserve input order in results', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: 'First' },
+      { supertag: 'todo', name: 'Second' },
+      { supertag: 'todo', name: 'Third' },
+    ], { dryRun: true });
+
+    expect(results[0].payload?.name).toBe('First');
+    expect(results[1].payload?.name).toBe('Second');
+    expect(results[2].payload?.name).toBe('Third');
+  });
+
+  it('should handle empty input array', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    const results = await batchCreateNodes([], { dryRun: true });
+
+    expect(results).toHaveLength(0);
+  });
+
+  it('should report errors for individual nodes', async () => {
+    const { batchCreateNodes } = await import('../src/services/batch-operations');
+
+    // Use an invalid supertag that doesn't exist
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: 'Valid Task' },
+      { supertag: 'nonexistent_tag_12345', name: 'Invalid' },
+    ], { dryRun: true });
+
+    // First should succeed, second should fail
+    expect(results).toHaveLength(2);
+    expect(results[0].success || results[0].error).toBeDefined();
+    expect(results[1].error).toBeDefined();
+    expect(results[1].error).toContain('Unknown supertag');
+  });
+});
