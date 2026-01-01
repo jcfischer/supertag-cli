@@ -89,6 +89,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Get all Status field values',
   },
+  {
+    name: 'tana_batch_get',
+    description: 'Fetch multiple nodes by ID',
+    category: 'query',
+    example: 'Get 5 nodes in a single request',
+  },
 
   // Explore tools
   {
@@ -180,6 +186,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_tagged: schemas.zodToJsonSchema(schemas.taggedSchema),
   tana_semantic_search: schemas.zodToJsonSchema(schemas.semanticSearchSchema),
   tana_field_values: schemas.zodToJsonSchema(schemas.fieldValuesSchema),
+  tana_batch_get: schemas.zodToJsonSchema(schemas.batchGetSchema),
   tana_supertags: schemas.zodToJsonSchema(schemas.supertagsSchema),
   tana_stats: schemas.zodToJsonSchema(schemas.statsSchema),
   tana_supertag_info: schemas.zodToJsonSchema(schemas.supertagInfoSchema),

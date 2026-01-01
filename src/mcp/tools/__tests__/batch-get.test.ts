@@ -137,3 +137,40 @@ describe('batchGet MCP tool', () => {
     expect(results[1].node?.tags).toContain('todo');
   });
 });
+
+// T-2.3: Tool registry tests
+describe('tana_batch_get tool registry', () => {
+  it('should be registered in TOOL_METADATA', async () => {
+    const { TOOL_METADATA } = await import('../../tool-registry');
+
+    const batchGetTool = TOOL_METADATA.find((t) => t.name === 'tana_batch_get');
+
+    expect(batchGetTool).toBeDefined();
+    expect(batchGetTool?.category).toBe('query');
+    expect(batchGetTool?.description).toContain('multiple nodes');
+  });
+
+  it('should have schema in TOOL_SCHEMAS via getToolSchema', async () => {
+    const { getToolSchema } = await import('../../tool-registry');
+
+    const schema = getToolSchema('tana_batch_get');
+
+    expect(schema).not.toBeNull();
+    expect(schema?.properties).toBeDefined();
+    expect((schema?.properties as Record<string, unknown>)?.nodeIds).toBeDefined();
+  });
+
+  it('should appear in capabilities response', async () => {
+    const { getCapabilities } = await import('../../tool-registry');
+
+    const capabilities = getCapabilities();
+
+    // Find the query category
+    const queryCategory = capabilities.categories.find((c) => c.name === 'query');
+    expect(queryCategory).toBeDefined();
+
+    // Check that tana_batch_get is in query tools
+    const batchGetTool = queryCategory?.tools.find((t) => t.name === 'tana_batch_get');
+    expect(batchGetTool).toBeDefined();
+  });
+});
