@@ -22,6 +22,15 @@ export const limitSchema = z
   .default(20)
   .describe('Maximum number of results to return');
 
+/**
+ * Select schema for field projection
+ * Spec: 059-universal-select-parameter
+ */
+export const selectSchema = z
+  .array(z.string())
+  .optional()
+  .describe('Fields to select in response (e.g., ["id", "name", "fields.Status"]). Omit to return all fields.');
+
 // Date range schemas
 export const dateRangeSchema = {
   createdAfter: z
@@ -47,6 +56,7 @@ export const searchSchema = z.object({
   query: z.string().min(1).describe('Full-text search query'),
   workspace: workspaceSchema,
   limit: limitSchema,
+  select: selectSchema,
   raw: z
     .boolean()
     .default(false)
@@ -64,6 +74,7 @@ export const taggedSchema = z.object({
   tagname: z.string().min(1).describe('Supertag name to filter by (e.g., "todo", "meeting", "contact")'),
   workspace: workspaceSchema,
   limit: limitSchema,
+  select: selectSchema,
   orderBy: z
     .enum(['created', 'updated'])
     .default('created')
@@ -99,6 +110,7 @@ export const nodeSchema = z.object({
     .max(10)
     .default(0)
     .describe('Depth of child traversal (0 = no children, 1 = direct children, etc.)'),
+  select: selectSchema,
 });
 export type NodeInput = z.infer<typeof nodeSchema>;
 
@@ -178,6 +190,7 @@ export const fieldValuesSchema = z.object({
     .describe('Search query for FTS (required for "search" mode)'),
   workspace: workspaceSchema,
   limit: limitSchema,
+  select: selectSchema,
   offset: z
     .number()
     .min(0)
@@ -213,6 +226,7 @@ export const semanticSearchSchema = z.object({
   query: z.string().min(1).describe('Natural language search query for semantic similarity matching'),
   workspace: workspaceSchema,
   limit: limitSchema,
+  select: selectSchema,
   minSimilarity: z
     .number()
     .min(0)

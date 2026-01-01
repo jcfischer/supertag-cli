@@ -27,7 +27,12 @@ import {
   addStandardOptions,
   formatJsonOutput,
   parseDateRangeOptions,
+  parseSelectOption,
 } from "./helpers";
+import {
+  parseSelectPaths,
+  applyProjectionToArray,
+} from "../utils/select-projection";
 import { buildPagination, buildOrderBy } from "../db/query-builder";
 import {
   tsv,
@@ -56,6 +61,7 @@ interface SearchOptions extends StandardOptions {
   createdBefore?: string;
   updatedAfter?: string;
   updatedBefore?: string;
+  select?: string;
 }
 
 /**
@@ -76,7 +82,8 @@ export function createSearchCommand(): Command {
     .option("--created-after <date>", "Filter nodes created after date (YYYY-MM-DD)")
     .option("--created-before <date>", "Filter nodes created before date (YYYY-MM-DD)")
     .option("--updated-after <date>", "Filter nodes updated after date (YYYY-MM-DD)")
-    .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)");
+    .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)")
+    .option("--select <fields>", "Select specific fields in JSON output (comma-separated, e.g., id,name,fields.Status)");
 
   // Add standard options with show and depth
   addStandardOptions(search, {
@@ -205,7 +212,13 @@ async function handleFtsSearch(
 
         return item;
       });
-      console.log(formatJsonOutput(enriched));
+
+      // Apply field projection if --select is specified
+      const selectFields = parseSelectOption(options.select);
+      const projection = parseSelectPaths(selectFields);
+      const projectedResults = applyProjectionToArray(enriched, projection);
+
+      console.log(formatJsonOutput(projectedResults));
     } else if (options.show) {
       // Rich output with full node contents
       console.log(`\n🔍 Search results for "${query}" (${results.length}):\n`);
@@ -393,7 +406,13 @@ async function handleSemanticSearch(
 
           return result;
         });
-        console.log(formatJsonOutput(enriched));
+
+        // Apply field projection if --select is specified
+        const selectFields = parseSelectOption(options.select);
+        const projection = parseSelectPaths(selectFields);
+        const projectedResults = applyProjectionToArray(enriched, projection);
+
+        console.log(formatJsonOutput(projectedResults));
       } else if (options.show) {
         console.log(`Results (${results.length}):`);
         console.log("");
@@ -639,6 +658,10 @@ async function handleTaggedSearch(
     }
 
     if (options.json) {
+      // Apply field projection if --select is specified
+      const selectFields = parseSelectOption(options.select);
+      const projection = parseSelectPaths(selectFields);
+
       if (options.show) {
         // Full content for each node
         const enriched = results.map((node) => {
@@ -648,9 +671,11 @@ async function handleTaggedSearch(
             return getNodeContents(engine.rawDb, node.id);
           }
         }).filter(Boolean);
-        console.log(formatJsonOutput(enriched));
+        const projectedResults = applyProjectionToArray(enriched as Record<string, unknown>[], projection);
+        console.log(formatJsonOutput(projectedResults));
       } else {
-        console.log(formatJsonOutput(results));
+        const projectedResults = applyProjectionToArray(results as unknown as Record<string, unknown>[], projection);
+        console.log(formatJsonOutput(projectedResults));
       }
     } else if (options.show) {
       console.log(`\n🏷️  Nodes tagged with #${tagname} (${results.length}):\n`);

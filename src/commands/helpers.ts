@@ -202,3 +202,25 @@ export function parseDateRangeOptions(options: {
 
   return result;
 }
+
+/**
+ * Parse --select CLI option into string array for projection
+ * Spec: 059-universal-select-parameter
+ *
+ * @param select - Comma-separated field names from CLI
+ * @returns Array of field names, or undefined if not specified
+ *
+ * @example
+ * parseSelectOption("id,name,fields.Status")
+ * // => ["id", "name", "fields.Status"]
+ */
+export function parseSelectOption(select: string | undefined): string[] | undefined {
+  if (!select) {
+    return undefined;
+  }
+
+  return select
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}

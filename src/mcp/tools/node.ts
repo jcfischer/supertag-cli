@@ -10,6 +10,10 @@ import { resolveWorkspaceContext } from '../../config/workspace-resolver.js';
 import type { NodeInput } from '../schemas.js';
 import { withDbRetrySync } from '../../db/retry.js';
 import { withDatabase } from '../../db/with-database.js';
+import {
+  parseSelectPaths,
+  applyProjection,
+} from '../../utils/select-projection.js';
 
 interface NodeData {
   id: string;
@@ -269,11 +273,19 @@ export async function showNode(input: NodeInput): Promise<NodeContents | null> {
   const workspace = resolveWorkspaceContext({ workspace: input.workspace });
   const depth = input.depth || 0;
 
-  return withDatabase({ dbPath: workspace.dbPath, readonly: true }, (ctx) => {
+  const result = withDatabase({ dbPath: workspace.dbPath, readonly: true }, (ctx) => {
     if (depth > 0) {
       return getNodeContentsWithDepth(ctx.db, input.nodeId, 0, depth);
     } else {
       return getNodeContentsBasic(ctx.db, input.nodeId);
     }
   });
+
+  if (!result) {
+    return null;
+  }
+
+  // Apply field projection if select is specified
+  const projection = parseSelectPaths(input.select);
+  return applyProjection(result, projection) as NodeContents;
 }

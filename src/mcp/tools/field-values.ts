@@ -14,6 +14,10 @@ import {
   type FieldValueResult,
   type FieldNameCount,
 } from "../../db/field-query.js";
+import {
+  parseSelectPaths,
+  applyProjectionToArray,
+} from "../../utils/select-projection.js";
 
 export interface FieldValuesInput {
   mode: "list" | "query" | "search";
@@ -21,6 +25,7 @@ export interface FieldValuesInput {
   query?: string;
   workspace?: string;
   limit?: number;
+  select?: string[];
   offset?: number;
   createdAfter?: string;
   createdBefore?: string;
@@ -87,11 +92,19 @@ export async function fieldValues(input: FieldValuesInput): Promise<FieldValuesR
         }
 
         const results = queryFieldValuesByFieldName(ctx.db, input.fieldName, options);
+
+        // Apply field projection if select is specified
+        const projection = parseSelectPaths(input.select);
+        const projectedResults = applyProjectionToArray(
+          results,
+          projection
+        ) as FieldValueResult[];
+
         return {
           workspace: workspace.alias,
           mode: "query",
-          results,
-          count: results.length,
+          results: projectedResults,
+          count: projectedResults.length,
         };
       }
 
@@ -106,11 +119,18 @@ export async function fieldValues(input: FieldValuesInput): Promise<FieldValuesR
           limit: input.limit ?? 50,
         });
 
+        // Apply field projection if select is specified
+        const projection = parseSelectPaths(input.select);
+        const projectedResults = applyProjectionToArray(
+          results,
+          projection
+        ) as FieldValueResult[];
+
         return {
           workspace: workspace.alias,
           mode: "search",
-          results,
-          count: results.length,
+          results: projectedResults,
+          count: projectedResults.length,
         };
       }
 

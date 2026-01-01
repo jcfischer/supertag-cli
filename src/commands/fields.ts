@@ -17,7 +17,12 @@ import {
   resolveDbPath,
   checkDb,
   formatJsonOutput,
+  parseSelectOption,
 } from "./helpers";
+import {
+  parseSelectPaths,
+  applyProjectionToArray,
+} from "../utils/select-projection";
 import type { StandardOptions } from "../types";
 import {
   getAvailableFieldNames,
@@ -94,7 +99,8 @@ export function createFieldsCommand(): Command {
     .description("Get values for a specific field")
     .option("--after <date>", "Filter values created after date (YYYY-MM-DD)")
     .option("--before <date>", "Filter values created before date (YYYY-MM-DD)")
-    .option("--offset <n>", "Skip first N results (pagination)", "0");
+    .option("--offset <n>", "Skip first N results (pagination)", "0")
+    .option("--select <fields>", "Select specific fields in JSON output (comma-separated)");
 
   addStandardOptions(valuesCmd, { defaultLimit: "100" });
 
@@ -105,6 +111,7 @@ export function createFieldsCommand(): Command {
         after?: string;
         before?: string;
         offset?: string;
+        select?: string;
       }
     ) => {
       const dbPath = resolveDbPath(options);
@@ -147,7 +154,11 @@ export function createFieldsCommand(): Command {
         const values = queryFieldValuesByFieldName(ctx.db, name, queryOptions);
 
         if (options.json) {
-          console.log(formatJsonOutput(values));
+          // Apply field projection if --select is specified
+          const selectFields = parseSelectOption(options.select);
+          const projection = parseSelectPaths(selectFields);
+          const projectedResults = applyProjectionToArray(values as unknown as Record<string, unknown>[], projection);
+          console.log(formatJsonOutput(projectedResults));
         } else if (outputOpts.pretty) {
           console.log(
             `\n${header(EMOJI.node, `Field: ${name} (${values.length} values)`)}\n`

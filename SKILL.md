@@ -28,6 +28,7 @@ Full-text search across Tana workspace using FTS5 indexing.
 | `updatedAfter` | string | No | Filter by update date |
 | `updatedBefore` | string | No | Filter by update date |
 | `workspace` | string | No | Workspace alias (default: main) |
+| `select` | array | No | Fields to include in response (e.g., ["id", "name", "tags"]) |
 
 **Example:**
 ```
@@ -48,6 +49,7 @@ Vector similarity search using embeddings. Finds conceptually related content wi
 | `includeAncestor` | boolean | No | Include ancestor context (default: true) |
 | `depth` | number | No | Child traversal depth (0-3) |
 | `workspace` | string | No | Workspace alias |
+| `select` | array | No | Fields to include in response (e.g., ["nodeId", "name", "similarity"]) |
 
 **Example:**
 ```
@@ -68,6 +70,7 @@ Find all nodes with a specific supertag applied.
 | `createdAfter` | string | No | Filter by creation date |
 | `createdBefore` | string | No | Filter by creation date |
 | `workspace` | string | No | Workspace alias |
+| `select` | array | No | Fields to include in response (e.g., ["id", "name", "created"]) |
 
 **Example:**
 ```
@@ -85,6 +88,7 @@ Get full contents of a specific node by ID.
 | `nodeId` | string | Yes | Tana node ID |
 | `depth` | number | No | Child traversal (0 = none, 1+ = children) |
 | `workspace` | string | No | Workspace alias |
+| `select` | array | No | Fields to include in response (e.g., ["id", "name", "fields"]) |
 
 **Example:**
 ```
@@ -183,6 +187,7 @@ Query field values extracted from Tana nodes. Fields like "Gestern war gut weil"
 | `createdAfter` | string | No | Filter by creation date (YYYY-MM-DD) |
 | `createdBefore` | string | No | Filter by creation date |
 | `workspace` | string | No | Workspace alias |
+| `select` | array | No | Fields to include in response (e.g., ["fieldName", "count"]) |
 
 **Mode: list** - Discover available fields:
 ```
@@ -399,6 +404,10 @@ supertag search "meeting" --pretty
 
 # JSON output
 supertag search "meeting" --json
+
+# JSON with field selection (reduces output)
+supertag search "meeting" --json --select id,name,tags
+supertag nodes show <id> --json --select id,name,fields
 
 # Verbose with timing
 supertag search "meeting" --verbose

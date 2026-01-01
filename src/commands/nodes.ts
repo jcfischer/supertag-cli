@@ -21,7 +21,12 @@ import {
   addStandardOptions,
   formatJsonOutput,
   parseDateRangeOptions,
+  parseSelectOption,
 } from "./helpers";
+import {
+  parseSelectPaths,
+  applyProjection,
+} from "../utils/select-projection";
 import {
   getNodeContents,
   getNodeContentsWithDepth,
@@ -39,6 +44,7 @@ import type { StandardOptions } from "../types";
 
 interface NodeShowOptions extends StandardOptions {
   // depth is included via addStandardOptions
+  select?: string;
 }
 
 interface NodeRefsOptions extends StandardOptions {
@@ -69,6 +75,8 @@ export function createNodesCommand(): Command {
     defaultLimit: "1",
   });
 
+  showCmd.option("--select <fields>", "Select specific fields in JSON output (comma-separated, e.g., id,name,fields)");
+
   showCmd.action(async (nodeId: string, options: NodeShowOptions) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
@@ -78,6 +86,10 @@ export function createNodesCommand(): Command {
     const depth = options.depth ? parseInt(String(options.depth)) : 0;
     const outputOpts = resolveOutputOptions(options);
 
+    // Parse select option for field projection
+    const selectFields = parseSelectOption(options.select);
+    const projection = parseSelectPaths(selectFields);
+
     await withDatabase({ dbPath, readonly: true }, (ctx) => {
       if (depth > 0) {
         if (options.json) {
@@ -86,7 +98,8 @@ export function createNodesCommand(): Command {
             console.error(`❌ Node not found: ${nodeId}`);
             process.exit(1);
           }
-          console.log(formatJsonOutput(contents));
+          const projected = applyProjection(contents as Record<string, unknown>, projection);
+          console.log(formatJsonOutput(projected));
         } else {
           const output = formatNodeWithDepth(ctx.db, nodeId, 0, depth);
           if (!output) {
@@ -103,7 +116,8 @@ export function createNodesCommand(): Command {
         }
 
         if (options.json) {
-          console.log(formatJsonOutput(contents));
+          const projected = applyProjection(contents as Record<string, unknown>, projection);
+          console.log(formatJsonOutput(projected));
         } else if (outputOpts.pretty) {
           console.log(formatNodeOutput(contents));
         } else {

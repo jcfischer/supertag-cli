@@ -150,6 +150,34 @@ Use full path with double backslashes:
 
 ---
 
+## Output Field Selection
+
+Most query tools support a `select` parameter to return only specific fields, reducing token usage when you don't need the full response.
+
+**Supported tools:** `tana_search`, `tana_semantic_search`, `tana_tagged`, `tana_node`, `tana_field_values`
+
+**Examples:**
+
+```json
+// Only get id and name fields
+{"query": "meeting", "select": ["id", "name"]}
+
+// Get id, name, and tags
+{"query": "project", "select": ["id", "name", "tags"]}
+
+// Access nested fields with dot notation
+{"nodeId": "abc123", "select": ["id", "name", "fields"]}
+```
+
+**Field paths:**
+- Simple fields: `id`, `name`, `tags`, `similarity`
+- Nested fields: `ancestor.name`, `ancestor.tags`
+- Arrays: `fields`, `children` (returns full array)
+
+When `select` is omitted or empty, all fields are returned (default behavior).
+
+---
+
 ## Testing MCP Setup
 
 ```bash

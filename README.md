@@ -322,6 +322,11 @@ supertag tags top --pretty             # Table with alignment
 # JSON mode: Structured data
 supertag search "meeting" --json       # Full JSON output
 
+# Select specific fields (reduces output)
+supertag search "meeting" --json --select id,name,tags
+supertag nodes show <id> --json --select id,name,fields
+supertag fields values Status --json --select valueText,parentId
+
 # Verbose mode: Additional details
 supertag search "meeting" --verbose    # Adds timing info
 supertag tags top --verbose            # Adds tag IDs
@@ -334,6 +339,7 @@ supertag tags top --verbose            # Adds tag IDs
 | `--pretty` | Human-friendly output with emojis and formatting |
 | `--no-pretty` | Force Unix TSV output (overrides config) |
 | `--json` | Structured JSON output |
+| `--select <fields>` | Select specific fields in JSON output (comma-separated) |
 | `--verbose` | Include technical details (timing, IDs) |
 | `--human-dates` | Localized date format (Dec 23, 2025) |
 
