@@ -98,7 +98,7 @@ export function createNodesCommand(): Command {
             console.error(`❌ Node not found: ${nodeId}`);
             process.exit(1);
           }
-          const projected = applyProjection(contents as Record<string, unknown>, projection);
+          const projected = applyProjection(contents, projection);
           console.log(formatJsonOutput(projected));
         } else {
           const output = formatNodeWithDepth(ctx.db, nodeId, 0, depth);
@@ -116,7 +116,7 @@ export function createNodesCommand(): Command {
         }
 
         if (options.json) {
-          const projected = applyProjection(contents as Record<string, unknown>, projection);
+          const projected = applyProjection(contents, projection);
           console.log(formatJsonOutput(projected));
         } else if (outputOpts.pretty) {
           console.log(formatNodeOutput(contents));

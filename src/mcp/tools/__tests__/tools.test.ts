@@ -199,7 +199,7 @@ describe('MCP Tools Integration', () => {
       const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
-        const nodeId = searchResult.results[0].id;
+        const nodeId = searchResult.results[0].id as string;
         const result = await showNode({ nodeId, workspace: undefined, depth: 0 });
 
         expect(result).toBeDefined();
@@ -220,7 +220,7 @@ describe('MCP Tools Integration', () => {
       const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
-        const nodeId = searchResult.results[0].id;
+        const nodeId = searchResult.results[0].id as string;
 
         // Depth 0 - no children content
         const result0 = await showNode({ nodeId, workspace: undefined, depth: 0 });
@@ -241,7 +241,7 @@ describe('MCP Tools Integration', () => {
       const searchResult = await search({ query: 'a', workspace: undefined, limit: 1, raw: false, includeAncestor: true });
 
       if (searchResult.results.length > 0) {
-        const nodeId = searchResult.results[0].id;
+        const nodeId = searchResult.results[0].id as string;
         const result = await showNode({ nodeId, workspace: undefined, depth: 0 });
 
         if (result) {

@@ -66,7 +66,7 @@ export interface SemanticSearchResultItem {
 export interface SemanticSearchResult {
   workspace: string;
   query: string;
-  results: SemanticSearchResultItem[];
+  results: Partial<Record<string, unknown>>[];
   count: number;
   model: string;
   dimensions: number;
@@ -354,10 +354,7 @@ export async function semanticSearch(
 
     // Apply field projection if select is specified
     const projection = parseSelectPaths(input.select);
-    const projectedResults = applyProjectionToArray(
-      finalResults,
-      projection
-    ) as SemanticSearchResultItem[];
+    const projectedResults = applyProjectionToArray(finalResults, projection);
 
     return {
       workspace,

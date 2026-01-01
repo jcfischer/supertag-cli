@@ -671,10 +671,10 @@ async function handleTaggedSearch(
             return getNodeContents(engine.rawDb, node.id);
           }
         }).filter(Boolean);
-        const projectedResults = applyProjectionToArray(enriched as Record<string, unknown>[], projection);
+        const projectedResults = applyProjectionToArray(enriched, projection);
         console.log(formatJsonOutput(projectedResults));
       } else {
-        const projectedResults = applyProjectionToArray(results as unknown as Record<string, unknown>[], projection);
+        const projectedResults = applyProjectionToArray(results, projection);
         console.log(formatJsonOutput(projectedResults));
       }
     } else if (options.show) {

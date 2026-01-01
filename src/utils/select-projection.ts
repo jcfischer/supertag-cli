@@ -175,7 +175,7 @@ function setNestedValue(
 /**
  * Apply projection to a single object
  *
- * @param obj - Object to project
+ * @param obj - Object to project (any object type)
  * @param projection - Projection configuration
  * @returns New object with only selected fields
  *
@@ -183,29 +183,30 @@ function setNestedValue(
  * applyProjection({ id: "1", name: "Test", extra: true }, projection)
  * // => { id: "1", name: "Test" }
  */
-export function applyProjection<T extends Record<string, unknown>>(
+export function applyProjection<T>(
   obj: T,
   projection: SelectProjection
-): Partial<T> {
+): Partial<Record<string, unknown>> {
   // If includeAll, return original object
   if (projection.includeAll) {
-    return obj;
+    return obj as unknown as Record<string, unknown>;
   }
 
   const result: Record<string, unknown> = {};
+  const source = obj as unknown as Record<string, unknown>;
 
   for (const path of projection.paths) {
-    const value = getNestedValue(obj, path.segments);
+    const value = getNestedValue(source, path.segments);
     setNestedValue(result, path.segments, value);
   }
 
-  return result as Partial<T>;
+  return result;
 }
 
 /**
  * Apply projection to an array of objects
  *
- * @param arr - Array of objects to project
+ * @param arr - Array of objects to project (any object type)
  * @param projection - Projection configuration
  * @returns New array with projected objects
  *
@@ -213,13 +214,13 @@ export function applyProjection<T extends Record<string, unknown>>(
  * applyProjectionToArray([{ id: "1", name: "A" }, { id: "2", name: "B" }], projection)
  * // => [{ id: "1" }, { id: "2" }]  // if projection selects only "id"
  */
-export function applyProjectionToArray<T extends Record<string, unknown>>(
+export function applyProjectionToArray<T>(
   arr: T[],
   projection: SelectProjection
-): Partial<T>[] {
+): Partial<Record<string, unknown>>[] {
   // If includeAll, return original array
   if (projection.includeAll) {
-    return arr;
+    return arr as unknown as Record<string, unknown>[];
   }
 
   return arr.map((obj) => applyProjection(obj, projection));

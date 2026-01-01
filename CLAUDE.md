@@ -19,12 +19,21 @@
 
 1. Update `CHANGELOG.md` - Change `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`
 2. Update version number in `package.json`
-3. Run `bun run test:full` - Ensure all tests pass
-4. Run `./release.sh X.Y.Z --push` to build, tag, and push
-5. Update public `CHANGELOG.md` at `~/work/web/invisible-store/tana/CHANGELOG.md`
-6. Update store listing if features changed
+3. Run `bun run typecheck` - Ensure TypeScript type checks pass
+4. Run `bun run test:full` - Ensure all tests pass
+5. Run `./release.sh X.Y.Z --push` to build, tag, and push
+6. Update public `CHANGELOG.md` at `~/work/web/invisible-store/tana/CHANGELOG.md`
+7. Update store listing if features changed
 
 **Note:** The release script updates `package.json` version automatically if you pass a version argument. Step 2 can be skipped if using `./release.sh X.Y.Z`.
+
+## PR Checklist
+
+**IMPORTANT: Run these checks before pushing a PR:**
+
+1. Run `bun run typecheck` - TypeScript types must pass
+2. Run `bun run test` - Fast tests must pass (1741+ tests)
+3. Push and verify CI passes (GitHub Actions runs full test suite)
 
 ## Key Architecture
 

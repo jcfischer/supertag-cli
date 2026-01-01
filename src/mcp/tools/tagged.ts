@@ -23,7 +23,7 @@ export interface TaggedNodeItem {
 export interface TaggedResult {
   workspace: string;
   tagname: string;
-  nodes: TaggedNodeItem[];
+  nodes: Partial<Record<string, unknown>>[];
   count: number;
 }
 
@@ -62,10 +62,7 @@ export async function tagged(input: TaggedInput): Promise<TaggedResult> {
 
     // Apply field projection if select is specified
     const projection = parseSelectPaths(input.select);
-    const projectedItems = applyProjectionToArray(
-      items,
-      projection
-    ) as TaggedNodeItem[];
+    const projectedItems = applyProjectionToArray(items, projection);
 
     return {
       workspace: workspace.alias,

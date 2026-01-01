@@ -1263,7 +1263,8 @@ export class TanaWebhookServer {
     const header = `- Semantic Search Results %%view:table%%`;
 
     // Table rows - use node reference as row name
-    const rows = results.results.map((item: SemanticSearchResultItem) => {
+    // Cast to SemanticSearchResultItem since webhook server doesn't use select parameter
+    const rows = (results.results as unknown as SemanticSearchResultItem[]).map((item) => {
       const similarity = Math.round(item.similarity * 100);
 
       // If the name already contains a [[...]] reference, extract just the reference

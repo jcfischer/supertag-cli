@@ -32,7 +32,7 @@ export interface SearchResultItem {
 export interface SearchResult {
   workspace: string;
   query: string;
-  results: SearchResultItem[];
+  results: Partial<Record<string, unknown>>[];
   count: number;
 }
 
@@ -83,10 +83,7 @@ export async function search(input: SearchInput): Promise<SearchResult> {
 
     // Apply field projection if select is specified
     const projection = parseSelectPaths(input.select);
-    const projectedResults = applyProjectionToArray(
-      resultsWithTags,
-      projection
-    ) as SearchResultItem[];
+    const projectedResults = applyProjectionToArray(resultsWithTags, projection);
 
     return {
       workspace: workspace.alias,

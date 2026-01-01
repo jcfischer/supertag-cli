@@ -157,7 +157,7 @@ export function createFieldsCommand(): Command {
           // Apply field projection if --select is specified
           const selectFields = parseSelectOption(options.select);
           const projection = parseSelectPaths(selectFields);
-          const projectedResults = applyProjectionToArray(values as unknown as Record<string, unknown>[], projection);
+          const projectedResults = applyProjectionToArray(values, projection);
           console.log(formatJsonOutput(projectedResults));
         } else if (outputOpts.pretty) {
           console.log(

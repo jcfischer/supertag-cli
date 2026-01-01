@@ -269,7 +269,7 @@ function getNodeContentsWithDepth(
   return contents;
 }
 
-export async function showNode(input: NodeInput): Promise<NodeContents | null> {
+export async function showNode(input: NodeInput): Promise<Partial<Record<string, unknown>> | null> {
   const workspace = resolveWorkspaceContext({ workspace: input.workspace });
   const depth = input.depth || 0;
 
@@ -287,5 +287,5 @@ export async function showNode(input: NodeInput): Promise<NodeContents | null> {
 
   // Apply field projection if select is specified
   const projection = parseSelectPaths(input.select);
-  return applyProjection(result, projection) as NodeContents;
+  return applyProjection(result, projection);
 }

@@ -35,7 +35,7 @@ export interface FieldValuesResult {
   workspace: string;
   mode: "list" | "query" | "search";
   fields?: FieldNameCount[];
-  results?: FieldValueResult[];
+  results?: Partial<Record<string, unknown>>[];
   count: number;
 }
 
@@ -95,10 +95,7 @@ export async function fieldValues(input: FieldValuesInput): Promise<FieldValuesR
 
         // Apply field projection if select is specified
         const projection = parseSelectPaths(input.select);
-        const projectedResults = applyProjectionToArray(
-          results,
-          projection
-        ) as FieldValueResult[];
+        const projectedResults = applyProjectionToArray(results, projection);
 
         return {
           workspace: workspace.alias,
@@ -121,10 +118,7 @@ export async function fieldValues(input: FieldValuesInput): Promise<FieldValuesR
 
         // Apply field projection if select is specified
         const projection = parseSelectPaths(input.select);
-        const projectedResults = applyProjectionToArray(
-          results,
-          projection
-        ) as FieldValueResult[];
+        const projectedResults = applyProjectionToArray(results, projection);
 
         return {
           workspace: workspace.alias,
