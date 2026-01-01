@@ -40,6 +40,7 @@ import { createUpdateCommand, checkForUpdatePassive } from './commands/update';
 import { createErrorsCommand } from './commands/errors';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
+import { setDebugMode, formatDebugError } from './utils/debug';
 
 // Use portable logger (no external dependencies)
 export const logger = createSimpleLogger('tana-skill');
@@ -52,7 +53,8 @@ const program = new Command();
 program
   .name('supertag')
   .description('Supertag CLI - read, write, sync, and serve Tana data')
-  .version(VERSION);
+  .version(VERSION)
+  .option('--debug', 'Enable debug mode with verbose error output');
 
 /**
  * Format Command
@@ -383,6 +385,12 @@ async function main() {
   const hasJsonFlag = process.argv.includes('--json');
   const hasPrettyFlag = process.argv.includes('--pretty');
   const hasVerboseFlag = process.argv.includes('--verbose') || process.argv.includes('-v');
+  const hasDebugFlag = process.argv.includes('--debug');
+
+  // Enable debug mode for verbose error output
+  if (hasDebugFlag) {
+    setDebugMode(true);
+  }
 
   const outputMode = resolveOutputMode({
     json: hasJsonFlag,
@@ -413,6 +421,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Error:', error.message);
+  console.error(formatDebugError(error));
   process.exit(1);
 });
