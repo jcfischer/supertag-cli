@@ -23,8 +23,9 @@ const { Logger } = await import(loggerPath);
 
 // Import workspace resolution
 import { getConfig } from '../config/manager';
-import { getEnabledWorkspaces, ensureWorkspaceDir } from '../config/paths';
-import { resolveWorkspaceContext } from '../config/workspace-resolver';
+import { ensureWorkspaceDir } from '../config/paths';
+import { resolveWorkspaceContext, type ResolvedWorkspace } from '../config/workspace-resolver';
+import { processWorkspaces } from '../config';
 
 // Configuration
 const USER_DATA_DIR = join(homedir(), '.config', 'tana', 'browser-data');
@@ -529,45 +530,45 @@ Examples:
 
   // Handle --all option for batch export
   if (values.all) {
-    const config = getConfig().getConfig();
-    const workspaces = getEnabledWorkspaces(config);
+    const batchResult = await processWorkspaces(
+      { all: true, continueOnError: true },
+      async (ws: ResolvedWorkspace) => {
+        logger.info(`\n=== Workspace: ${ws.alias} (${ws.nodeid}) ===`);
 
-    if (workspaces.length === 0) {
+        if (!ws.nodeid) {
+          throw new Error(`Workspace ${ws.alias} has no nodeid configured`);
+        }
+
+        // Ensure export directory exists
+        if (!existsSync(ws.exportDir)) {
+          mkdirSync(ws.exportDir, { recursive: true });
+        }
+
+        const result = await performExport({
+          exportDir: ws.exportDir,
+          headless: !values.headed,
+          timeout: parseInt(values.timeout || '60000', 10),
+          verbose,
+          nodeid: ws.nodeid,
+        });
+
+        if (!result) {
+          throw new Error(`Export failed for workspace ${ws.alias}`);
+        }
+
+        return { exportPath: result };
+      }
+    );
+
+    if (batchResult.results.length === 0) {
       logger.error('No enabled workspaces configured');
       logger.error('Add workspaces with: tana workspace add <nodeid> --alias <name>');
       process.exit(1);
     }
 
-    logger.info(`Exporting ${workspaces.length} enabled workspace(s)...`);
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const ws of workspaces) {
-      logger.info(`\n=== Workspace: ${ws.alias} (${ws.nodeid}) ===`);
-
-      // Ensure export directory exists
-      if (!existsSync(ws.exportDir)) {
-        mkdirSync(ws.exportDir, { recursive: true });
-      }
-
-      const result = await performExport({
-        exportDir: ws.exportDir,
-        headless: !values.headed,
-        timeout: parseInt(values.timeout || '60000', 10),
-        verbose,
-        nodeid: ws.nodeid,
-      });
-
-      if (result) {
-        successCount++;
-      } else {
-        failCount++;
-      }
-    }
-
     logger.info(`\n=== Batch Export Complete ===`);
-    logger.info(`Success: ${successCount}, Failed: ${failCount}`);
-    process.exit(failCount > 0 ? 1 : 0);
+    logger.info(`Success: ${batchResult.successful}, Failed: ${batchResult.failed}`);
+    process.exit(batchResult.failed > 0 ? 1 : 0);
   }
 
   // Resolve workspace from options

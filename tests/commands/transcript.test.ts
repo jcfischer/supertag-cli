@@ -50,7 +50,7 @@ describe("Transcript CLI Commands", () => {
 
       // Should show some output
       expect(result.length).toBeGreaterThan(0);
-    });
+    }, 30000); // CLI compilation is slow
 
     it(
       "should support --json output",
@@ -111,7 +111,7 @@ describe("Transcript CLI Commands", () => {
 
       // Should show transcript lines
       expect(result.length).toBeGreaterThan(0);
-    }, 15000); // CLI compilation is slow, need 15s timeout
+    }, 30000); // CLI compilation is slow
 
     it("should support --json output", async () => {
       if (!hasTranscripts) {

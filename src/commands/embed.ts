@@ -16,8 +16,10 @@
 import { Command } from "commander";
 import {
   getDatabasePath,
-  getEnabledWorkspaces,
 } from "../config/paths";
+import {
+  processWorkspaces,
+} from "../config";
 import { withDatabase } from "../db/with-database";
 import { resolveWorkspaceContext, type ResolvedWorkspace } from "../config/workspace-resolver";
 import { ConfigManager } from "../config/manager";
@@ -175,23 +177,22 @@ export function createEmbedCommand(): Command {
     .action(async (options) => {
       // Handle --all-workspaces
       if (options.allWorkspaces) {
-        const appConfig = ConfigManager.getInstance().getConfig();
-        const workspaces = getEnabledWorkspaces(appConfig);
+        const batchResult = await processWorkspaces(
+          { all: true, continueOnError: true },
+          async (ws: ResolvedWorkspace) => {
+            console.log(`\n━━━ Workspace: ${ws.alias} ━━━`);
+            await processWorkspaceEmbeddings(ws.alias, options);
+            return { alias: ws.alias };
+          }
+        );
 
-        if (workspaces.length === 0) {
+        if (batchResult.results.length === 0) {
           console.log("❌ No workspaces configured");
           console.log("Add workspaces with: supertag workspace add <id> --alias <name>");
           return;
         }
 
-        console.log(`📊 Processing ${workspaces.length} workspaces...\n`);
-
-        for (const ws of workspaces) {
-          console.log(`\n━━━ Workspace: ${ws.alias} ━━━`);
-          await processWorkspaceEmbeddings(ws.alias, options);
-        }
-
-        console.log("\n✅ All workspaces processed");
+        console.log(`\n✅ All workspaces processed (${batchResult.successful} succeeded, ${batchResult.failed} failed)`);
         return;
       }
 
