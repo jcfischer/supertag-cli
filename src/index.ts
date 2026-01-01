@@ -36,6 +36,7 @@ import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsM
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
 import { createCodegenCommand } from './commands/codegen';
+import { createUpdateCommand } from './commands/update';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
 
@@ -155,6 +156,7 @@ program.addCommand(createStatsCommand());      // supertag stats [--db] [--embed
 program.addCommand(createFieldsCommand());     // supertag fields list|values|search
 program.addCommand(createTranscriptCommand()); // supertag transcript list|show|search
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
+program.addCommand(createUpdateCommand());     // supertag update check|download
 
 /**
  * Help text with examples
