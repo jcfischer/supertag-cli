@@ -23,7 +23,13 @@ import {
   checkDb,
   addStandardOptions,
   formatJsonOutput,
+  parseSelectOption,
 } from "./helpers";
+import {
+  parseSelectPaths,
+  applyProjection,
+  applyProjectionToArray,
+} from "../utils/select-projection";
 
 /**
  * Get schema registry, preferring workspace-based but falling back to database.
@@ -213,30 +219,58 @@ export function createTagsCommand(): Command {
   // tags list
   const listCmd = tags
     .command("list")
-    .description("List all supertags with counts");
+    .description("List all supertags with counts")
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., tagName,count)");
 
   addStandardOptions(listCmd, { defaultLimit: "50" });
 
-  listCmd.action(async (options: StandardOptions) => {
+  listCmd.action(async (options: StandardOptions & { select?: string }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
     }
 
     const limit = options.limit ? parseInt(String(options.limit)) : 50;
+    const selectFields = parseSelectOption(options.select);
+    const projection = parseSelectPaths(selectFields);
+    const outputOpts = resolveOutputOptions(options);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const allTags = await ctx.engine.getTopSupertags(limit);
 
       if (options.json) {
-        console.log(formatJsonOutput(allTags));
-      } else {
+        const projectedResults = applyProjectionToArray(allTags, projection);
+        console.log(formatJsonOutput(projectedResults));
+      } else if (outputOpts.pretty) {
         console.log(`\n🏷️  Supertags (${allTags.length}):\n`);
         allTags.forEach((tag, i) => {
           console.log(`${i + 1}. ${tag.tagName} (${tag.count} nodes)`);
           console.log(`   ID: ${tag.tagId}`);
           console.log();
         });
+      } else {
+        // Unix mode: TSV output with --select support
+        const defaultFields = ["tagName", "tagId", "count"];
+
+        for (const tag of allTags) {
+          const data: Record<string, string | number> = {
+            tagName: tag.tagName,
+            tagId: tag.tagId,
+            count: tag.count,
+          };
+
+          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
+          const values = fieldsToOutput.map(field => {
+            const value = data[field];
+            return value !== undefined ? String(value) : "";
+          });
+
+          if (values.length === 1) {
+            console.log(values[0]);
+          } else {
+            console.log(tsv(...values));
+          }
+        }
       }
     });
   });
@@ -244,11 +278,12 @@ export function createTagsCommand(): Command {
   // tags top
   const topCmd = tags
     .command("top")
-    .description("Show most-used supertags by application count");
+    .description("Show most-used supertags by application count")
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., tagName,count)");
 
   addStandardOptions(topCmd, { defaultLimit: "20" });
 
-  topCmd.action(async (options: StandardOptions) => {
+  topCmd.action(async (options: StandardOptions & { select?: string }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -256,12 +291,15 @@ export function createTagsCommand(): Command {
 
     const limit = options.limit ? parseInt(String(options.limit)) : 20;
     const outputOpts = resolveOutputOptions(options);
+    const selectFields = parseSelectOption(options.select);
+    const projection = parseSelectPaths(selectFields);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const topTags = await ctx.engine.getTopTagsByUsage(limit);
 
       if (options.json) {
-        console.log(formatJsonOutput(topTags));
+        const projectedResults = applyProjectionToArray(topTags, projection);
+        console.log(formatJsonOutput(projectedResults));
       } else if (outputOpts.pretty) {
         // Pretty mode: emojis, table formatting
         console.log(`\n${header(EMOJI.tags, `Top ${topTags.length} supertags by usage`)}\n`);
@@ -285,13 +323,28 @@ export function createTagsCommand(): Command {
         console.log(table(headers, rows, { align: [...align] }));
         console.log(tip("Use 'search --tag <name>' to find nodes with a tag"));
       } else {
-        // Unix mode: TSV output, pipe-friendly
-        // Format: tagName\tcount (or with --verbose: tagId\ttagName\tcount)
+        // Unix mode: TSV output with --select support
+        const defaultFields = outputOpts.verbose
+          ? ["tagId", "tagName", "count"]
+          : ["tagName", "count"];
+
         for (const tag of topTags) {
-          if (outputOpts.verbose) {
-            console.log(tsv(tag.tagId, tag.tagName, tag.count));
+          const data: Record<string, string | number> = {
+            tagName: tag.tagName,
+            tagId: tag.tagId,
+            count: tag.count,
+          };
+
+          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
+          const values = fieldsToOutput.map(field => {
+            const value = data[field];
+            return value !== undefined ? String(value) : "";
+          });
+
+          if (values.length === 1) {
+            console.log(values[0]);
           } else {
-            console.log(tsv(tag.tagName, tag.count));
+            console.log(tsv(...values));
           }
         }
       }
@@ -302,11 +355,12 @@ export function createTagsCommand(): Command {
   const showCmd = tags
     .command("show <tagname>")
     .description("Show schema fields for a supertag")
-    .option("--all", "Show all fields including inherited");
+    .option("--all", "Show all fields including inherited")
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., id,name)");
 
   addStandardOptions(showCmd, { defaultLimit: "1" });
 
-  showCmd.action(async (tagname: string, options: TagsMetadataOptions) => {
+  showCmd.action(async (tagname: string, options: TagsMetadataOptions & { select?: string }) => {
     const dbPath = resolveDbPath(options);
     if (!checkDb(dbPath, options.workspace)) {
       process.exit(1);
@@ -368,9 +422,15 @@ export function createTagsCommand(): Command {
       const tagMeta = registryForMeta.getSupertagById(tagId);
       const color = tagMeta?.color || null;
 
+      const selectFields = parseSelectOption(options.select);
+      const projection = parseSelectPaths(selectFields);
+      const outputOpts = resolveOutputOptions(options);
+
       if (options.json) {
-        console.log(formatJsonOutput({ id: tagId, name: displayName, color, fields }));
-      } else {
+        const result = { id: tagId, name: displayName, color, fields };
+        const projected = applyProjection(result, projection);
+        console.log(formatJsonOutput(projected));
+      } else if (outputOpts.pretty) {
         console.log(`\n🏷️  ${displayName}`);
         console.log(`   ID: ${tagId}`);
         console.log(`   Color: ${color || "(none)"}`);
@@ -394,6 +454,34 @@ export function createTagsCommand(): Command {
           console.log(`\n   No fields defined`);
         }
         console.log();
+      } else {
+        // Unix mode: YAML-like output with --select support
+        const fieldsToShow = selectFields && selectFields.length > 0
+          ? new Set(selectFields)
+          : null;
+
+        console.log("---");
+        if (!fieldsToShow || fieldsToShow.has("id")) {
+          console.log(`id: ${tagId}`);
+        }
+        if (!fieldsToShow || fieldsToShow.has("name")) {
+          console.log(`name: ${displayName}`);
+        }
+        if ((!fieldsToShow || fieldsToShow.has("color")) && color) {
+          console.log(`color: ${color}`);
+        }
+        if (!fieldsToShow || fieldsToShow.has("fields")) {
+          if (fields.length > 0) {
+            console.log(`fields: ${fields.length}`);
+            for (const field of fields) {
+              if (field.inherited && field.origin) {
+                console.log(`  - ${field.name} (from ${field.origin})`);
+              } else {
+                console.log(`  - ${field.name}`);
+              }
+            }
+          }
+        }
       }
     });
   });

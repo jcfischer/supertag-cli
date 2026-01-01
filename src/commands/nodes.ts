@@ -26,6 +26,7 @@ import {
 import {
   parseSelectPaths,
   applyProjection,
+  applyProjectionToArray,
 } from "../utils/select-projection";
 import {
   getNodeContents,
@@ -48,7 +49,7 @@ interface NodeShowOptions extends StandardOptions {
 }
 
 interface NodeRefsOptions extends StandardOptions {
-  // standard options only
+  select?: string;
 }
 
 interface NodeRecentOptions extends StandardOptions {
@@ -56,6 +57,7 @@ interface NodeRecentOptions extends StandardOptions {
   createdBefore?: string;
   updatedAfter?: string;
   updatedBefore?: string;
+  select?: string;
 }
 
 /**
@@ -158,7 +160,8 @@ export function createNodesCommand(): Command {
   // nodes refs <node-id>
   const refsCmd = nodes
     .command("refs <node-id>")
-    .description("Show references for a node");
+    .description("Show references for a node")
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., direction,type)");
 
   addStandardOptions(refsCmd, { defaultLimit: "10" });
 
@@ -169,13 +172,16 @@ export function createNodesCommand(): Command {
     }
 
     const outputOpts = resolveOutputOptions(options);
+    const selectFields = parseSelectOption(options.select);
+    const projection = parseSelectPaths(selectFields);
 
     try {
       await withQueryEngine({ dbPath }, async (ctx) => {
         const graph = await ctx.engine.getReferenceGraph(nodeId, 1);
 
         if (options.json) {
-          console.log(formatJsonOutput(graph));
+          const projected = applyProjection(graph, projection);
+          console.log(formatJsonOutput(projected));
         } else if (outputOpts.pretty) {
           console.log(`\n${header(EMOJI.link, `References for: ${graph.node.name || nodeId}`)}:\n`);
 
@@ -191,13 +197,39 @@ export function createNodesCommand(): Command {
             console.log(`     Type: ${ref.reference.referenceType}`);
           });
         } else {
-          // Unix mode: TSV output
-          // Format: direction\tfrom_id\tto_id\ttype\tname
-          for (const ref of graph.outbound) {
-            console.log(tsv("out", nodeId, ref.reference.toNode, ref.reference.referenceType, ref.node?.name || ""));
-          }
-          for (const ref of graph.inbound) {
-            console.log(tsv("in", ref.reference.fromNode, nodeId, ref.reference.referenceType, ref.node?.name || ""));
+          // Unix mode: TSV output with --select support
+          // Default fields: direction, fromId, toId, type, name
+          const defaultFields = ["direction", "fromId", "toId", "type", "name"];
+
+          const allRefs = [
+            ...graph.outbound.map(ref => ({
+              direction: "out",
+              fromId: nodeId,
+              toId: ref.reference.toNode,
+              type: ref.reference.referenceType,
+              name: ref.node?.name || "",
+            })),
+            ...graph.inbound.map(ref => ({
+              direction: "in",
+              fromId: ref.reference.fromNode,
+              toId: nodeId,
+              type: ref.reference.referenceType,
+              name: ref.node?.name || "",
+            })),
+          ];
+
+          for (const ref of allRefs) {
+            const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
+            const values = fieldsToOutput.map(field => {
+              const value = ref[field as keyof typeof ref];
+              return value !== undefined ? String(value) : "";
+            });
+
+            if (values.length === 1) {
+              console.log(values[0]);
+            } else {
+              console.log(tsv(...values));
+            }
           }
         }
       });
@@ -214,7 +246,8 @@ export function createNodesCommand(): Command {
     .option("--created-after <date>", "Filter nodes created after date (YYYY-MM-DD)")
     .option("--created-before <date>", "Filter nodes created before date (YYYY-MM-DD)")
     .option("--updated-after <date>", "Filter nodes updated after date (YYYY-MM-DD)")
-    .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)");
+    .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)")
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., id,name)");
 
   addStandardOptions(recentCmd, { defaultLimit: "10" });
 
@@ -227,12 +260,15 @@ export function createNodesCommand(): Command {
     const limit = options.limit ? parseInt(String(options.limit)) : 10;
     const dateRange = parseDateRangeOptions(options);
     const outputOpts = resolveOutputOptions(options);
+    const selectFields = parseSelectOption(options.select);
+    const projection = parseSelectPaths(selectFields);
 
     await withQueryEngine({ dbPath }, async (ctx) => {
       const results = await ctx.engine.findRecentlyUpdated(limit, dateRange);
 
       if (options.json) {
-        console.log(formatJsonOutput(results));
+        const projectedResults = applyProjectionToArray(results, projection);
+        console.log(formatJsonOutput(projectedResults));
       } else if (outputOpts.pretty) {
         console.log(`\n${header(EMOJI.recent, `Recently updated (${results.length})`)}:\n`);
         results.forEach((node, i) => {
@@ -244,11 +280,25 @@ export function createNodesCommand(): Command {
           console.log();
         });
       } else {
-        // Unix mode: TSV output
-        // Format: id\tname\tupdated
+        // Unix mode: TSV output with --select support
+        const defaultFields = ["id", "name", "updated"];
         for (const node of results) {
-          const updated = node.updated ? formatDateISO(new Date(node.updated)) : "";
-          console.log(tsv(node.id, node.name || "", updated));
+          const data: Record<string, string> = {
+            id: node.id,
+            name: node.name || "",
+            updated: node.updated ? formatDateISO(new Date(node.updated)) : "",
+          };
+          const fieldsToOutput = selectFields && selectFields.length > 0 ? selectFields : defaultFields;
+          const values = fieldsToOutput.map(field => {
+            const value = data[field];
+            return value !== undefined ? String(value) : "";
+          });
+
+          if (values.length === 1) {
+            console.log(values[0]);
+          } else {
+            console.log(tsv(...values));
+          }
         }
       }
     });
