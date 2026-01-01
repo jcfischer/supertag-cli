@@ -12,8 +12,12 @@ import {
   checkForUpdate,
   downloadUpdate,
   detectPlatform,
+  installUpdate,
+  shouldShowNotification,
+  markNotificationShown,
 } from "../services/update";
 import { TANA_CACHE_DIR } from "../config/paths";
+import { getConfig } from "../config/manager";
 import { version } from "../../package.json";
 
 /**
@@ -148,8 +152,151 @@ async function downloadCommand(options: { output?: string }): Promise<void> {
   console.log("  ✅ Download complete!");
   console.log(`  Saved to: ${outputPath}`);
   console.log("");
-  console.log("  To install, extract the archive and replace the current binary.");
+  console.log("  Run 'supertag update install' to install the update.");
   console.log("");
+}
+
+/**
+ * Install command - install a downloaded update
+ */
+async function installCommand(options: { file?: string; yes?: boolean }): Promise<void> {
+  // Get current binary path
+  const currentBinaryPath = process.execPath;
+
+  // If this is running via Bun, get the script path instead
+  const binaryPath = currentBinaryPath.includes("bun")
+    ? join(process.cwd(), "supertag")
+    : currentBinaryPath;
+
+  // Default zip path
+  const zipPath = options.file ?? (() => {
+    // Try to find the latest downloaded update
+    const result = checkForUpdate({
+      currentVersion: version,
+      forceCheck: false,
+    });
+    // For now, just check default location
+    const latestZip = join(TANA_CACHE_DIR, "supertag-latest.zip");
+    if (existsSync(latestZip)) {
+      return latestZip;
+    }
+    return null;
+  })();
+
+  if (!zipPath) {
+    console.log("");
+    console.log("  ❌ No update file specified");
+    console.log("");
+    console.log("  Usage:");
+    console.log("    supertag update install --file <path-to-zip>");
+    console.log("");
+    console.log("  Or first download an update:");
+    console.log("    supertag update download");
+    console.log("");
+    process.exit(1);
+  }
+
+  if (!existsSync(zipPath)) {
+    console.log("");
+    console.log(`  ❌ Update file not found: ${zipPath}`);
+    console.log("");
+    process.exit(1);
+  }
+
+  // Show what we're about to do
+  console.log("");
+  console.log("  🔄 Installing update...");
+  console.log("");
+  console.log(`  Update file: ${zipPath}`);
+  console.log(`  Binary path: ${binaryPath}`);
+  console.log("");
+
+  if (!options.yes) {
+    console.log("  ⚠️  This will replace your current supertag binary.");
+    console.log("  A backup will be created before installation.");
+    console.log("");
+    console.log("  Use --yes to skip this confirmation.");
+    console.log("");
+    process.exit(0);
+  }
+
+  // Perform installation
+  const backupDir = join(TANA_CACHE_DIR, "backups");
+  const result = await installUpdate({
+    zipPath,
+    binaryPath,
+    backupDir,
+  });
+
+  if (!result.success) {
+    console.log("");
+    console.log(`  ❌ Installation failed: ${result.message}`);
+    console.log("");
+    process.exit(1);
+  }
+
+  console.log("");
+  console.log("  ✅ Update installed successfully!");
+  if (result.backupPath) {
+    console.log(`  Backup saved to: ${result.backupPath}`);
+  }
+  console.log("");
+  console.log("  Restart supertag to use the new version.");
+  console.log("");
+}
+
+/**
+ * Format a one-line update notification for display during CLI execution
+ */
+export function formatUpdateNotification(latestVersion: string): string {
+  return `💡 Update available: v${latestVersion} - run 'supertag update check' for details`;
+}
+
+/**
+ * Check if update checking is enabled based on config
+ * Returns true if updateCheck is 'enabled' (default) or undefined
+ * Returns false if updateCheck is 'disabled' or 'manual'
+ */
+export function isUpdateCheckEnabled(): boolean {
+  const mode = getConfig().getUpdateCheckMode();
+  return mode === "enabled";
+}
+
+/**
+ * Check for updates passively (non-blocking, silent on errors)
+ * Called on CLI startup to show a notification if update is available
+ * Returns notification message or null if no notification needed
+ */
+export async function checkForUpdatePassive(): Promise<string | null> {
+  try {
+    // Check if update checking is enabled in config
+    if (!isUpdateCheckEnabled()) {
+      return null;
+    }
+
+    // First check if we should show a notification (uses cache)
+    if (!shouldShowNotification({ currentVersion: version })) {
+      return null;
+    }
+
+    // Try to get cached version info for the notification
+    const result = await checkForUpdate({
+      currentVersion: version,
+      forceCheck: false, // Always use cache for passive checks
+    });
+
+    if (!result || !result.updateAvailable) {
+      return null;
+    }
+
+    // Mark that we've shown the notification
+    markNotificationShown();
+
+    return formatUpdateNotification(result.latestVersion);
+  } catch {
+    // Fail silently - this is a passive check
+    return null;
+  }
 }
 
 /**
@@ -176,6 +323,16 @@ export function createUpdateCommand(): Command {
     .option("-o, --output <path>", "Output path for downloaded file")
     .action(async (opts: { output?: string }) => {
       await downloadCommand(opts);
+    });
+
+  // update install
+  update
+    .command("install")
+    .description("Install a downloaded update")
+    .option("-f, --file <path>", "Path to downloaded update zip file")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (opts: { file?: string; yes?: boolean }) => {
+      await installCommand(opts);
     });
 
   return update;

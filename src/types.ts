@@ -140,6 +140,8 @@ export interface TanaConfig {
   embeddings?: EmbeddingConfig;
   /** Firebase Web API key for token refresh (public client-side key) */
   firebaseApiKey?: string;
+  /** Update check mode: enabled (default), disabled, or manual */
+  updateCheck?: 'enabled' | 'disabled' | 'manual';
 }
 
 /**
@@ -424,3 +426,18 @@ export type SearchType = "fts" | "semantic" | "tagged";
  * Determines which statistics to display
  */
 export type StatsType = "all" | "db" | "embed" | "filter";
+
+/**
+ * Update check mode for controlling automatic update notifications
+ * - enabled: Check for updates on CLI startup (default)
+ * - disabled: Never check for updates automatically
+ * - manual: Only check when explicitly requested via 'supertag update check'
+ */
+export type UpdateCheckMode = "enabled" | "disabled" | "manual";
+
+// Runtime constant for UpdateCheckMode values (for runtime validation)
+export const UpdateCheckMode = {
+  ENABLED: "enabled" as const,
+  DISABLED: "disabled" as const,
+  MANUAL: "manual" as const,
+};

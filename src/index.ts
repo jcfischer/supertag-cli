@@ -36,7 +36,7 @@ import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsM
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
 import { createCodegenCommand } from './commands/codegen';
-import { createUpdateCommand } from './commands/update';
+import { createUpdateCommand, checkForUpdatePassive } from './commands/update';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
 
@@ -156,7 +156,7 @@ program.addCommand(createStatsCommand());      // supertag stats [--db] [--embed
 program.addCommand(createFieldsCommand());     // supertag fields list|values|search
 program.addCommand(createTranscriptCommand()); // supertag transcript list|show|search
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
-program.addCommand(createUpdateCommand());     // supertag update check|download
+program.addCommand(createUpdateCommand());     // supertag update check|download|install
 
 /**
  * Help text with examples
@@ -384,6 +384,20 @@ async function main() {
     level: hasVerboseFlag ? 'debug' : 'info',
     mode: outputMode,
   });
+
+  // Start passive update check (non-blocking)
+  // Only run if not in JSON mode and not running update command
+  const isUpdateCommand = process.argv.some(arg => arg === 'update');
+  if (!hasJsonFlag && !isUpdateCommand) {
+    // Fire and forget - display notification if available
+    checkForUpdatePassive().then(notification => {
+      if (notification) {
+        console.error(notification); // Use stderr to not interfere with output
+      }
+    }).catch(() => {
+      // Silently ignore errors in passive check
+    });
+  }
 
   // Parse and execute commands
   program.parse();

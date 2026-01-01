@@ -5,8 +5,8 @@
  * Spec: 058-version-update-checker
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, unlinkSync, chmodSync } from "fs";
+import { dirname, join, basename } from "path";
 import { TANA_CACHE_DIR } from "../config/paths";
 
 // =============================================================================
@@ -548,4 +548,247 @@ export async function downloadUpdate(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+// =============================================================================
+// T-3.1: installUpdate
+// =============================================================================
+
+/**
+ * Options for installUpdate
+ */
+export interface InstallUpdateOptions {
+  zipPath: string;
+  binaryPath: string;
+  backupDir: string;
+}
+
+/**
+ * Create a test zip file for testing (exported for tests)
+ * Uses native Bun.spawn to call the zip command
+ */
+export async function createTestZip(
+  zipPath: string,
+  binaryName: string,
+  content: string
+): Promise<void> {
+  // Use a unique temp directory to avoid conflicts
+  const timestamp = Date.now();
+  const tempDir = join(dirname(zipPath), `temp-zip-${timestamp}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  const tempBinaryPath = join(tempDir, binaryName);
+
+  // Write the temp binary
+  writeFileSync(tempBinaryPath, content, { mode: 0o755 });
+
+  // Create zip using native command
+  const proc = Bun.spawn(["zip", "-j", zipPath, tempBinaryPath], {
+    cwd: tempDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  await proc.exited;
+
+  // Clean up temp directory
+  Bun.spawn(["rm", "-rf", tempDir]);
+}
+
+/**
+ * Install an update from a downloaded zip file
+ * 1. Validate zip exists
+ * 2. Backup current binary
+ * 3. Extract and replace
+ * 4. Set executable permissions
+ * 5. Rollback on failure
+ */
+export async function installUpdate(
+  options: InstallUpdateOptions
+): Promise<InstallResult> {
+  const { zipPath, binaryPath, backupDir } = options;
+
+  // Validate zip exists
+  if (!existsSync(zipPath)) {
+    return {
+      success: false,
+      installedVersion: "",
+      message: `Zip file not found: ${zipPath}`,
+    };
+  }
+
+  // Generate backup path with timestamp
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const binaryName = basename(binaryPath);
+  const backupPath = join(backupDir, `${binaryName}.${timestamp}.backup`);
+
+  // Ensure backup directory exists
+  if (!existsSync(backupDir)) {
+    mkdirSync(backupDir, { recursive: true });
+  }
+
+  // Backup current binary (if it exists)
+  let hadBackup = false;
+  if (existsSync(binaryPath)) {
+    try {
+      copyFileSync(binaryPath, backupPath);
+      hadBackup = true;
+    } catch (error) {
+      return {
+        success: false,
+        installedVersion: "",
+        message: `Failed to backup current binary: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  // Extract zip using unzip command
+  const tempExtractDir = join(dirname(zipPath), `extract-${timestamp}`);
+  mkdirSync(tempExtractDir, { recursive: true });
+
+  try {
+    const proc = Bun.spawn(["unzip", "-o", zipPath, "-d", tempExtractDir], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      // Rollback if we had a backup
+      if (hadBackup && existsSync(backupPath)) {
+        copyFileSync(backupPath, binaryPath);
+      }
+
+      // Clean up temp dir
+      if (existsSync(tempExtractDir)) {
+        Bun.spawn(["rm", "-rf", tempExtractDir]);
+      }
+
+      return {
+        success: false,
+        installedVersion: "",
+        message: `Failed to extract zip file (exit code ${exitCode})`,
+      };
+    }
+
+    // Find the extracted binary
+    const extractedBinaryPath = join(tempExtractDir, binaryName);
+    if (!existsSync(extractedBinaryPath)) {
+      // Try to find any executable in the extracted dir
+      const ls = Bun.spawn(["ls", tempExtractDir], { stdout: "pipe" });
+      const output = await new Response(ls.stdout).text();
+      const files = output.trim().split("\n").filter(Boolean);
+
+      if (files.length === 0) {
+        throw new Error("No files found in zip archive");
+      }
+
+      // Use the first file if binaryName not found
+      const fallbackPath = join(tempExtractDir, files[0]);
+      if (!existsSync(fallbackPath)) {
+        throw new Error(`Binary not found in archive: ${binaryName}`);
+      }
+
+      // Copy the fallback
+      copyFileSync(fallbackPath, binaryPath);
+    } else {
+      // Copy the extracted binary
+      copyFileSync(extractedBinaryPath, binaryPath);
+    }
+
+    // Set executable permissions
+    chmodSync(binaryPath, 0o755);
+
+    // Clean up temp dir
+    Bun.spawn(["rm", "-rf", tempExtractDir]);
+
+    return {
+      success: true,
+      backupPath: hadBackup ? backupPath : undefined,
+      installedVersion: "unknown", // Would need to run binary to get version
+      message: "Update installed successfully",
+    };
+  } catch (error) {
+    // Rollback on any error
+    if (hadBackup && existsSync(backupPath)) {
+      try {
+        copyFileSync(backupPath, binaryPath);
+      } catch {
+        // Rollback failed - leave backup in place
+      }
+    }
+
+    // Clean up temp dir
+    if (existsSync(tempExtractDir)) {
+      Bun.spawn(["rm", "-rf", tempExtractDir]);
+    }
+
+    return {
+      success: false,
+      installedVersion: "",
+      message: `Installation failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+// =============================================================================
+// T-4.1: Passive Notification Logic
+// =============================================================================
+
+const NOTIFICATION_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Options for shouldShowNotification
+ */
+export interface NotificationOptions {
+  currentVersion: string;
+  cachePath?: string;
+}
+
+/**
+ * Check if we should show an update notification
+ * Returns true if:
+ * - Cache exists and contains newer version
+ * - User hasn't been notified in last 24 hours
+ */
+export function shouldShowNotification(options: NotificationOptions): boolean {
+  const { currentVersion, cachePath = DEFAULT_CACHE_PATH } = options;
+
+  // No cache = no notification
+  const cache = getCache(cachePath);
+  if (!cache) {
+    return false;
+  }
+
+  // Check if update is available
+  const updateAvailable = compareVersions(cache.latestVersion, currentVersion) > 0;
+  if (!updateAvailable) {
+    return false;
+  }
+
+  // Check notification cooldown
+  if (cache.notifiedAt) {
+    const notifiedTime = new Date(cache.notifiedAt).getTime();
+    const now = Date.now();
+    if (now - notifiedTime < NOTIFICATION_COOLDOWN_MS) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Mark that we've shown a notification to the user
+ * Updates the cache with current timestamp
+ */
+export function markNotificationShown(cachePath: string = DEFAULT_CACHE_PATH): void {
+  const cache = getCache(cachePath);
+  if (!cache) {
+    return;
+  }
+
+  cache.notifiedAt = new Date().toISOString();
+  setCache(cache, cachePath);
 }

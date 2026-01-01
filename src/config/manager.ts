@@ -407,6 +407,23 @@ export class ConfigManager {
   reload(): void {
     this.config = this.load();
   }
+
+  /**
+   * Get update check mode with default
+   * @returns 'enabled' | 'disabled' | 'manual'
+   */
+  getUpdateCheckMode(): 'enabled' | 'disabled' | 'manual' {
+    return this.config.updateCheck ?? 'enabled';
+  }
+
+  /**
+   * Set update check mode
+   * @param mode - 'enabled' | 'disabled' | 'manual'
+   */
+  setUpdateCheckMode(mode: 'enabled' | 'disabled' | 'manual'): void {
+    this.config.updateCheck = mode;
+    this.save({});
+  }
 }
 
 /**

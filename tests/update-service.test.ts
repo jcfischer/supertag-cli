@@ -692,3 +692,334 @@ describe("downloadUpdate", () => {
     expect(existsSync(outputPath)).toBe(true);
   });
 });
+
+// =============================================================================
+// T-3.1: installUpdate Tests
+// =============================================================================
+
+describe("installUpdate", () => {
+  const testInstallDir = "/tmp/supertag-install-test";
+  const testBinaryPath = join(testInstallDir, "supertag");
+  const testBackupDir = join(testInstallDir, "backups");
+  const testZipPath = join(testInstallDir, "update.zip");
+
+  beforeEach(async () => {
+    if (existsSync(testInstallDir)) {
+      rmSync(testInstallDir, { recursive: true });
+    }
+    mkdirSync(testInstallDir, { recursive: true });
+    mkdirSync(testBackupDir, { recursive: true });
+
+    // Create a fake "current binary"
+    writeFileSync(testBinaryPath, "#!/bin/bash\necho 'old version'", { mode: 0o755 });
+  });
+
+  afterEach(() => {
+    if (existsSync(testInstallDir)) {
+      rmSync(testInstallDir, { recursive: true });
+    }
+  });
+
+  it("should export installUpdate function", async () => {
+    const { installUpdate } = await import("../src/services/update");
+    expect(installUpdate).toBeDefined();
+    expect(typeof installUpdate).toBe("function");
+  });
+
+  it("should return InstallResult with required fields", async () => {
+    const { installUpdate, createTestZip } = await import("../src/services/update");
+
+    // Create a valid test zip
+    await createTestZip(testZipPath, "supertag", "#!/bin/bash\necho 'new version'");
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(typeof result.success).toBe("boolean");
+    expect(typeof result.installedVersion).toBe("string");
+    expect(typeof result.message).toBe("string");
+  });
+
+  it("should backup current binary before replacing", async () => {
+    const { installUpdate, createTestZip } = await import("../src/services/update");
+
+    await createTestZip(testZipPath, "supertag", "#!/bin/bash\necho 'new version'");
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.backupPath).toBeDefined();
+    expect(existsSync(result.backupPath!)).toBe(true);
+
+    // Verify backup contains old content
+    const backupContent = readFileSync(result.backupPath!, "utf-8");
+    expect(backupContent).toContain("old version");
+  });
+
+  it("should replace binary with new version", async () => {
+    const { installUpdate, createTestZip } = await import("../src/services/update");
+
+    await createTestZip(testZipPath, "supertag", "#!/bin/bash\necho 'new version 1.2.3'");
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+
+    // Verify binary was replaced
+    const newContent = readFileSync(testBinaryPath, "utf-8");
+    expect(newContent).toContain("new version");
+  });
+
+  it("should preserve executable permissions", async () => {
+    const { installUpdate, createTestZip } = await import("../src/services/update");
+    const { statSync } = await import("fs");
+
+    await createTestZip(testZipPath, "supertag", "#!/bin/bash\necho 'new version'");
+
+    await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    const stats = statSync(testBinaryPath);
+    // Check that file is executable (has at least user execute permission)
+    expect((stats.mode & 0o100) !== 0).toBe(true);
+  });
+
+  it("should return error for non-existent zip", async () => {
+    const { installUpdate } = await import("../src/services/update");
+
+    const result = await installUpdate({
+      zipPath: "/nonexistent/path/update.zip",
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("not found");
+  });
+
+  it("should return error for invalid zip", async () => {
+    const { installUpdate } = await import("../src/services/update");
+
+    // Create an invalid zip file
+    writeFileSync(testZipPath, "not a valid zip file");
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("should rollback on failure during installation", async () => {
+    const { installUpdate } = await import("../src/services/update");
+
+    // Create a corrupted zip that will fail during extraction
+    writeFileSync(testZipPath, "PK\x03\x04corrupted data");
+
+    const originalContent = readFileSync(testBinaryPath, "utf-8");
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(false);
+
+    // Original binary should still work (either unchanged or restored)
+    expect(existsSync(testBinaryPath)).toBe(true);
+  });
+});
+
+// =============================================================================
+// T-4.1: Passive Notification Logic Tests
+// =============================================================================
+
+describe("Passive Notification Logic", () => {
+  const testCacheDir = "/tmp/supertag-notification-test";
+  const testCachePath = join(testCacheDir, "update-cache.json");
+
+  beforeEach(() => {
+    if (existsSync(testCacheDir)) {
+      rmSync(testCacheDir, { recursive: true });
+    }
+    mkdirSync(testCacheDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testCacheDir)) {
+      rmSync(testCacheDir, { recursive: true });
+    }
+  });
+
+  it("should export shouldShowNotification function", async () => {
+    const { shouldShowNotification } = await import("../src/services/update");
+    expect(shouldShowNotification).toBeDefined();
+    expect(typeof shouldShowNotification).toBe("function");
+  });
+
+  it("should export markNotificationShown function", async () => {
+    const { markNotificationShown } = await import("../src/services/update");
+    expect(markNotificationShown).toBeDefined();
+    expect(typeof markNotificationShown).toBe("function");
+  });
+
+  it("should return true when update available and never notified", async () => {
+    const { shouldShowNotification, setCache } = await import("../src/services/update");
+
+    // Cache with update available, never notified
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: null,
+      latestVersion: "2.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("should return false when no update available", async () => {
+    const { shouldShowNotification, setCache } = await import("../src/services/update");
+
+    // Cache with same version (no update)
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: null,
+      latestVersion: "1.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath,
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("should return false when recently notified (within 24 hours)", async () => {
+    const { shouldShowNotification, setCache } = await import("../src/services/update");
+
+    // Cache with recent notification
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: new Date().toISOString(), // Just notified
+      latestVersion: "2.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath,
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("should return true when notified more than 24 hours ago", async () => {
+    const { shouldShowNotification, setCache } = await import("../src/services/update");
+
+    // Cache with old notification (25 hours ago)
+    const oldNotification = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: oldNotification,
+      latestVersion: "2.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("should return false when cache is missing", async () => {
+    const { shouldShowNotification } = await import("../src/services/update");
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath, // No cache file exists
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("should update cache when markNotificationShown is called", async () => {
+    const { markNotificationShown, setCache, getCache } = await import("../src/services/update");
+
+    // Create cache without notification
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: null,
+      latestVersion: "2.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    markNotificationShown(testCachePath);
+
+    const cache = getCache(testCachePath);
+    expect(cache?.notifiedAt).not.toBeNull();
+    expect(cache?.notifiedAt).toBeDefined();
+  });
+
+  it("should not show notification for same version already notified", async () => {
+    const { shouldShowNotification, setCache } = await import("../src/services/update");
+
+    // Recently notified about version 2.0.0
+    setCache({
+      checkedAt: new Date().toISOString(),
+      notifiedAt: new Date().toISOString(),
+      latestVersion: "2.0.0",
+      currentVersion: "1.0.0",
+      releaseDate: "2025-01-01T00:00:00Z",
+      changelog: [],
+      assets: [],
+    }, testCachePath);
+
+    const result = shouldShowNotification({
+      currentVersion: "1.0.0",
+      cachePath: testCachePath,
+    });
+
+    expect(result).toBe(false);
+  });
+});

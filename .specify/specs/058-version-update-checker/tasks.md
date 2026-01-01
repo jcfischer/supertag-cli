@@ -1,9 +1,9 @@
 ---
 feature: "Version Update Checker"
 plan: "./plan.md"
-status: "in_progress"
+status: "completed"
 total_tasks: 14
-completed: 8
+completed: 14
 ---
 
 # Tasks: Version Update Checker
@@ -18,78 +18,78 @@ completed: 8
 
 ### Group 1: Foundation
 
-- [ ] **T-1.1** Add update types to types.ts [T] [P]
+- [x] **T-1.1** Add update types to types.ts [T] [P]
   - File: `src/types.ts`
   - Test: `tests/update-service.test.ts` (type validation)
   - Description: Add GitHubRelease, GitHubAsset, UpdateCache, UpdateConfig, Platform, UpdateCheckResult, InstallResult types
 
-- [ ] **T-1.2** Implement version comparison utility [T] [P]
+- [x] **T-1.2** Implement version comparison utility [T] [P]
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Implement `compareVersions(a, b)` for semver comparison. Handle edge cases: pre-release, build metadata, missing components
 
-- [ ] **T-1.3** Implement platform detection [T] [P]
+- [x] **T-1.3** Implement platform detection [T] [P]
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Implement `detectPlatform()` using process.arch and process.platform. Map to Platform type
 
-- [ ] **T-1.4** Implement cache utilities [T] [P]
+- [x] **T-1.4** Implement cache utilities [T] [P]
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Implement `getCache()`, `setCache()`, `isCacheStale()`. Use ~/.cache/supertag/update-cache.json
 
 ### Group 2: Core Features
 
-- [ ] **T-2.1** Implement GitHub API integration [T] (depends: T-1.1)
+- [x] **T-2.1** Implement GitHub API integration [T] (depends: T-1.1)
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Implement `fetchLatestRelease()` to call GitHub Releases API with proper headers and error handling
 
-- [ ] **T-2.2** Implement checkForUpdate [T] (depends: T-1.2, T-1.3, T-1.4, T-2.1)
+- [x] **T-2.2** Implement checkForUpdate [T] (depends: T-1.2, T-1.3, T-1.4, T-2.1)
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Main check function with cache logic, version comparison, and UpdateCheckResult generation
 
-- [ ] **T-2.3** Implement downloadUpdate [T] (depends: T-1.3)
+- [x] **T-2.3** Implement downloadUpdate [T] (depends: T-1.3)
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Streaming download with progress callback, file size verification
 
-- [ ] **T-2.4** Create update CLI commands [T] (depends: T-2.2, T-2.3)
+- [x] **T-2.4** Create update CLI commands [T] (depends: T-2.2, T-2.3)
   - File: `src/commands/update.ts`
   - Test: `tests/update-commands.test.ts`
   - Description: Implement `supertag update check` and `supertag update download` subcommands
 
 ### Group 3: Self-Update
 
-- [ ] **T-3.1** Implement installUpdate [T] (depends: T-2.3)
+- [x] **T-3.1** Implement installUpdate [T] (depends: T-2.3)
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Unzip, backup current binary, replace with new version. Handle permissions and rollback on failure
 
-- [ ] **T-3.2** Add install command to CLI [T] (depends: T-3.1, T-2.4)
+- [x] **T-3.2** Add install command to CLI [T] (depends: T-3.1, T-2.4)
   - File: `src/commands/update.ts`
   - Test: `tests/update-commands.test.ts`
   - Description: Implement `supertag update install` with confirmation, backup info, success/failure output
 
 ### Group 4: Integration
 
-- [ ] **T-4.1** Implement passive notification logic [T] (depends: T-2.2)
+- [x] **T-4.1** Implement passive notification logic [T] (depends: T-2.2)
   - File: `src/services/update.ts`
   - Test: `tests/update-service.test.ts`
   - Description: Implement `shouldShowNotification()` and `markNotificationShown()`. Check cache age, notification frequency
 
-- [ ] **T-4.2** Add passive check hook to main CLI [T] (depends: T-4.1)
+- [x] **T-4.2** Add passive check hook to main CLI [T] (depends: T-4.1)
   - File: `src/index.ts`
   - Test: `tests/update-commands.test.ts`
   - Description: Non-blocking async check on CLI startup. Show one-line notification if update available
 
-- [ ] **T-4.3** Add updateCheck config option (depends: T-4.2)
+- [x] **T-4.3** Add updateCheck config option (depends: T-4.2)
   - File: `src/config/manager.ts`, `src/types.ts`
   - Test: `tests/update-commands.test.ts`
   - Description: Add `updateCheck: 'enabled' | 'disabled' | 'manual'` to TanaConfig. Wire into passive check
 
-- [ ] **T-4.4** Wire update command into main CLI (depends: T-3.2)
+- [x] **T-4.4** Wire update command into main CLI (depends: T-3.2)
   - File: `src/index.ts`
   - Test: `tests/update-commands.test.ts`
   - Description: Register update command with subcommands in Commander.js setup
@@ -134,12 +134,12 @@ T-1.4 ──┘              │                         │
 | T-2.2 | ✅ done | 2026-01-01 | 2026-01-01 | Check for update |
 | T-2.3 | ✅ done | 2026-01-01 | 2026-01-01 | Download update |
 | T-2.4 | ✅ done | 2026-01-01 | 2026-01-01 | CLI commands wired into index.ts |
-| T-3.1 | pending | - | - | Install update |
-| T-3.2 | pending | - | - | Install command |
-| T-4.1 | pending | - | - | Notification logic |
-| T-4.2 | pending | - | - | Passive check hook |
-| T-4.3 | pending | - | - | Config option |
-| T-4.4 | pending | - | - | Wire into CLI |
+| T-3.1 | ✅ done | 2026-01-01 | 2026-01-01 | Install update function |
+| T-3.2 | ✅ done | 2026-01-01 | 2026-01-01 | Install CLI command |
+| T-4.1 | ✅ done | 2026-01-01 | 2026-01-01 | Notification logic |
+| T-4.2 | ✅ done | 2026-01-01 | 2026-01-01 | Passive check hook integrated |
+| T-4.3 | ✅ done | 2026-01-01 | 2026-01-01 | Config option: updateCheck enabled/disabled/manual |
+| T-4.4 | ✅ done | 2026-01-01 | 2026-01-01 | Update command wired (was done in T-2.4) |
 
 ## TDD Reminder
 
