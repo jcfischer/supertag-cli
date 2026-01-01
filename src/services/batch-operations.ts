@@ -7,8 +7,10 @@
  * Spec: 062-batch-operations
  */
 
+import { Database } from 'bun:sqlite';
 import type { NodeContents } from '../mcp/tools/node.js';
 import type { CreateNodeInput, TanaApiNode } from '../types.js';
+import { withDbRetrySync } from '../db/retry.js';
 
 // =============================================================================
 // Constants
@@ -98,11 +100,32 @@ export interface BatchError {
 }
 
 // =============================================================================
-// Service Functions (Skeleton - to be implemented in T-1.2 and T-3.1)
+// Internal Types
+// =============================================================================
+
+interface NodeData {
+  id: string;
+  name: string | null;
+  created: number | null;
+  rawData: string;
+}
+
+interface TagData {
+  data_node_id: string;
+  tag_name: string;
+}
+
+// =============================================================================
+// Service Functions
 // =============================================================================
 
 /**
  * Fetch multiple nodes by ID from local database
+ *
+ * Uses efficient batch SQL queries to avoid N+1 problem:
+ * - Single query to fetch all nodes
+ * - Single query to fetch all tags for those nodes
+ * - Results assembled in input order
  *
  * @param dbPath - Path to workspace database
  * @param nodeIds - Array of node IDs to fetch (max 100)
@@ -114,12 +137,75 @@ export function batchGetNodes(
   nodeIds: string[],
   options?: { depth?: number; select?: string[] }
 ): BatchGetResult[] {
-  // Skeleton implementation - to be completed in T-1.2
-  return nodeIds.map((id) => ({
-    id,
-    node: null,
-    error: 'Not implemented yet',
-  }));
+  // Handle empty input
+  if (nodeIds.length === 0) {
+    return [];
+  }
+
+  const db = new Database(dbPath, { readonly: true });
+
+  try {
+    // Batch query all nodes in a single SQL statement
+    const placeholders = nodeIds.map(() => '?').join(',');
+    const nodesData = withDbRetrySync(
+      () =>
+        db
+          .query(
+            `SELECT id, name, created, raw_data as rawData FROM nodes WHERE id IN (${placeholders})`
+          )
+          .all(...nodeIds) as NodeData[],
+      'batchGetNodes nodes'
+    );
+
+    // Create a map for O(1) lookup
+    const nodeMap = new Map(nodesData.map((n) => [n.id, n]));
+
+    // Batch query all tags for found nodes
+    const foundIds = nodesData.map((n) => n.id);
+    let tagMap = new Map<string, string[]>();
+
+    if (foundIds.length > 0) {
+      const tagPlaceholders = foundIds.map(() => '?').join(',');
+      const tagsData = withDbRetrySync(
+        () =>
+          db
+            .query(
+              `SELECT data_node_id, tag_name FROM tag_applications WHERE data_node_id IN (${tagPlaceholders})`
+            )
+            .all(...foundIds) as TagData[],
+        'batchGetNodes tags'
+      );
+
+      // Group tags by node ID
+      for (const tag of tagsData) {
+        const existing = tagMap.get(tag.data_node_id) || [];
+        existing.push(tag.tag_name);
+        tagMap.set(tag.data_node_id, existing);
+      }
+    }
+
+    // Assemble results in input order
+    return nodeIds.map((id) => {
+      const nodeData = nodeMap.get(id);
+
+      if (!nodeData) {
+        return { id, node: null };
+      }
+
+      const node: NodeContents = {
+        id: nodeData.id,
+        name: nodeData.name || '(unnamed)',
+        created: nodeData.created ? new Date(nodeData.created) : null,
+        tags: tagMap.get(id) || [],
+        fields: [],
+        children: [],
+      };
+
+      return { id, node };
+    });
+  } finally {
+    db.close();
+  }
 }
 
 /**
