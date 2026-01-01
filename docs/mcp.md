@@ -10,20 +10,139 @@ The `supertag-mcp` binary runs locally on your machine as a subprocess - no serv
 
 ## Available Tools
 
+### Discovery Tools (Start Here)
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
+| `tana_capabilities` | Lightweight overview of all tools | "What can this Tana MCP do?" |
+| `tana_tool_schema` | Get full schema for a specific tool | Load parameters for `tana_search` |
+
+### Query Tools
+
 | Tool | Description | Example Query |
 |------|-------------|---------------|
 | `tana_search` | Full-text search across workspace | "Search my Tana for project notes" |
 | `tana_semantic_search` | Vector similarity search | "Find notes about knowledge management" |
 | `tana_tagged` | Find nodes by supertag | "Find all my todos" |
+| `tana_field_values` | Query text-based field values | "Get values for 'Summary' field" |
+
+### Explore Tools
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
+| `tana_node` | Get node contents with depth | "Show node abc123 with children" |
 | `tana_stats` | Database statistics | "How many nodes in my Tana?" |
 | `tana_supertags` | List all supertags | "What supertags do I have?" |
 | `tana_supertag_info` | Query supertag inheritance and fields | "What fields does the meeting tag have?" |
-| `tana_node` | Get node contents with depth | "Show node abc123 with children" |
-| `tana_create` | Create new nodes with references | "Create a todo linked to node abc123" |
-| `tana_sync` | Trigger reindex or status | "Reindex my Tana database" |
+
+### Transcript Tools
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
 | `tana_transcript_list` | List meetings with transcripts | "Which meetings have transcripts?" |
 | `tana_transcript_show` | Get transcript for a meeting | "Show transcript from last standup" |
 | `tana_transcript_search` | Search within transcripts | "Find where we discussed pricing" |
+
+### Mutate Tools
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
+| `tana_create` | Create new nodes with references | "Create a todo linked to node abc123" |
+
+### System Tools
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
+| `tana_sync` | Trigger reindex or status | "Reindex my Tana database" |
+| `tana_cache_clear` | Clear workspace cache | "Refresh workspace configuration" |
+
+---
+
+## Progressive Disclosure Pattern
+
+The Tana MCP server supports **progressive disclosure** - a two-tier tool discovery pattern that reduces upfront token cost from ~2000 tokens to ~1000 tokens.
+
+### Why Progressive Disclosure?
+
+Loading 16 tool schemas upfront consumes significant context. Progressive disclosure lets AI agents:
+1. Start with a lightweight overview (~1000 tokens)
+2. Load full schemas only for tools they need (~500 tokens each)
+
+### How It Works
+
+**Step 1: Discover Capabilities**
+
+```
+Agent: "What can this MCP server do?"
+→ Calls tana_capabilities
+→ Gets categorized tool list with brief descriptions and examples
+```
+
+**Step 2: Load Schemas On-Demand**
+
+```
+Agent: "I need to search"
+→ Calls tana_tool_schema with tool="tana_search"
+→ Gets full parameter schema for search
+```
+
+**Step 3: Execute Tools**
+
+```
+Agent: Uses loaded schema to call tana_search with validated parameters
+```
+
+### Example Workflow
+
+```json
+// Step 1: Agent asks what's available
+{"tool": "tana_capabilities"}
+
+// Response: Lightweight overview
+{
+  "version": "1.3.4",
+  "categories": [
+    {
+      "name": "query",
+      "description": "Search and find content",
+      "tools": [
+        {"name": "tana_search", "description": "Full-text search", "example": "Search by keywords"}
+      ]
+    }
+  ],
+  "quickActions": ["search", "create", "tagged", "show"]
+}
+
+// Step 2: Agent loads schema for needed tool
+{"tool": "tana_tool_schema", "arguments": {"tool": "tana_search"}}
+
+// Response: Full schema
+{
+  "tool": "tana_search",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "query": {"type": "string", "description": "Search query"},
+      "limit": {"type": "number", "default": 100}
+    },
+    "required": ["query"]
+  }
+}
+
+// Step 3: Agent executes with validated parameters
+{"tool": "tana_search", "arguments": {"query": "meeting notes", "limit": 10}}
+```
+
+### Token Savings
+
+| Pattern | Token Cost |
+|---------|------------|
+| **Traditional**: All 16 schemas upfront | ~2000 tokens |
+| **Progressive**: Capabilities only | ~1000 tokens |
+| **Progressive**: Capabilities + 1 schema | ~1500 tokens |
+| **Progressive**: Capabilities + 3 schemas | ~2000 tokens |
+
+Progressive disclosure breaks even at ~3 tools and saves tokens for most use cases.
 
 ## Prerequisites
 
