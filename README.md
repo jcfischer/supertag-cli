@@ -112,6 +112,41 @@ supertag create meeting "Team Standup" --date 2025-12-06
 supertag create video,towatch "Tutorial" --url https://example.com
 ```
 
+### BATCH - Multi-Node Operations
+
+Fetch or create multiple nodes efficiently in a single request.
+
+```bash
+# Fetch multiple nodes by ID
+supertag batch get id1 id2 id3
+
+# Pipe from search (get IDs, then fetch full details)
+supertag search "meeting" --format ids | supertag batch get --stdin
+
+# With children (depth 1-3)
+supertag batch get id1 id2 --depth 2
+
+# Create multiple nodes from JSON file
+supertag batch create --file nodes.json
+
+# Create from stdin
+echo '[{"supertag":"todo","name":"Task 1"},{"supertag":"todo","name":"Task 2"}]' | \
+  supertag batch create --stdin
+
+# Dry-run mode (validate without creating)
+supertag batch create --file nodes.json --dry-run
+```
+
+**Input format for batch create:**
+```json
+[
+  {"supertag": "todo", "name": "Task 1", "fields": {"Status": "Open"}},
+  {"supertag": "meeting", "name": "Standup", "children": [{"name": "Agenda item"}]}
+]
+```
+
+**Limits:** 100 nodes for `batch get`, 50 nodes for `batch create`.
+
 ### EXPORT - Automated Backup
 
 ```bash

@@ -304,6 +304,57 @@ export const toolSchemaSchema = z.object({
 });
 export type ToolSchemaInput = z.infer<typeof toolSchemaSchema>;
 
+// tana_batch_get (Spec 062: Batch Operations)
+export const batchGetSchema = z.object({
+  nodeIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(100)
+    .describe('Array of node IDs to fetch (1-100 IDs)'),
+  workspace: workspaceSchema,
+  depth: z
+    .number()
+    .min(0)
+    .max(3)
+    .default(0)
+    .describe('Depth of child traversal (0 = no children, 1 = direct children, etc.). Max 3.'),
+  select: selectSchema,
+});
+export type BatchGetInput = z.infer<typeof batchGetSchema>;
+
+// tana_batch_create (Spec 062: Batch Operations)
+// Node definition for batch create (similar to createSchema but in array form)
+const batchNodeSchema = z.object({
+  supertag: z.string().min(1).describe('Supertag name (e.g., "todo")'),
+  name: z.string().min(1).describe('Node name/title'),
+  fields: z
+    .record(z.string(), z.union([z.string(), z.array(z.string())]))
+    .optional()
+    .describe('Field values as key-value pairs (e.g., {"Status": "Done"})'),
+  children: z
+    .array(childNodeSchema)
+    .optional()
+    .describe('Child nodes with optional nesting'),
+});
+
+export const batchCreateSchema = z.object({
+  nodes: z
+    .array(batchNodeSchema)
+    .min(1)
+    .max(50)
+    .describe('Array of node definitions to create (1-50 nodes)'),
+  target: z
+    .string()
+    .optional()
+    .describe('Default target node ID for all nodes (INBOX, SCHEMA, or specific node ID)'),
+  dryRun: z
+    .boolean()
+    .default(false)
+    .describe('Validate without actually creating nodes'),
+  workspace: workspaceSchema,
+});
+export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
+
 // Zod v4 internal type definition
 interface ZodDef {
   type: string;

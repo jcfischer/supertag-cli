@@ -12,6 +12,7 @@ import { createSearchCommand } from "../../src/commands/search";
 import { createNodesCommand } from "../../src/commands/nodes";
 import { createTagsCommand } from "../../src/commands/tags";
 import { createStatsCommand } from "../../src/commands/stats";
+import { createBatchCommand } from "../../src/commands/batch";
 
 describe("CLI command wiring", () => {
   it("should export createSearchCommand", () => {
@@ -41,6 +42,13 @@ describe("CLI command wiring", () => {
     expect(cmd).toBeInstanceOf(Command);
     expect(cmd.name()).toBe("stats");
   });
+
+  it("should export createBatchCommand", () => {
+    expect(typeof createBatchCommand).toBe("function");
+    const cmd = createBatchCommand();
+    expect(cmd).toBeInstanceOf(Command);
+    expect(cmd.name()).toBe("batch");
+  });
 });
 
 describe("command registration", () => {
@@ -53,6 +61,7 @@ describe("command registration", () => {
     program.addCommand(createNodesCommand());
     program.addCommand(createTagsCommand());
     program.addCommand(createStatsCommand());
+    program.addCommand(createBatchCommand());
 
     // Verify commands were added
     const commandNames = program.commands.map((c) => c.name());
@@ -60,5 +69,6 @@ describe("command registration", () => {
     expect(commandNames).toContain("nodes");
     expect(commandNames).toContain("tags");
     expect(commandNames).toContain("stats");
+    expect(commandNames).toContain("batch");
   });
 });

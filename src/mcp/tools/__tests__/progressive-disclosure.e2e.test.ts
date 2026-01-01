@@ -29,7 +29,7 @@ describe('Progressive Disclosure E2E Workflow', () => {
           expect(tool.description).toBeDefined();
           expect(tool.example).toBeDefined();
           // Should NOT include inputSchema (that's the whole point)
-          expect((tool as Record<string, unknown>).inputSchema).toBeUndefined();
+          expect((tool as unknown as Record<string, unknown>).inputSchema).toBeUndefined();
         }
       }
     });

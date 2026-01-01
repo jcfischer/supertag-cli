@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Batch Operations (Spec 062)** - Fetch or create multiple nodes in a single request
+  - New `supertag batch get <ids...>` command to fetch multiple nodes by ID
+    - Supports stdin input: `echo "id1\nid2" | supertag batch get --stdin`
+    - Supports combined positional and stdin IDs
+    - Efficient SQL query (no N+1 queries)
+    - Max 100 nodes per request
+  - New `supertag batch create` command to create multiple nodes at once
+    - Supports JSON file input: `supertag batch create --file nodes.json`
+    - Supports stdin: `cat nodes.json | supertag batch create --stdin`
+    - Dry-run mode for validation: `--dry-run`
+    - Max 50 nodes per request
+  - New MCP tools: `tana_batch_get` and `tana_batch_create`
+  - All standard format options supported (json, csv, table, ids, minimal, jsonl)
+  - 46 new tests
+
 - **Universal Format Options (Spec 060)** - Extended output formatting from 3 modes to 6 formats
   - New `--format <type>` option on all standard commands
   - Formats: `json`, `table`, `csv`, `ids`, `minimal`, `jsonl`

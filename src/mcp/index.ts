@@ -32,6 +32,8 @@ import { transcriptList, transcriptShow, transcriptSearch } from './tools/transc
 import { cacheClear } from './tools/cache.js';
 import { capabilities } from './tools/capabilities.js';
 import { toolSchema } from './tools/tool-schema.js';
+import { batchGet } from './tools/batch-get.js';
+import { batchCreate } from './tools/batch-create.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -186,6 +188,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Get the full JSON schema for a specific Tana tool. Use after tana_capabilities to load detailed parameter information for tools you need.',
         inputSchema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
       },
+      {
+        name: 'tana_batch_get',
+        description:
+          'Fetch multiple nodes by ID in a single request. Returns an array of results in the same order as the input node IDs. Use for efficient batch lookups.',
+        inputSchema: schemas.zodToJsonSchema(schemas.batchGetSchema),
+      },
+      {
+        name: 'tana_batch_create',
+        description:
+          'Create multiple nodes in a single request. Each node requires a supertag and name. Use dryRun=true to validate without creating. Returns per-node results with success/error status.',
+        inputSchema: schemas.zodToJsonSchema(schemas.batchCreateSchema),
+      },
     ],
   };
 });
@@ -277,6 +291,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_tool_schema': {
         const validated = schemas.toolSchemaSchema.parse(args);
         result = await toolSchema(validated);
+        break;
+      }
+      case 'tana_batch_get': {
+        const validated = schemas.batchGetSchema.parse(args);
+        result = await batchGet(validated);
+        break;
+      }
+      case 'tana_batch_create': {
+        const validated = schemas.batchCreateSchema.parse(args);
+        result = await batchCreate(validated);
         break;
       }
       default:
