@@ -5,6 +5,7 @@
  * Provides consistent error handling, database validation, and caching.
  *
  * Spec: 052-unified-workspace-resolver
+ * Updated: 073-error-context (T-5.2 - Structured errors)
  */
 
 import { existsSync } from "fs";
@@ -15,6 +16,8 @@ import {
   getWorkspaceExportDir,
 } from "./paths";
 import { ConfigManager } from "./manager";
+import { StructuredError } from "../utils/structured-errors";
+import { findSimilarValues, formatSimilarValuesSuggestion } from "../utils/suggestion-generator";
 import type { TanaConfig, WorkspaceConfig, WorkspaceContext } from "../types";
 
 // =============================================================================
@@ -62,35 +65,73 @@ export interface ResolveOptions {
 /**
  * Thrown when workspace alias/id not found in configuration
  */
-export class WorkspaceNotFoundError extends Error {
-  public readonly name = "WorkspaceNotFoundError";
+export class WorkspaceNotFoundError extends StructuredError {
+  public readonly requestedWorkspace: string;
+  public readonly availableWorkspaces: string[];
 
-  constructor(
-    public readonly requestedWorkspace: string,
-    public readonly availableWorkspaces: string[]
-  ) {
+  constructor(requestedWorkspace: string, availableWorkspaces: string[]) {
     const available =
       availableWorkspaces.length > 0
         ? `\nAvailable: ${availableWorkspaces.join(", ")}`
         : "\nNo workspaces configured.";
-    super(`Workspace not found: ${requestedWorkspace}${available}`);
+
+    // Find similar workspace names for suggestion
+    const similarWorkspaces = findSimilarValues(requestedWorkspace, availableWorkspaces);
+    const similarSuggestion = formatSimilarValuesSuggestion(similarWorkspaces);
+    const suggestion =
+      similarSuggestion ||
+      (availableWorkspaces.length > 0
+        ? `Try one of: ${availableWorkspaces.join(", ")}`
+        : 'Configure workspaces in supertag config, then run "supertag sync".');
+
+    super("WORKSPACE_NOT_FOUND", `Workspace not found: ${requestedWorkspace}${available}`, {
+      details: {
+        requestedWorkspace,
+        availableWorkspaces,
+      },
+      suggestion,
+      recovery: {
+        canRetry: false,
+        alternatives: availableWorkspaces,
+      },
+    });
+
+    this.name = "WorkspaceNotFoundError";
+    this.requestedWorkspace = requestedWorkspace;
+    this.availableWorkspaces = availableWorkspaces;
   }
 }
 
 /**
  * Thrown when workspace exists but database file is missing
  */
-export class WorkspaceDatabaseMissingError extends Error {
-  public readonly name = "WorkspaceDatabaseMissingError";
+export class WorkspaceDatabaseMissingError extends StructuredError {
+  public readonly workspace: string;
+  public readonly dbPath: string;
 
-  constructor(
-    public readonly workspace: string,
-    public readonly dbPath: string
-  ) {
+  constructor(workspace: string, dbPath: string) {
+    const suggestion = `Run 'supertag sync -w ${workspace}' to create the database.`;
+
     super(
-      `Workspace '${workspace}' database not found at: ${dbPath}\n` +
-        `Run 'supertag sync' to create the database.`
+      "DATABASE_NOT_FOUND",
+      // Include suggestion in message for backward compatibility
+      `Workspace '${workspace}' database not found at: ${dbPath}\n${suggestion}`,
+      {
+        details: {
+          workspace,
+          dbPath,
+        },
+        suggestion,
+        recovery: {
+          canRetry: false,
+          suggestedCommand: `supertag sync -w ${workspace}`,
+        },
+      }
     );
+
+    this.name = "WorkspaceDatabaseMissingError";
+    this.workspace = workspace;
+    this.dbPath = dbPath;
   }
 }
 
