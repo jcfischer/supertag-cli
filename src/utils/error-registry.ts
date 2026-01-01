@@ -165,6 +165,11 @@ export const ERROR_REGISTRY: Record<ErrorCode, ErrorMeta> = {
     defaultSuggestion: "Fix all listed validation errors.",
     retryable: false,
   },
+  UNKNOWN_ERROR: {
+    category: "internal",
+    defaultSuggestion: "An unexpected error occurred. Check the error message for details.",
+    retryable: false,
+  },
 };
 
 // =============================================================================

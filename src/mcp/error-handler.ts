@@ -25,10 +25,12 @@ export interface McpContentItem {
 
 /**
  * MCP tool result with error flag
+ * Uses index signature for compatibility with MCP SDK
  */
 export interface McpToolResult {
   isError: boolean;
   content: McpContentItem[];
+  [key: string]: unknown;
 }
 
 // =============================================================================

@@ -42,6 +42,7 @@ export const ERROR_CODES = [
   // Internal errors
   "INTERNAL_ERROR",
   "VALIDATION_ERRORS",
+  "UNKNOWN_ERROR",
 ] as const;
 
 /**
@@ -85,8 +86,10 @@ export type ErrorCategory = (typeof ERROR_CATEGORIES)[number];
  * Recovery hints for AI agents and programmatic error handling
  */
 export interface RecoveryInfo {
+  /** Whether the operation can be retried (alias: retryable) */
+  canRetry?: boolean;
   /** Whether the operation can be retried */
-  retryable: boolean;
+  retryable?: boolean;
   /** Seconds to wait before retrying (for rate limits, etc.) */
   retryAfter?: number;
   /** Retry strategy: immediate or exponential backoff */
@@ -99,6 +102,10 @@ export interface RecoveryInfo {
   alternativeParams?: Record<string, unknown>;
   /** Suggested parameters for retry */
   retryWith?: Record<string, unknown>;
+  /** Alternative values (e.g., available workspaces) */
+  alternatives?: string[];
+  /** Suggested command to run to fix the issue */
+  suggestedCommand?: string;
 }
 
 // =============================================================================

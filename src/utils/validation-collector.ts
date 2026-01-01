@@ -108,9 +108,7 @@ export function mapZodError(zodError: z.ZodError): ValidationErrorItem[] {
     // Get the received value if available
     let value: unknown = undefined;
     if ("received" in issue) {
-      value = issue.received;
-    } else if (issue.code === "invalid_type" && "received" in issue) {
-      value = (issue as z.ZodInvalidTypeIssue).received;
+      value = (issue as { received?: unknown }).received;
     }
 
     // Build the error item
@@ -125,8 +123,8 @@ export function mapZodError(zodError: z.ZodError): ValidationErrorItem[] {
     }
 
     // Add expected type for type errors
-    if (issue.code === "invalid_type") {
-      item.expected = (issue as z.ZodInvalidTypeIssue).expected;
+    if (issue.code === "invalid_type" && "expected" in issue) {
+      item.expected = (issue as { expected?: string }).expected;
     }
 
     return item;
@@ -136,7 +134,7 @@ export function mapZodError(zodError: z.ZodError): ValidationErrorItem[] {
 /**
  * Map Zod issue code to a standardized code
  */
-function mapZodIssueCode(zodCode: z.ZodIssueCode): string {
+function mapZodIssueCode(zodCode: string): string {
   switch (zodCode) {
     case "invalid_type":
       return "INVALID_TYPE";
