@@ -95,6 +95,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Get 5 nodes in a single request',
   },
+  {
+    name: 'tana_query',
+    description: 'Unified query with tag, field, and date filtering',
+    category: 'query',
+    example: 'Find active tasks with parent project',
+  },
 
   // Explore tools
   {
@@ -206,6 +212,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_cache_clear: schemas.zodToJsonSchema(schemas.cacheClearSchema),
   tana_capabilities: schemas.zodToJsonSchema(schemas.capabilitiesSchema),
   tana_tool_schema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
+  tana_query: schemas.zodToJsonSchema(schemas.querySchema),
 };
 
 // =============================================================================

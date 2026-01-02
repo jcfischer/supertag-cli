@@ -34,6 +34,7 @@ import { capabilities } from './tools/capabilities.js';
 import { toolSchema } from './tools/tool-schema.js';
 import { batchGet } from './tools/batch-get.js';
 import { batchCreate } from './tools/batch-create.js';
+import { query } from './tools/query.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -200,6 +201,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Create multiple nodes in a single request. Each node requires a supertag and name. Use dryRun=true to validate without creating. Returns per-node results with success/error status.',
         inputSchema: schemas.zodToJsonSchema(schemas.batchCreateSchema),
       },
+      {
+        name: 'tana_query',
+        description:
+          'Unified query with tag, field, and date filtering. Single tool that replaces multi-step discovery workflows. Supports: find by tag, filter by field values (Status=Done), date ranges (created after 7d), contains (~), exists checks, ordering (-created for descending), and field projection (select). Example: find task where Status=Active and created>7d order by -created limit 20',
+        inputSchema: schemas.zodToJsonSchema(schemas.querySchema),
+      },
     ],
   };
 });
@@ -301,6 +308,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_batch_create': {
         const validated = schemas.batchCreateSchema.parse(args);
         result = await batchCreate(validated);
+        break;
+      }
+      case 'tana_query': {
+        const validated = schemas.querySchema.parse(args);
+        result = await query(validated);
         break;
       }
       default:

@@ -32,7 +32,7 @@ Get a lightweight overview of available tools, categorized by function.
 | `category` | string | No | Filter to specific category (query, explore, transcript, mutate, system) |
 
 **Categories:**
-- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get
+- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get, tana_query
 - **explore**: tana_node, tana_stats, tana_supertags, tana_supertag_info
 - **transcript**: tana_transcript_list, tana_transcript_show, tana_transcript_search
 - **mutate**: tana_create, tana_batch_create
@@ -262,6 +262,60 @@ Create meeting notes with children for agenda items
 Validate batch create with dry-run before creating
 ```
 
+### tana_query
+Unified query that combines tag filtering, field filtering, date ranges, and full-text search in a single expressive query. Replaces multi-step discovery→query→filter workflows.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `find` | string | Yes | Tag name to search (e.g., "task", "meeting", "*" for any) |
+| `where` | object | No | Field conditions (see below) |
+| `orderBy` | string | No | Sort field, prefix with "-" for descending (e.g., "-created") |
+| `limit` | number | No | Max results (default: 100) |
+| `offset` | number | No | Skip N results for pagination |
+| `select` | array | No | Fields to include in response |
+| `workspace` | string | No | Workspace alias |
+
+**Where conditions (object keys are field names):**
+- Shorthand: `{"Status": "Done"}` (equality)
+- Operators: `{"Status": {"eq": "Done"}}`, `{"Status": {"neq": "Cancelled"}}`
+- Contains: `{"name": {"contains": "TypeScript"}}`
+- Dates: `{"created": {"after": "7d"}}`, `{"created": {"before": "2025-01-01"}}`
+- Comparison: `{"priority": {"gt": 5}}`, `{"count": {"lte": 10}}`
+- Exists: `{"Summary": {"exists": true}}`
+
+**Relative dates:** `today`, `7d` (7 days ago), `1w` (1 week), `1m` (1 month), `1y` (1 year)
+
+**Example:**
+```
+Find all tasks with status Active created in the last week
+{
+  "find": "task",
+  "where": {
+    "Status": "Active",
+    "created": {"after": "7d"}
+  },
+  "orderBy": "-created",
+  "limit": 20
+}
+
+Find meetings with John in attendees
+{
+  "find": "meeting",
+  "where": {
+    "Attendees": {"contains": "John"}
+  }
+}
+
+Find any nodes matching "project" in name
+{
+  "find": "*",
+  "where": {
+    "name": {"contains": "project"}
+  }
+}
+```
+
 ### tana_field_values
 Query field values extracted from Tana nodes. Fields like "Gestern war gut weil", "Summary", or "Action Items" store structured data in tuple children.
 
@@ -397,6 +451,71 @@ supertag tags visualize --show-fields     # Show field counts
 supertag tags visualize --colors          # Use tag colors (DOT)
 supertag tags visualize --output graph.md # Write to file
 ```
+
+### Query Command
+
+The unified query command combines tag filtering, field filtering, and date ranges in a SQL-like syntax:
+
+```bash
+# Basic query by tag
+supertag query "find task"
+
+# Filter by field value
+supertag query "find task where Status = Done"
+
+# Multiple conditions (AND)
+supertag query "find task where Status = Active and Priority = High"
+
+# OR conditions (use parentheses)
+supertag query "find task where (Status = Done or Status = Cancelled)"
+
+# Contains operator (~)
+supertag query "find meeting where Attendees ~ John"
+supertag query "find * where name ~ project"
+
+# Date filtering with relative dates
+supertag query "find task where created > 7d"        # Last 7 days
+supertag query "find meeting where created > 1w"    # Last week
+supertag query "find note where created > 1m"       # Last month
+
+# Date filtering with ISO dates
+supertag query "find task where created > 2025-01-01"
+supertag query "find meeting where created > 2025-01-01 and created < 2025-12-31"
+
+# Ordering results
+supertag query "find task order by created"         # Ascending
+supertag query "find task order by -created"        # Descending
+supertag query "find task where Status = Active order by -created"
+
+# Pagination
+supertag query "find task limit 20"
+supertag query "find task limit 20 offset 40"
+
+# Field projection
+supertag query "find task select id,name,Status"
+
+# Complete example
+supertag query "find task where Status = Active and created > 7d order by -created limit 20"
+
+# Output formats
+supertag query "find task" --format json
+supertag query "find task" --format csv > tasks.csv
+supertag query "find task" --format ids | xargs -I{} supertag nodes show {}
+```
+
+**Query syntax:**
+```
+find <tag> [where <conditions>] [order by [-]<field>] [limit N] [offset N] [select <fields>]
+```
+
+**Operators:**
+- `=` - Equality
+- `!=` - Not equal
+- `~` - Contains
+- `>`, `<`, `>=`, `<=` - Comparison
+- `exists` - Field exists check
+
+**Relative dates:** `today`, `7d`, `1w`, `1m`, `1y`
 
 ### Create Commands
 
