@@ -304,6 +304,60 @@ export const toolSchemaSchema = z.object({
 });
 export type ToolSchemaInput = z.infer<typeof toolSchemaSchema>;
 
+// tana_query (Spec 063: Unified Query Language)
+/**
+ * Where condition for a single field
+ * Shorthand: "Done" means { eq: "Done" }
+ * Full form: { eq: "Done", contains: "John", after: "7d", before: "today", exists: true, neq: "Active", gt: 5, gte: 1, lt: 100, lte: 50 }
+ */
+const whereConditionSchema = z.union([
+  // Shorthand: "Done" means { eq: "Done" }
+  z.string(),
+  z.number(),
+  // Full condition object
+  z.object({
+    eq: z.union([z.string(), z.number()]).optional().describe('Exact match'),
+    neq: z.union([z.string(), z.number()]).optional().describe('Not equal'),
+    contains: z.string().optional().describe('Contains substring or array element'),
+    after: z.string().optional().describe('After date (ISO 8601 or relative: today, 7d, 1w)'),
+    before: z.string().optional().describe('Before date (ISO 8601 or relative: today, 7d, 1w)'),
+    gt: z.number().optional().describe('Greater than'),
+    gte: z.number().optional().describe('Greater than or equal'),
+    lt: z.number().optional().describe('Less than'),
+    lte: z.number().optional().describe('Less than or equal'),
+    exists: z.boolean().optional().describe('Field has value'),
+  }),
+]);
+
+export const querySchema = z.object({
+  find: z
+    .string()
+    .min(1)
+    .describe('Supertag to find (e.g., "task", "meeting") or "*" for all nodes'),
+  where: z
+    .record(z.string(), whereConditionSchema)
+    .optional()
+    .describe('Filter conditions by field name. Use "parent.tags" or "parent.name" for parent queries.'),
+  select: selectSchema,
+  orderBy: z
+    .string()
+    .optional()
+    .describe('Field to order by. Prefix with "-" for descending (e.g., "-created")'),
+  limit: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(100)
+    .describe('Maximum results (default: 100, max: 1000)'),
+  offset: z
+    .number()
+    .min(0)
+    .default(0)
+    .describe('Skip first N results for pagination'),
+  workspace: workspaceSchema,
+});
+export type QueryInput = z.infer<typeof querySchema>;
+
 // tana_batch_get (Spec 062: Batch Operations)
 export const batchGetSchema = z.object({
   nodeIds: z
