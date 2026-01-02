@@ -179,6 +179,61 @@ describe("Query Parser", () => {
     });
   });
 
+  describe("OR Groups (T-2.3)", () => {
+    it("should parse simple OR group", () => {
+      const ast = parseQuery("find task where (Status = Done or Status = Active)");
+      expect(ast.where).toHaveLength(1);
+      // The result should be a WhereGroup
+      const group = ast.where![0];
+      expect("type" in group).toBe(true);
+      expect((group as any).type).toBe("or");
+    });
+
+    it("should parse OR group with two conditions", () => {
+      const ast = parseQuery("find task where (Priority > 2 or Priority < 1)");
+      const group = ast.where![0] as any;
+      expect(group.clauses).toHaveLength(2);
+    });
+
+    it("should parse AND with OR group", () => {
+      const ast = parseQuery("find task where created > 7d and (Status = Done or Status = Active)");
+      expect(ast.where).toHaveLength(2);
+      // First is a regular clause, second is a group
+      const firstClause = ast.where![0] as WhereClause;
+      expect(firstClause.field).toBe("created");
+      const group = ast.where![1] as any;
+      expect(group.type).toBe("or");
+    });
+
+    it("should parse multiple OR conditions", () => {
+      const ast = parseQuery("find task where (Status = Done or Status = Active or Status = Pending)");
+      const group = ast.where![0] as any;
+      expect(group.clauses).toHaveLength(3);
+    });
+  });
+
+  describe("Parent Path Fields (T-2.4)", () => {
+    it("should parse parent.tags field", () => {
+      const ast = parseQuery("find task where parent.tags ~ project");
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("parent.tags");
+      expect(clause.operator).toBe("~");
+    });
+
+    it("should parse parent.name field", () => {
+      const ast = parseQuery('find task where parent.name = "Q4 Planning"');
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("parent.name");
+      expect(clause.value).toBe("Q4 Planning");
+    });
+
+    it("should parse fields.Status path", () => {
+      const ast = parseQuery("find task where fields.Status = Done");
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("fields.Status");
+    });
+  });
+
   describe("Error Handling", () => {
     it("should throw on missing find keyword", () => {
       expect(() => parseQuery("task")).toThrow(ParseError);

@@ -150,23 +150,60 @@ class Parser {
   }
 
   /**
-   * Parse where clause: "where" condition ("and" condition)*
+   * Parse where clause: "where" condition_or_group ("and" condition_or_group)*
    */
   private parseWhereClause(): (WhereClause | WhereGroup)[] {
     this.expect(TokenType.KEYWORD, "where");
 
-    const conditions: WhereClause[] = [];
+    const conditions: (WhereClause | WhereGroup)[] = [];
 
-    // Parse first condition
-    conditions.push(this.parseCondition());
+    // Parse first condition or group
+    conditions.push(this.parseConditionOrGroup());
 
     // Parse additional conditions with "and"
     while (this.match(TokenType.KEYWORD, "and")) {
       this.advance(); // consume "and"
-      conditions.push(this.parseCondition());
+      conditions.push(this.parseConditionOrGroup());
     }
 
     return conditions;
+  }
+
+  /**
+   * Parse either a single condition or a parenthesized group
+   */
+  private parseConditionOrGroup(): WhereClause | WhereGroup {
+    // Check for opening parenthesis (start of OR group)
+    if (this.match(TokenType.LPAREN)) {
+      return this.parseOrGroup();
+    }
+
+    return this.parseCondition();
+  }
+
+  /**
+   * Parse OR group: "(" condition ("or" condition)* ")"
+   */
+  private parseOrGroup(): WhereGroup {
+    this.expect(TokenType.LPAREN, "(");
+
+    const clauses: WhereClause[] = [];
+
+    // Parse first condition
+    clauses.push(this.parseCondition());
+
+    // Parse additional conditions with "or"
+    while (this.match(TokenType.KEYWORD, "or")) {
+      this.advance(); // consume "or"
+      clauses.push(this.parseCondition());
+    }
+
+    this.expect(TokenType.RPAREN, ")");
+
+    return {
+      type: "or",
+      clauses,
+    };
   }
 
   /**
