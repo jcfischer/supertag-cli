@@ -111,20 +111,36 @@ export function tokenize(input: string): Token[] {
     throw new Error(`Unterminated string starting at position ${pos}`);
   }
 
-  function readNumber(): number {
-    let numStr = "";
+  function readNumberOrDateOrRelative(): Token {
+    let value = "";
 
     // Handle negative numbers
     if (peek() === "-") {
-      numStr += advance();
+      value += advance();
     }
 
     // Read digits and decimal point
     while (pos < input.length && /[\d.]/.test(peek())) {
-      numStr += advance();
+      value += advance();
     }
 
-    return parseFloat(numStr);
+    // Check for relative date suffix (d, w, m, y) - must not be followed by more alphanums
+    if (/[dwmy]/.test(peek()) && !/[a-zA-Z0-9]/.test(peek(1))) {
+      value += advance();
+      return { type: TokenType.IDENTIFIER, value };
+    }
+
+    // Check for ISO date format: YYYY-MM-DD or datetime
+    // If we have 4 digits followed by a hyphen, it's likely a date
+    if (value.length === 4 && peek() === "-" && /\d/.test(peek(1))) {
+      // Read the rest of the date/datetime
+      while (pos < input.length && /[\d\-:TZ+.]/.test(peek())) {
+        value += advance();
+      }
+      return { type: TokenType.IDENTIFIER, value };
+    }
+
+    return { type: TokenType.NUMBER, value: parseFloat(value) };
   }
 
   function readIdentifier(): string {
@@ -140,8 +156,8 @@ export function tokenize(input: string): Token[] {
       return advance();
     }
 
-    // Read identifier: letters, digits, underscores, dots
-    while (pos < input.length && /[a-zA-Z0-9_.]/.test(peek())) {
+    // Read identifier: letters, digits, underscores, dots, and hyphens (for dates)
+    while (pos < input.length && /[a-zA-Z0-9_.:-]/.test(peek())) {
       value += advance();
     }
 
@@ -196,10 +212,9 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
-    // Numbers (including negative)
+    // Numbers, relative dates (7d, 2w), or ISO dates (2025-01-01)
     if (/\d/.test(char) || (char === "-" && /\d/.test(peek(1)))) {
-      const value = readNumber();
-      tokens.push({ type: TokenType.NUMBER, value });
+      tokens.push(readNumberOrDateOrRelative());
       continue;
     }
 
