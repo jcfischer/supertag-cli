@@ -25,6 +25,7 @@
 - [Capabilities](#capabilities)
   - [READ - Query Workspace](#read---query-workspace)
   - [WRITE - Create Nodes](#write---create-nodes)
+  - [QUERY - Unified Query Language](#query---unified-query-language)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [FIELDS - Query Field Values](#fields---query-field-values)
@@ -111,6 +112,48 @@ supertag create todo "Task name" --status active
 supertag create meeting "Team Standup" --date 2025-12-06
 supertag create video,towatch "Tutorial" --url https://example.com
 ```
+
+### QUERY - Unified Query Language
+
+SQL-like queries for complex filtering in a single command.
+
+```bash
+# Find todos with specific status
+supertag query "find todo where Status = Done"
+
+# Filter by date with relative dates
+supertag query "find meeting where created > 7d"
+supertag query "find task where Due < today"
+
+# Combine conditions with AND/OR
+supertag query "find project where Status = Active and Priority >= 2"
+supertag query "find task where (Status = Open or Status = InProgress)"
+
+# Contains search
+supertag query "find contact where Name ~ John"
+
+# Parent path queries
+supertag query "find task where parent.tags ~ project"
+
+# Sort and limit results
+supertag query "find meeting order by -created limit 10"
+
+# Field projection
+supertag query "find todo" --select id,name,fields.Status
+```
+
+**Operators:**
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `=` | Exact match | `Status = Done` |
+| `~` | Contains | `Name ~ John` |
+| `>`, `<`, `>=`, `<=` | Comparison | `Priority >= 2` |
+| `exists` | Field has value | `Due exists` |
+| `not` | Negation | `not Status = Done` |
+| `and`, `or` | Logical | `A and (B or C)` |
+
+**Relative Dates:** `today`, `yesterday`, `7d`, `30d`, `1w`, `1m`, `1y`
 
 ### BATCH - Multi-Node Operations
 

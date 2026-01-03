@@ -277,4 +277,44 @@ describe("Unified Query Engine", () => {
       expect(result.count).toBeGreaterThan(0);
     });
   });
+
+  describe("Date Field Handling", () => {
+    it("should parse ISO date for created field", async () => {
+      // Get a task to find its created date
+      const allTasks = await engine.execute({ find: "task", limit: 1 });
+      expect(allTasks.count).toBeGreaterThan(0);
+
+      // The test data uses relative timestamps, so we'll test with a date far in the past
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "created", operator: ">", value: "2020-01-01" }],
+      };
+      const result = await engine.execute(ast);
+      // All tasks should be after 2020-01-01
+      expect(result.count).toBe(3);
+    });
+
+    it("should parse ISO date for updated field", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "updated", operator: ">", value: "2020-01-01" }],
+      };
+      const result = await engine.execute(ast);
+      // Only tasks with updated set (task1, task2) should match
+      expect(result.count).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should handle exact ISO date match with date range", async () => {
+      // Test that ISO dates are converted to timestamps for comparison
+      const ast: QueryAST = {
+        find: "task",
+        where: [
+          { field: "created", operator: ">", value: "2020-01-01" },
+          { field: "created", operator: "<", value: "2099-12-31" },
+        ],
+      };
+      const result = await engine.execute(ast);
+      expect(result.count).toBe(3);
+    });
+  });
 });

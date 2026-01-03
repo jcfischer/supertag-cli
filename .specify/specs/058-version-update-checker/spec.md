@@ -171,9 +171,13 @@ The system must allow user configuration of update behavior.
 ## [NEEDS CLARIFICATION]
 
 - Should `supertag update install` (self-update) be included in initial release, or deferred?
+  -> included
 - Should we support GitHub authentication for higher API rate limits?
+  -> no
 - What changelog information should be displayed (full notes vs. highlights)?
+  -> full notes since current installed version
 - Should the MCP server have its own update checking, or rely on main CLI?
+  -> rely on main CLI
 
 ## Out of Scope
 

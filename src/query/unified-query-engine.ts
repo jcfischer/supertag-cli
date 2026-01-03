@@ -109,7 +109,15 @@ export class UnifiedQueryEngine {
    * Resolve dates in a single clause
    */
   private resolveClauseDates(clause: WhereClause): WhereClause {
-    if (typeof clause.value === "string" && isRelativeDateValue(clause.value)) {
+    if (typeof clause.value !== "string") {
+      return clause;
+    }
+
+    // Always parse dates for date fields (created, updated, doneAt)
+    const dateFields = ["created", "updated", "doneAt"];
+    const isDateField = dateFields.includes(clause.field);
+
+    if (isRelativeDateValue(clause.value) || isDateField) {
       return {
         ...clause,
         value: parseDateValue(clause.value),
