@@ -668,9 +668,10 @@ async function queryNodesWithFieldFilter(
  * Same logic as VisualizationService.getSubtree()
  */
 function findDescendantTagIds(db: Database, rootTagName: string): string[] {
-  // Find root tag ID
+  // Find root tag ID (case-insensitive)
   const rootResult = db.query(`
-    SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
+    SELECT tag_id FROM supertag_metadata
+    WHERE LOWER(tag_name) = LOWER(?)
   `).get(rootTagName) as { tag_id: string } | null;
 
   if (!rootResult) {
