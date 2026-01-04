@@ -36,7 +36,7 @@ import { migrateFieldValuesSchema, clearFieldValues, migrateSupertagMetadataSche
 import { extractFieldValuesFromNodes, insertFieldValues } from "./field-values";
 import { extractSupertagMetadata } from "./supertag-metadata";
 import { updateFieldTypesFromValues } from "./value-type-inference";
-import { extractFieldTypesFromDocs, updateFieldTypesFromExport } from "./explicit-type-extraction";
+import { extractFieldTypesFromDocs, updateFieldTypesFromExport, extractTargetSupertagsFromDocs, updateTargetSupertagsFromExport } from "./explicit-type-extraction";
 import type { NodeDump } from "../types/tana-dump";
 import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
 
@@ -440,6 +440,10 @@ export class TanaIndexer {
       const explicitTypes = extractFieldTypesFromDocs(docs);
       updateFieldTypesFromExport(this.sqlite, explicitTypes);
 
+      // Extract and store target supertags for reference fields (Options from Supertag)
+      const targetSupertags = extractTargetSupertagsFromDocs(docs);
+      updateTargetSupertagsFromExport(this.sqlite, targetSupertags);
+
       // Then apply value-based inference for any remaining 'text' types
       // This catches fields without explicit typeChoice (older exports, etc.)
       updateFieldTypesFromValues(this.sqlite);
@@ -740,6 +744,10 @@ export class TanaIndexer {
       // This is the most reliable source - extracts actual type definitions from the export
       const explicitTypes = extractFieldTypesFromDocs(dump.docs);
       updateFieldTypesFromExport(this.sqlite, explicitTypes);
+
+      // STEP 5.7.5: Extract and store target supertags for reference fields (Options from Supertag)
+      const targetSupertags = extractTargetSupertagsFromDocs(dump.docs);
+      updateTargetSupertagsFromExport(this.sqlite, targetSupertags);
 
       // STEP 5.8: Apply value-based inference for any remaining 'text' types
       // This catches fields without explicit typeChoice (older exports, etc.)

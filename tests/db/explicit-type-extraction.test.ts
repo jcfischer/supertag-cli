@@ -239,4 +239,149 @@ describe("extractFieldTypesFromExport", () => {
       expect(types.get("field1")).toBeUndefined();
     });
   });
+
+  describe("extractTargetSupertag", () => {
+    it("should extract target supertag from 'Selected source supertag' tuple", async () => {
+      const { extractTargetSupertag } = await import(
+        "../../src/db/explicit-type-extraction"
+      );
+
+      // Simulate Tana export structure for Company field
+      const docs = [
+        // Field label node (Company)
+        {
+          id: "fieldLabel1",
+          props: {
+            name: "Company",
+            _ownerId: "tupleNode1",
+            _metaNodeId: "metaNode1",
+          },
+          children: ["typeChoice1", "sourceTuple1"],
+        },
+        // typeChoice tuple
+        {
+          id: "typeChoice1",
+          props: {
+            _docType: "tuple",
+            name: "typeChoice",
+            description: "Type of data stored in this attribute",
+          },
+          children: ["SYS_T06", "SYS_D05"], // SYS_D05 = reference
+        },
+        // "Selected source supertag" tuple
+        {
+          id: "sourceTuple1",
+          props: {
+            _docType: "tuple",
+            description: "Selected source supertag",
+          },
+          children: ["SYS_A05", "companyTagDef"],
+        },
+        // Target supertag tagDef
+        {
+          id: "companyTagDef",
+          props: {
+            _docType: "tagDef",
+            name: "company",
+          },
+          children: [],
+        },
+      ];
+
+      const result = extractTargetSupertag(docs, "fieldLabel1");
+
+      expect(result).toEqual({
+        tagDefId: "companyTagDef",
+        tagName: "company",
+      });
+    });
+
+    it("should return null for non-reference fields", async () => {
+      const { extractTargetSupertag } = await import(
+        "../../src/db/explicit-type-extraction"
+      );
+
+      const docs = [
+        {
+          id: "fieldLabel1",
+          props: {
+            name: "DueDate",
+          },
+          children: ["typeChoice1"],
+        },
+        // typeChoice for date field (no target supertag)
+        {
+          id: "typeChoice1",
+          props: {
+            _docType: "tuple",
+            name: "typeChoice",
+          },
+          children: ["SYS_T06", "SYS_D03"], // SYS_D03 = date
+        },
+      ];
+
+      const result = extractTargetSupertag(docs, "fieldLabel1");
+      expect(result).toBeNull();
+    });
+
+    it("should return null when target supertag tuple not found", async () => {
+      const { extractTargetSupertag } = await import(
+        "../../src/db/explicit-type-extraction"
+      );
+
+      const docs = [
+        {
+          id: "fieldLabel1",
+          props: {
+            name: "Company",
+          },
+          children: ["typeChoice1"], // Missing source tuple
+        },
+        {
+          id: "typeChoice1",
+          props: {
+            _docType: "tuple",
+            name: "typeChoice",
+          },
+          children: ["SYS_T06", "SYS_D05"],
+        },
+      ];
+
+      const result = extractTargetSupertag(docs, "fieldLabel1");
+      expect(result).toBeNull();
+    });
+
+    it("should return null when tagDef not found", async () => {
+      const { extractTargetSupertag } = await import(
+        "../../src/db/explicit-type-extraction"
+      );
+
+      const docs = [
+        {
+          id: "fieldLabel1",
+          props: { name: "Company" },
+          children: ["typeChoice1", "sourceTuple1"],
+        },
+        {
+          id: "typeChoice1",
+          props: {
+            _docType: "tuple",
+            name: "typeChoice",
+          },
+          children: ["SYS_T06", "SYS_D05"],
+        },
+        {
+          id: "sourceTuple1",
+          props: {
+            _docType: "tuple",
+            description: "Selected source supertag",
+          },
+          children: ["SYS_A05", "missingTagDef"], // tagDef doesn't exist
+        },
+      ];
+
+      const result = extractTargetSupertag(docs, "fieldLabel1");
+      expect(result).toBeNull();
+    });
+  });
 });

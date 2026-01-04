@@ -154,6 +154,9 @@ export const supertagFields = sqliteTable(
     normalizedName: text("normalized_name"), // Lowercase, no special chars
     description: text("description"), // Field documentation
     inferredDataType: text("inferred_data_type"), // 'text'|'date'|'reference'|'url'|'number'|'checkbox'
+    // Target supertag for reference fields (Options from Supertag)
+    targetSupertagId: text("target_supertag_id"), // tagDef ID of target supertag (for SYS_D05 fields)
+    targetSupertagName: text("target_supertag_name"), // Name of target supertag
   },
   (table) => ({
     tagIdx: index("idx_supertag_fields_tag").on(table.tagId),

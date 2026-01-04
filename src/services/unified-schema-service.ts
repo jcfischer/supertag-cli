@@ -42,6 +42,8 @@ export interface UnifiedField {
   description?: string | null;
   dataType?: string | null;
   order: number;
+  targetSupertagId?: string | null;
+  targetSupertagName?: string | null;
 }
 
 /**
@@ -352,7 +354,7 @@ export class UnifiedSchemaService {
     const rows = this.db
       .query(
         `
-        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type
+        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type, target_supertag_id, target_supertag_name
         FROM supertag_fields
         WHERE tag_id = ?
         ORDER BY field_order
@@ -366,6 +368,8 @@ export class UnifiedSchemaService {
       normalized_name: string | null;
       description: string | null;
       inferred_data_type: string | null;
+      target_supertag_id: string | null;
+      target_supertag_name: string | null;
     }>;
 
     return rows.map((row) => ({
@@ -376,6 +380,8 @@ export class UnifiedSchemaService {
       description: row.description,
       dataType: row.inferred_data_type,
       order: row.field_order,
+      targetSupertagId: row.target_supertag_id,
+      targetSupertagName: row.target_supertag_name,
     }));
   }
 
@@ -464,6 +470,8 @@ export class UnifiedSchemaService {
         break;
 
       case "reference":
+      case "options":
+        // Both reference and options fields use node IDs
         // Check if it's an ID (8+ alphanumeric chars) or a name
         if (typeof value === "string" && /^[A-Za-z0-9_-]{8,}$/.test(value)) {
           fieldChildren.push({

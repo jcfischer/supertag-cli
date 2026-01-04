@@ -71,15 +71,18 @@ function analyzeValueForType(
  *
  * @param db - SQLite database connection
  * @param fieldName - Name of the field to analyze
- * @param fieldDefId - Optional field definition ID for more precise matching
+ * @param fieldLabelId - Optional field label ID for more precise matching
  * @returns Inferred type or null if no type can be determined
  */
 export function inferTypeFromValues(
   db: Database,
   fieldName: string,
-  fieldDefId?: string
+  fieldLabelId?: string
 ): DataType | null {
   // Query field values and their node data
+  // Note: field_values stores field_def_id as the parent tuple node,
+  // while supertag_fields stores field_label_id as the child label node.
+  // We need to handle both cases by also checking if field_label_id is a child of field_def_id.
   let query = `
     SELECT fv.value_text, n.raw_data
     FROM field_values fv
@@ -88,9 +91,18 @@ export function inferTypeFromValues(
   `;
   const params: string[] = [fieldName];
 
-  if (fieldDefId) {
-    query += " AND fv.field_def_id = ?";
-    params.push(fieldDefId);
+  if (fieldLabelId) {
+    // Check if field_def_id matches directly OR if field_label_id is a child of the tuple
+    // The tuple node has children array containing the field label node
+    query += ` AND (
+      fv.field_def_id = ?
+      OR EXISTS (
+        SELECT 1 FROM nodes tuple
+        WHERE tuple.id = fv.field_def_id
+        AND json_extract(tuple.raw_data, '$.children') LIKE '%' || ? || '%'
+      )
+    )`;
+    params.push(fieldLabelId, fieldLabelId);
   }
 
   query += " LIMIT 10"; // Sample up to 10 values for inference

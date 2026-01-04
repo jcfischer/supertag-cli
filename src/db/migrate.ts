@@ -326,6 +326,8 @@ export function migrateSchemaConsolidation(db: Database): void {
         normalized_name TEXT,
         description TEXT,
         inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
         UNIQUE(tag_id, field_name)
       )
     `);
@@ -339,6 +341,13 @@ export function migrateSchemaConsolidation(db: Database): void {
     }
     if (!columnExists(db, "supertag_fields", "inferred_data_type")) {
       db.run("ALTER TABLE supertag_fields ADD COLUMN inferred_data_type TEXT");
+    }
+    // Target supertag columns for reference fields (Options from Supertag)
+    if (!columnExists(db, "supertag_fields", "target_supertag_id")) {
+      db.run("ALTER TABLE supertag_fields ADD COLUMN target_supertag_id TEXT");
+    }
+    if (!columnExists(db, "supertag_fields", "target_supertag_name")) {
+      db.run("ALTER TABLE supertag_fields ADD COLUMN target_supertag_name TEXT");
     }
   }
 
@@ -364,6 +373,8 @@ export function needsSchemaConsolidationMigration(db: Database): boolean {
     if (!columnExists(db, "supertag_fields", "normalized_name")) return true;
     if (!columnExists(db, "supertag_fields", "description")) return true;
     if (!columnExists(db, "supertag_fields", "inferred_data_type")) return true;
+    if (!columnExists(db, "supertag_fields", "target_supertag_id")) return true;
+    if (!columnExists(db, "supertag_fields", "target_supertag_name")) return true;
   }
 
   return false;

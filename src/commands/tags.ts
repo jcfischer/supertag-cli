@@ -652,6 +652,8 @@ export function createTagsCommand(): Command {
         originTagName: string;
         depth: number;
         inferredDataType?: string;
+        targetSupertagId?: string;
+        targetSupertagName?: string;
       }>;
 
       if (options.all) {
@@ -662,6 +664,8 @@ export function createTagsCommand(): Command {
           originTagName: f.originTagName,
           depth: f.depth,
           inferredDataType: f.inferredDataType,
+          targetSupertagId: f.targetSupertagId,
+          targetSupertagName: f.targetSupertagName,
         }));
       } else if (options.inherited) {
         // Only inherited fields (depth > 0)
@@ -673,6 +677,8 @@ export function createTagsCommand(): Command {
             originTagName: f.originTagName,
             depth: f.depth,
             inferredDataType: f.inferredDataType,
+            targetSupertagId: f.targetSupertagId,
+            targetSupertagName: f.targetSupertagName,
           }));
       } else {
         // Default: own fields only (depth === 0)
@@ -682,6 +688,8 @@ export function createTagsCommand(): Command {
           originTagName: f.tagName,
           depth: 0,
           inferredDataType: f.inferredDataType,
+          targetSupertagId: f.targetSupertagId,
+          targetSupertagName: f.targetSupertagName,
         }));
       }
 
