@@ -8,9 +8,9 @@
  */
 
 import { Command } from "commander";
-import { join } from "path";
+import { join, dirname } from "path";
 import { TanaExportWatcher } from "../monitors/tana-export-monitor";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import {
   getDatabasePath,
   DEFAULT_EXPORT_DIR,
@@ -29,7 +29,7 @@ import {
   getExportFiles,
   formatBytes,
 } from "../cleanup/cleanup";
-import { syncSchemaToPath } from "./schema";
+import { syncSchemaToPath, getSchemaRegistryFromDatabase } from "./schema";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');
@@ -252,11 +252,16 @@ export function registerSyncCommands(program: Command): void {
         logger.info(`Tag Applications: ${result.tagApplicationsIndexed.toLocaleString()}`);
         logger.info(`Duration: ${result.durationMs}ms (${(result.durationMs / 1000).toFixed(2)}s)`);
 
-        // Sync schema registry from the same export
+        // Generate schema registry from database (includes targetSupertag data)
         logger.info('Syncing schema registry...');
         try {
-          const exportFullPath = join(paths.exportDir, result.exportFile);
-          const registry = syncSchemaToPath(exportFullPath, paths.schemaPath, false);
+          const registry = getSchemaRegistryFromDatabase(paths.dbPath);
+          // Write the registry to the schema cache file
+          const schemaDir = dirname(paths.schemaPath);
+          if (!existsSync(schemaDir)) {
+            mkdirSync(schemaDir, { recursive: true });
+          }
+          writeFileSync(paths.schemaPath, registry.toJSON());
           logger.info(`Schema: ${registry.listSupertags().length} supertags synced to ${paths.schemaPath}`);
         } catch (schemaError) {
           logger.warn(`Schema sync failed: ${schemaError}`);
