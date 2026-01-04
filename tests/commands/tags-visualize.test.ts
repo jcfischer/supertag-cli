@@ -54,8 +54,6 @@ describe("tags visualize command", () => {
         field_order INTEGER DEFAULT 0,
         inferred_data_type TEXT,
         target_supertag_id TEXT,
-        target_supertag_name TEXT,
-        target_supertag_id TEXT,
         target_supertag_name TEXT
       )
     `);
