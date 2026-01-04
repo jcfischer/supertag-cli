@@ -479,9 +479,18 @@ export class UnifiedSchemaService {
             id: value,
           } as TanaApiNode);
         } else {
-          fieldChildren.push({
-            name: String(value),
-          });
+          // Creating a new node by name
+          // If field has targetSupertag, create tagged node; otherwise plain node
+          if (field.targetSupertagId) {
+            fieldChildren.push({
+              name: String(value),
+              supertags: [{ id: field.targetSupertagId }],
+            });
+          } else {
+            fieldChildren.push({
+              name: String(value),
+            });
+          }
         }
         break;
 
