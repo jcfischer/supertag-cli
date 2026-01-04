@@ -42,6 +42,17 @@ function convertObjectToNode(obj: GenericJson, defaultName: string): TanaNode {
       continue;
     }
 
+    // Handle children array specially
+    if (key === 'children' && Array.isArray(value)) {
+      // Convert array items to child nodes
+      for (const item of value) {
+        if (typeof item === 'object' && item !== null) {
+          children.push(convertObjectToNode(item as GenericJson, 'Child'));
+        }
+      }
+      continue;
+    }
+
     // Handle different value types
     if (value === null || value === undefined) {
       continue;
@@ -156,12 +167,9 @@ export function tanaNodeToApiNode(node: TanaNode): {
     }
   }
 
-  // Convert children
+  // Convert children recursively
   if (node.children && node.children.length > 0) {
-    apiNode.children = node.children.map(child => ({
-      name: child.name,
-      description: child.fields ? JSON.stringify(child.fields) : undefined,
-    }));
+    apiNode.children = node.children.map(child => tanaNodeToApiNode(child) as any);
   }
 
   return apiNode;
