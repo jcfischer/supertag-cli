@@ -65,6 +65,7 @@ interface SearchOptions extends StandardOptions {
   select?: string;
   format?: OutputFormat;
   header?: boolean;
+  includeDescendants?: boolean;
 }
 
 /**
@@ -98,6 +99,7 @@ export function createSearchCommand(): Command {
     .argument("[query]", "Search query (required for FTS/semantic)")
     .option("--semantic", "Use semantic (vector) search instead of FTS")
     .option("-t, --tag <tagname>", "Find nodes with a specific supertag")
+    .option("--include-descendants", "Include nodes with supertags inheriting from --tag")
     .option("-f, --field <filter>", "Filter by field value (e.g., 'Location=Zurich' or 'Location~Zur')")
     .option("-a, --ancestor", "Show nearest ancestor with supertag (default: true)")
     .option("--no-ancestor", "Disable ancestor resolution")
@@ -661,6 +663,43 @@ async function queryNodesWithFieldFilter(
 /**
  * Handle tag-based search
  */
+/**
+ * Find all descendant tag IDs for a given tag using recursive CTE
+ * Same logic as VisualizationService.getSubtree()
+ */
+function findDescendantTagIds(db: Database, rootTagName: string): string[] {
+  // Find root tag ID
+  const rootResult = db.query(`
+    SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
+  `).get(rootTagName) as { tag_id: string } | null;
+
+  if (!rootResult) {
+    return [];
+  }
+
+  const rootId = rootResult.tag_id;
+
+  // Get all descendants using recursive CTE
+  const descendantRows = db.query(`
+    WITH RECURSIVE descendants(tag_id, depth) AS (
+      -- Base case: root tag
+      SELECT ?, 0
+
+      UNION ALL
+
+      -- Recursive case: children of current nodes
+      SELECT sp.child_tag_id, d.depth + 1
+      FROM supertag_parents sp
+      INNER JOIN descendants d ON sp.parent_tag_id = d.tag_id
+      WHERE d.depth < 10
+    )
+    SELECT DISTINCT tag_id
+    FROM descendants
+  `).all(rootId) as Array<{ tag_id: string }>;
+
+  return descendantRows.map(r => r.tag_id);
+}
+
 async function handleTaggedSearch(
   tagname: string,
   options: SearchOptions,
@@ -686,12 +725,68 @@ async function handleTaggedSearch(
     // If we have a field filter, we need to query with field values
     let results: Array<{ id: string; name: string | null; created?: number | null }>;
 
+    // Get tag IDs to search (either just the specified tag or all descendants)
+    let tagIds: string[] = [];
+    if (options.includeDescendants) {
+      tagIds = findDescendantTagIds(engine.rawDb, tagname);
+      if (tagIds.length === 0) {
+        if (format === "json" || format === "jsonl" || format === "minimal") {
+          console.log("[]");
+        } else if (format === "ids" || format === "csv") {
+          // Empty output
+        } else {
+          console.log(`❌ Tag not found: "${tagname}"`);
+        }
+        return;
+      }
+    }
+
     if (fieldFilter) {
       // Query nodes with field value filter
       results = await queryNodesWithFieldFilter(engine.rawDb, tagname, fieldFilter, {
         limit,
         ...dateRange,
       });
+    } else if (options.includeDescendants && tagIds.length > 0) {
+      // Query for nodes with ANY of the descendant tags
+      // First get tag names for all descendant tag IDs
+      const tagNameRows = engine.rawDb.query(`
+        SELECT tag_id, tag_name
+        FROM supertag_metadata
+        WHERE tag_id IN (${tagIds.map(() => '?').join(',')})
+      `).all(...tagIds) as Array<{ tag_id: string; tag_name: string }>;
+
+      const tagNames = tagNameRows.map(r => r.tag_name);
+
+      if (tagNames.length === 0) {
+        results = [];
+      } else {
+        const placeholders = tagNames.map(() => '?').join(',');
+        const sql = `
+          SELECT DISTINCT
+            n.id,
+            n.name,
+            n.created
+          FROM nodes n
+          INNER JOIN tag_applications ta ON n.id = ta.data_node_id
+          WHERE ta.tag_name IN (${placeholders})
+          ${dateRange.createdAfter ? 'AND n.created > ?' : ''}
+          ${dateRange.createdBefore ? 'AND n.created < ?' : ''}
+          ${dateRange.updatedAfter ? 'AND n.updated > ?' : ''}
+          ${dateRange.updatedBefore ? 'AND n.updated < ?' : ''}
+          ORDER BY n.created DESC
+          LIMIT ?
+        `;
+        const params = [
+          ...tagNames,
+          ...(dateRange.createdAfter ? [dateRange.createdAfter] : []),
+          ...(dateRange.createdBefore ? [dateRange.createdBefore] : []),
+          ...(dateRange.updatedAfter ? [dateRange.updatedAfter] : []),
+          ...(dateRange.updatedBefore ? [dateRange.updatedBefore] : []),
+          limit,
+        ];
+        results = engine.rawDb.query(sql).all(...params) as any;
+      }
     } else {
       results = await engine.findNodesByTag(tagname, {
         limit,
