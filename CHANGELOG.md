@@ -5,6 +5,36 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Schema Registry Export (Spec 081)** - Enhanced schema-registry.json with target supertag metadata
+  - `FieldSchema` interface now includes optional `targetSupertag` property with `id` and `name`
+  - `UnifiedSchemaService.toSchemaRegistryJSON()` exports target supertag for reference fields
+  - Enables Raycast and other tools to read target supertags directly from cached JSON file
+  - Backward compatible - tools using old schema format continue to work
+  - Performance: Eliminates need for CLI spawning in external tools (200-500ms → <10ms)
+  - 62 tests passing including enhanced schema export
+
+- **Target Supertag Extraction (Spec 077)** - Reference fields now store actual target supertag from Tana definition
+  - New database columns `target_supertag_id` and `target_supertag_name` in `supertag_fields` table
+  - Extracts target supertag from "Selected source supertag" tuple in field definitions
+  - Replaces field name heuristics with precise Tana metadata
+  - `tags fields` command now includes `targetSupertagId` and `targetSupertagName` in JSON output
+  - Enables correct dropdown population in Raycast and other integrations
+  - Fixes "Options from Supertag" fields where field name doesn't match target supertag name (e.g., "Company" field → "company" supertag)
+  - Database migration automatically runs on first sync after update
+  - 18 tests passing including extraction, storage, and service layer integration
+
+### Fixed
+
+- **Tag Resolution** - `isTagId()` now correctly distinguishes Tana IDs from kebab-case tag names
+  - Requires mixed case (both uppercase and lowercase) to identify as ID
+  - Fixes commands failing on tags like "outcome-goal", "value-goal", etc.
+  - Previously these were incorrectly treated as IDs due to matching `/^[A-Za-z0-9_-]{8,}$/`
+  - Now requires both `/[A-Z]/` and `/[a-z]/` patterns for ID detection
+
 ## [1.4.1] - 2026-01-03
 
 ### Fixed

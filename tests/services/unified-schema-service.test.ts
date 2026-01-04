@@ -862,4 +862,44 @@ describe("UnifiedSchemaService toSchemaRegistryJSON (T-4.1)", () => {
     expect(contact!.id).toBe("contact-id");
     expect(contact!.fields).toHaveLength(1);
   });
+
+  // Spec 081 T-1.2: Test target supertag export
+  it("should include targetSupertag in field schema for reference fields", () => {
+    db.run(`
+      INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+      VALUES ('person-id', 'person', 'person'),
+             ('company-id', 'company', 'company')
+    `);
+    db.run(`
+      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, target_supertag_id, target_supertag_name)
+      VALUES ('person-id', 'person', 'Company', 'company-attr', 0, 'company', 'reference', 'company-id', 'company')
+    `);
+
+    const json = service.toSchemaRegistryJSON();
+    const data = JSON.parse(json);
+    const person = data.supertags.find((t: any) => t.id === "person-id");
+    const companyField = person.fields[0];
+
+    expect(companyField.targetSupertag).toBeDefined();
+    expect(companyField.targetSupertag.id).toBe("company-id");
+    expect(companyField.targetSupertag.name).toBe("company");
+  });
+
+  it("should omit targetSupertag for fields without target supertag", () => {
+    db.run(`
+      INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+      VALUES ('contact-id', 'contact', 'contact')
+    `);
+    db.run(`
+      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, target_supertag_id, target_supertag_name)
+      VALUES ('contact-id', 'contact', 'Email', 'email-attr', 0, 'email', 'text', NULL, NULL)
+    `);
+
+    const json = service.toSchemaRegistryJSON();
+    const data = JSON.parse(json);
+    const contact = data.supertags[0];
+    const emailField = contact.fields[0];
+
+    expect(emailField.targetSupertag).toBeUndefined();
+  });
 });

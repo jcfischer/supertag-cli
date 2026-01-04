@@ -17,6 +17,8 @@ export interface SupertagField {
   fieldLabelId: string; // Node ID of the field label
   fieldOrder: number; // Position in tagDef children
   inferredDataType?: string; // Inferred data type (text, date, email, etc.) - Spec 020
+  targetSupertagId?: string; // Target supertag ID for reference fields (Options from Supertag)
+  targetSupertagName?: string; // Target supertag name for reference fields
 }
 
 /**
@@ -40,6 +42,8 @@ export interface InheritedField {
   originTagName: string; // Human-readable origin tag name
   depth: number; // 0 = own field, 1+ = inherited depth
   inferredDataType?: string; // Inferred data type (text, date, email, etc.) - Spec 020
+  targetSupertagId?: string; // Target supertag ID for reference fields (Options from Supertag)
+  targetSupertagName?: string; // Target supertag name for reference fields
 }
 
 /**

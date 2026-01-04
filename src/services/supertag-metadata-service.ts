@@ -34,7 +34,7 @@ export class SupertagMetadataService {
   getFields(tagId: string): SupertagField[] {
     const results = this.db
       .query(
-        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type
+        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name
          FROM supertag_fields
          WHERE tag_id = ?
          ORDER BY field_order`
@@ -47,6 +47,8 @@ export class SupertagMetadataService {
       field_label_id: string;
       field_order: number;
       inferred_data_type: string | null;
+      target_supertag_id: string | null;
+      target_supertag_name: string | null;
     }>;
 
     return results.map((r) => ({
@@ -57,6 +59,8 @@ export class SupertagMetadataService {
       fieldLabelId: r.field_label_id,
       fieldOrder: r.field_order,
       inferredDataType: r.inferred_data_type ?? undefined,
+      targetSupertagId: r.target_supertag_id ?? undefined,
+      targetSupertagName: r.target_supertag_name ?? undefined,
     }));
   }
 
@@ -67,7 +71,7 @@ export class SupertagMetadataService {
   getFieldsByName(tagName: string): SupertagField[] {
     const results = this.db
       .query(
-        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type
+        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name
          FROM supertag_fields
          WHERE tag_name = ?
          ORDER BY field_order`
@@ -80,6 +84,8 @@ export class SupertagMetadataService {
       field_label_id: string;
       field_order: number;
       inferred_data_type: string | null;
+      target_supertag_id: string | null;
+      target_supertag_name: string | null;
     }>;
 
     return results.map((r) => ({
@@ -90,6 +96,8 @@ export class SupertagMetadataService {
       fieldLabelId: r.field_label_id,
       fieldOrder: r.field_order,
       inferredDataType: r.inferred_data_type ?? undefined,
+      targetSupertagId: r.target_supertag_id ?? undefined,
+      targetSupertagName: r.target_supertag_name ?? undefined,
     }));
   }
 
@@ -206,6 +214,8 @@ export class SupertagMetadataService {
           originTagName: field.tagName,
           depth: 0,
           inferredDataType: field.inferredDataType,
+          targetSupertagId: field.targetSupertagId,
+          targetSupertagName: field.targetSupertagName,
         });
       }
     }
@@ -226,6 +236,8 @@ export class SupertagMetadataService {
             originTagName: ancestorName || ancestor.tagId,
             depth: ancestor.depth,
             inferredDataType: field.inferredDataType,
+            targetSupertagId: field.targetSupertagId,
+            targetSupertagName: field.targetSupertagName,
           });
         }
       }
@@ -305,10 +317,17 @@ export class SupertagMetadataService {
   }
 
   /**
-   * Check if a string looks like a tag ID (8+ alphanumeric chars with optional - and _).
+   * Check if a string looks like a tag ID.
+   * Tana IDs are mixed-case alphanumeric strings (e.g., "hDwO8FKJfFPP").
+   * This distinguishes them from kebab-case tag names (e.g., "outcome-goal").
    */
   isTagId(input: string): boolean {
-    return /^[A-Za-z0-9_-]{8,}$/.test(input);
+    // Must be 8+ chars, alphanumeric with optional - and _
+    if (!/^[A-Za-z0-9_-]{8,}$/.test(input)) {
+      return false;
+    }
+    // Must contain both uppercase AND lowercase (distinguishes IDs from tag names)
+    return /[A-Z]/.test(input) && /[a-z]/.test(input);
   }
 
   /**

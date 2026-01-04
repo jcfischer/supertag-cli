@@ -34,6 +34,8 @@ describe("Supertag Metadata Schema", () => {
         normalized_name TEXT,
         description TEXT,
         inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
         UNIQUE(tag_id, field_name)
       )
     `);

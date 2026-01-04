@@ -52,7 +52,9 @@ describe("tags visualize command", () => {
         field_name TEXT NOT NULL,
         field_label_id TEXT,
         field_order INTEGER DEFAULT 0,
-        inferred_data_type TEXT
+        inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT
       )
     `);
 

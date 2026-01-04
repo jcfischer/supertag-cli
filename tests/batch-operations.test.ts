@@ -385,6 +385,8 @@ describe('batchCreateNodes', () => {
         normalized_name TEXT,
         description TEXT,
         inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
         PRIMARY KEY (tag_id, field_label_id)
       )
     `);

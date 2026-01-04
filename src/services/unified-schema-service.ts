@@ -42,6 +42,8 @@ export interface UnifiedField {
   description?: string | null;
   dataType?: string | null;
   order: number;
+  targetSupertagId?: string | null;
+  targetSupertagName?: string | null;
 }
 
 /**
@@ -352,7 +354,7 @@ export class UnifiedSchemaService {
     const rows = this.db
       .query(
         `
-        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type
+        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type, target_supertag_id, target_supertag_name
         FROM supertag_fields
         WHERE tag_id = ?
         ORDER BY field_order
@@ -366,6 +368,8 @@ export class UnifiedSchemaService {
       normalized_name: string | null;
       description: string | null;
       inferred_data_type: string | null;
+      target_supertag_id: string | null;
+      target_supertag_name: string | null;
     }>;
 
     return rows.map((row) => ({
@@ -376,6 +380,8 @@ export class UnifiedSchemaService {
       description: row.description,
       dataType: row.inferred_data_type,
       order: row.field_order,
+      targetSupertagId: row.target_supertag_id,
+      targetSupertagName: row.target_supertag_name,
     }));
   }
 
@@ -464,6 +470,8 @@ export class UnifiedSchemaService {
         break;
 
       case "reference":
+      case "options":
+        // Both reference and options fields use node IDs
         // Check if it's an ID (8+ alphanumeric chars) or a name
         if (typeof value === "string" && /^[A-Za-z0-9_-]{8,}$/.test(value)) {
           fieldChildren.push({
@@ -590,8 +598,28 @@ export class UnifiedSchemaService {
   toSchemaRegistryJSON(): string {
     const supertags = this.listSupertags();
 
+    // Deduplicate: only export canonical supertag for each name
+    // Apply same logic as SchemaRegistry: prefer more parents, then more fields
+    const canonicalSupertags = new Map<string, UnifiedSupertag>();
+    for (const tag of supertags) {
+      const existing = canonicalSupertags.get(tag.name);
+      if (!existing) {
+        canonicalSupertags.set(tag.name, tag);
+      } else {
+        // Prefer tag with more inheritance parents
+        const tagParents = tag.extends?.length ?? 0;
+        const existingParents = existing.extends?.length ?? 0;
+        if (tagParents > existingParents) {
+          canonicalSupertags.set(tag.name, tag);
+        } else if (tagParents === existingParents && tag.fields.length > existing.fields.length) {
+          // Same parents - prefer more fields
+          canonicalSupertags.set(tag.name, tag);
+        }
+      }
+    }
+
     // Convert to SchemaRegistry format
-    const schemaSupertags = supertags.map((tag) => {
+    const schemaSupertags = Array.from(canonicalSupertags.values()).map((tag) => {
       // Convert fields to FieldSchema format
       const fields = tag.fields.map((field) => {
         const fieldSchema: Record<string, unknown> = {
@@ -606,6 +634,14 @@ export class UnifiedSchemaService {
         }
         if (field.dataType) {
           fieldSchema.dataType = field.dataType;
+        }
+
+        // Spec 081 T-1.3: Include target supertag for reference fields
+        if (field.targetSupertagId && field.targetSupertagName) {
+          fieldSchema.targetSupertag = {
+            id: field.targetSupertagId,
+            name: field.targetSupertagName,
+          };
         }
 
         return fieldSchema;
