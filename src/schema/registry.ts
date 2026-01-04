@@ -22,6 +22,13 @@ export interface FieldSchema {
   description?: string;
   /** Data type hint (derived from usage) */
   dataType?: 'text' | 'date' | 'reference' | 'url' | 'number' | 'checkbox';
+  /** Target supertag for reference fields (Options from Supertag) */
+  targetSupertag?: {
+    /** Target supertag ID */
+    id: string;
+    /** Target supertag name */
+    name: string;
+  } | null;
 }
 
 /**

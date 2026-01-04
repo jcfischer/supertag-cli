@@ -616,6 +616,14 @@ export class UnifiedSchemaService {
           fieldSchema.dataType = field.dataType;
         }
 
+        // Spec 081 T-1.3: Include target supertag for reference fields
+        if (field.targetSupertagId && field.targetSupertagName) {
+          fieldSchema.targetSupertag = {
+            id: field.targetSupertagId,
+            name: field.targetSupertagName,
+          };
+        }
+
         return fieldSchema;
       });
 
