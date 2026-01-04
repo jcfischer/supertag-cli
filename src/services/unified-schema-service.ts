@@ -598,8 +598,28 @@ export class UnifiedSchemaService {
   toSchemaRegistryJSON(): string {
     const supertags = this.listSupertags();
 
+    // Deduplicate: only export canonical supertag for each name
+    // Apply same logic as SchemaRegistry: prefer more parents, then more fields
+    const canonicalSupertags = new Map<string, UnifiedSupertag>();
+    for (const tag of supertags) {
+      const existing = canonicalSupertags.get(tag.name);
+      if (!existing) {
+        canonicalSupertags.set(tag.name, tag);
+      } else {
+        // Prefer tag with more inheritance parents
+        const tagParents = tag.extends?.length ?? 0;
+        const existingParents = existing.extends?.length ?? 0;
+        if (tagParents > existingParents) {
+          canonicalSupertags.set(tag.name, tag);
+        } else if (tagParents === existingParents && tag.fields.length > existing.fields.length) {
+          // Same parents - prefer more fields
+          canonicalSupertags.set(tag.name, tag);
+        }
+      }
+    }
+
     // Convert to SchemaRegistry format
-    const schemaSupertags = supertags.map((tag) => {
+    const schemaSupertags = Array.from(canonicalSupertags.values()).map((tag) => {
       // Convert fields to FieldSchema format
       const fields = tag.fields.map((field) => {
         const fieldSchema: Record<string, unknown> = {
