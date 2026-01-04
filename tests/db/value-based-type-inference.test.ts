@@ -53,7 +53,11 @@ describe("Value-Based Type Inference", () => {
         field_order INTEGER,
         normalized_name TEXT,
         description TEXT,
-        inferred_data_type TEXT
+        inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT
       )
     `);
   });

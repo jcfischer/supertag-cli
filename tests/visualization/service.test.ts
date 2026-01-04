@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 import { VisualizationService } from "../../src/visualization/service";
 import type { VisualizationData } from "../../src/visualization/types";
+import { migrateSchemaConsolidation, migrateSupertagMetadataSchema } from "../../src/db/migrate";
 
 describe("VisualizationService", () => {
   let db: Database;
@@ -17,38 +18,9 @@ describe("VisualizationService", () => {
     // Create in-memory test database with required tables
     db = new Database(":memory:");
 
-    // Create tables matching the actual schema
-    db.run(`
-      CREATE TABLE supertag_metadata (
-        tag_id TEXT PRIMARY KEY,
-        tag_name TEXT NOT NULL,
-        normalized_name TEXT,
-        description TEXT,
-        color TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE supertag_parents (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        child_tag_id TEXT NOT NULL,
-        parent_tag_id TEXT NOT NULL,
-        UNIQUE(child_tag_id, parent_tag_id)
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE supertag_fields (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tag_id TEXT NOT NULL,
-        tag_name TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        field_label_id TEXT,
-        field_order INTEGER DEFAULT 0,
-        inferred_data_type TEXT
-      )
-    `);
+    // Use migrations to create schema
+    migrateSupertagMetadataSchema(db);
+    migrateSchemaConsolidation(db);
 
     db.run(`
       CREATE TABLE tag_applications (
@@ -77,12 +49,12 @@ describe("VisualizationService", () => {
 
     // Insert test data
     // Tags: entity (root), person (extends entity), meeting (extends event), event (extends entity)
-    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, color) VALUES
-      ('tag_entity', 'entity', '#E8E8E8'),
-      ('tag_person', 'person', '#B5D8FF'),
-      ('tag_event', 'event', '#FFE4B5'),
-      ('tag_meeting', 'meeting', '#FFD700'),
-      ('tag_orphan', 'orphan', NULL)
+    db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES
+      ('tag_entity', 'entity', 'entity', '#E8E8E8'),
+      ('tag_person', 'person', 'person', '#B5D8FF'),
+      ('tag_event', 'event', 'event', '#FFE4B5'),
+      ('tag_meeting', 'meeting', 'meeting', '#FFD700'),
+      ('tag_orphan', 'orphan', 'orphan', NULL)
     `);
 
     // Inheritance: person -> entity, event -> entity, meeting -> event
@@ -93,15 +65,15 @@ describe("VisualizationService", () => {
     `);
 
     // Fields (for field count)
-    db.run(`INSERT INTO supertag_fields (tag_id, tag_name, field_name) VALUES
-      ('tag_person', 'person', 'Email'),
-      ('tag_person', 'person', 'Phone'),
-      ('tag_person', 'person', 'Company'),
-      ('tag_meeting', 'meeting', 'Date'),
-      ('tag_meeting', 'meeting', 'Attendees'),
-      ('tag_meeting', 'meeting', 'Location'),
-      ('tag_meeting', 'meeting', 'Notes'),
-      ('tag_event', 'event', 'Date')
+    db.run(`INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order) VALUES
+      ('tag_person', 'person', 'Email', 'field_email', 0),
+      ('tag_person', 'person', 'Phone', 'field_phone', 1),
+      ('tag_person', 'person', 'Company', 'field_company', 2),
+      ('tag_meeting', 'meeting', 'Date', 'field_date', 0),
+      ('tag_meeting', 'meeting', 'Attendees', 'field_attendees', 1),
+      ('tag_meeting', 'meeting', 'Location', 'field_location', 2),
+      ('tag_meeting', 'meeting', 'Notes', 'field_notes', 3),
+      ('tag_event', 'event', 'Date', 'field_event_date', 0)
     `);
 
     // Tag applications (for usage count)

@@ -36,7 +36,11 @@ function createTestDb(): Database {
       field_order INTEGER DEFAULT 0,
       normalized_name TEXT,
       description TEXT,
-      inferred_data_type TEXT
+      inferred_data_type TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
+        target_supertag_id TEXT,
+        target_supertag_name TEXT
     )
   `);
 
