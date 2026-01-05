@@ -42,6 +42,46 @@ export const SYSTEM_FIELD_MARKERS: Record<string, string> = {
 };
 
 /**
+ * Check if a node is in the trash by walking its ownership chain.
+ *
+ * Tana marks trash by having an _ownerId containing "TRASH" (e.g., "M9rkJkwuED_TRASH").
+ * A node is considered trashed if any ancestor in its ownership chain is in trash.
+ *
+ * @param node - The node to check
+ * @param nodes - Map of all nodes for ownership lookup
+ * @param maxDepth - Maximum depth to traverse (prevents infinite loops)
+ * @returns true if the node or any of its owners is in trash
+ */
+export function isNodeInTrash(
+  node: NodeDump,
+  nodes: Map<string, NodeDump>,
+  maxDepth: number = 20
+): boolean {
+  let currentNode: NodeDump | undefined = node;
+  let depth = 0;
+
+  while (currentNode && depth < maxDepth) {
+    const ownerId = currentNode.props._ownerId;
+
+    // Check if owner ID contains TRASH
+    if (ownerId && String(ownerId).includes("TRASH")) {
+      return true;
+    }
+
+    // Move to parent node
+    if (ownerId) {
+      currentNode = nodes.get(String(ownerId));
+    } else {
+      break;
+    }
+
+    depth++;
+  }
+
+  return false;
+}
+
+/**
  * Extract field definitions from a tagDef node.
  *
  * Examines the tagDef's children looking for tuples where:
@@ -244,10 +284,9 @@ export function extractSupertagMetadata(
       continue;
     }
 
-    // Skip trashed tagDefs - detected by _ownerId containing TRASH
-    // This matches the pattern used in transcript.ts for trash detection
-    const ownerId = node.props._ownerId;
-    if (ownerId && String(ownerId).includes("TRASH")) {
+    // Skip trashed tagDefs - walk the ownership chain to detect trash
+    // A node is trashed if any ancestor in its ownership chain has "TRASH" in its ID
+    if (isNodeInTrash(node, nodes)) {
       continue;
     }
 
