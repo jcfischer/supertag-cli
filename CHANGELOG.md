@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-01-05
+
+### Fixed
+
+- **Supertags with Zero Fields** - `findAllTagsByName` now queries `supertag_metadata` instead of `supertag_fields`
+  - Supertags with no fields (like "article") were invisible to `tags show` command
+  - Now all supertags in the schema are findable regardless of field count
+
+## [1.6.2] - 2026-01-05
+
+### Fixed
+
+- **Deep Trash Detection** - Now walks entire ownership chain (up to 20 levels) to detect trashed nodes
+  - Previously only checked immediate `_ownerId` for "TRASH" marker
+  - Nodes nested deep inside trashed hierarchies (e.g., 9 levels) were not filtered
+  - Added `isNodeInTrash()` helper function for recursive ownership check
+  - Filters out 139 additional trashed supertags that were previously showing
+
+## [1.6.1] - 2026-01-05
+
+### Fixed
+
+- **Trash Detection for Supertags** - Supertags in Tana's trash are now filtered from queries
+  - Detects trashed nodes by `_ownerId` property containing "TRASH"
+  - Filters during both indexing (supertag-metadata.ts) and queries (UnifiedSchemaService)
+  - Prevents stale/deleted supertags from appearing in search results
+
+- **Playwright Export Build** - Fixed `supertag-export` binary failing with "Cannot find package 'playwright'"
+  - Build now uses `--external` flags for playwright and related packages
+  - Requires global playwright installation: `bun add -g playwright`
+  - Requires `NODE_PATH` environment variable pointing to global node_modules
+  - Updated installation docs for all platforms (macOS, Linux, Windows)
+
 ## [1.6.0] - 2026-01-04
 
 ### Added
