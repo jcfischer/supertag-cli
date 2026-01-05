@@ -60,9 +60,29 @@ export interface SchemaStats {
  */
 export class UnifiedSchemaService {
   readonly db: Database;
+  private hasNodesTable: boolean | null = null;
 
   constructor(db: Database) {
     this.db = db;
+  }
+
+  /**
+   * Check if the nodes table exists (cached for performance).
+   * Some databases (e.g., minimal test databases) may not have the nodes table.
+   */
+  private checkNodesTable(): boolean {
+    if (this.hasNodesTable !== null) {
+      return this.hasNodesTable;
+    }
+    try {
+      const result = this.db
+        .query("SELECT name FROM sqlite_master WHERE type='table' AND name='nodes'")
+        .get() as { name: string } | null;
+      this.hasNodesTable = result !== null;
+    } catch {
+      this.hasNodesTable = false;
+    }
+    return this.hasNodesTable;
   }
 
   /**
@@ -73,6 +93,8 @@ export class UnifiedSchemaService {
    * 1. Prefer more inheritance parents
    * 2. Then prefer more own fields
    *
+   * Excludes trashed supertags by checking the node's _ownerId in raw_data.
+   *
    * @param name - Supertag name to find
    * @returns Unified supertag or null if not found
    */
@@ -82,9 +104,21 @@ export class UnifiedSchemaService {
     // Find all matching supertags and pick the canonical one
     // Priority: more inheritance parents, then more own fields
     // This handles cases where duplicate entries exist in the database
-    const row = this.db
-      .query(
-        `
+    // Excludes trashed supertags when nodes table is available
+    const hasNodes = this.checkNodesTable();
+    const query = hasNodes
+      ? `
+        SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color,
+               (SELECT COUNT(*) FROM supertag_parents p WHERE p.child_tag_id = m.tag_id) as parent_count,
+               (SELECT COUNT(*) FROM supertag_fields f WHERE f.tag_id = m.tag_id) as field_count
+        FROM supertag_metadata m
+        LEFT JOIN nodes n ON n.id = m.tag_id
+        WHERE (m.tag_name = ? OR m.normalized_name = ?)
+          AND (n.raw_data IS NULL OR COALESCE(json_extract(n.raw_data, '$.props._ownerId'), '') NOT LIKE '%TRASH%')
+        ORDER BY parent_count DESC, field_count DESC
+        LIMIT 1
+      `
+      : `
         SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color,
                (SELECT COUNT(*) FROM supertag_parents p WHERE p.child_tag_id = m.tag_id) as parent_count,
                (SELECT COUNT(*) FROM supertag_fields f WHERE f.tag_id = m.tag_id) as field_count
@@ -92,9 +126,9 @@ export class UnifiedSchemaService {
         WHERE m.tag_name = ? OR m.normalized_name = ?
         ORDER BY parent_count DESC, field_count DESC
         LIMIT 1
-      `
-      )
-      .get(name, normalizedQuery) as {
+      `;
+
+    const row = this.db.query(query).get(name, normalizedQuery) as {
       tag_id: string;
       tag_name: string;
       normalized_name: string;
@@ -113,20 +147,28 @@ export class UnifiedSchemaService {
 
   /**
    * Find a supertag by its node ID.
+   * Excludes trashed supertags.
    *
    * @param id - Supertag node ID
    * @returns Unified supertag or null if not found
    */
   getSupertagById(id: string): UnifiedSupertag | null {
-    const row = this.db
-      .query(
-        `
+    const hasNodes = this.checkNodesTable();
+    const query = hasNodes
+      ? `
+        SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color
+        FROM supertag_metadata m
+        LEFT JOIN nodes n ON n.id = m.tag_id
+        WHERE m.tag_id = ?
+          AND (n.raw_data IS NULL OR COALESCE(json_extract(n.raw_data, '$.props._ownerId'), '') NOT LIKE '%TRASH%')
+      `
+      : `
         SELECT tag_id, tag_name, normalized_name, description, color
         FROM supertag_metadata
         WHERE tag_id = ?
-      `
-      )
-      .get(id) as {
+      `;
+
+    const row = this.db.query(query).get(id) as {
       tag_id: string;
       tag_name: string;
       normalized_name: string;
@@ -143,19 +185,28 @@ export class UnifiedSchemaService {
 
   /**
    * List all supertags in the database.
+   * Excludes trashed supertags by checking the node's _ownerId in raw_data.
    *
    * @returns Array of all unified supertags
    */
   listSupertags(): UnifiedSupertag[] {
-    const rows = this.db
-      .query(
-        `
+    const hasNodes = this.checkNodesTable();
+    const query = hasNodes
+      ? `
+        SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color
+        FROM supertag_metadata m
+        LEFT JOIN nodes n ON n.id = m.tag_id
+        WHERE n.raw_data IS NULL
+           OR COALESCE(json_extract(n.raw_data, '$.props._ownerId'), '') NOT LIKE '%TRASH%'
+        ORDER BY m.tag_name
+      `
+      : `
         SELECT tag_id, tag_name, normalized_name, description, color
         FROM supertag_metadata
         ORDER BY tag_name
-      `
-      )
-      .all() as Array<{
+      `;
+
+    const rows = this.db.query(query).all() as Array<{
       tag_id: string;
       tag_name: string;
       normalized_name: string;
@@ -168,6 +219,7 @@ export class UnifiedSchemaService {
 
   /**
    * Search for supertags by partial name match.
+   * Excludes trashed supertags.
    *
    * @param query - Search query (partial match on name or normalized name)
    * @returns Array of matching supertags
@@ -177,16 +229,24 @@ export class UnifiedSchemaService {
     const likePattern = `%${query.toLowerCase()}%`;
     const normalizedPattern = `%${normalizedQuery}%`;
 
-    const rows = this.db
-      .query(
-        `
+    const hasNodes = this.checkNodesTable();
+    const sql = hasNodes
+      ? `
+        SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color
+        FROM supertag_metadata m
+        LEFT JOIN nodes n ON n.id = m.tag_id
+        WHERE (LOWER(m.tag_name) LIKE ? OR m.normalized_name LIKE ?)
+          AND (n.raw_data IS NULL OR COALESCE(json_extract(n.raw_data, '$.props._ownerId'), '') NOT LIKE '%TRASH%')
+        ORDER BY m.tag_name
+      `
+      : `
         SELECT tag_id, tag_name, normalized_name, description, color
         FROM supertag_metadata
         WHERE LOWER(tag_name) LIKE ? OR normalized_name LIKE ?
         ORDER BY tag_name
-      `
-      )
-      .all(likePattern, normalizedPattern) as Array<{
+      `;
+
+    const rows = this.db.query(sql).all(likePattern, normalizedPattern) as Array<{
       tag_id: string;
       tag_name: string;
       normalized_name: string;

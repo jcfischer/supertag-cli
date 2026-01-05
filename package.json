@@ -9,6 +9,7 @@
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile=supertag",
     "build:mcp": "bun build src/mcp/index.ts --compile --outfile=supertag-mcp",
+    "build:export": "bun build src/cli/tana-export.ts --compile --outfile=supertag-export --external=playwright --external=playwright-core --external=chromium-bidi --external=electron",
     "dev": "bun run src/index.ts",
     "dev:mcp": "bun run src/mcp/index.ts",
     "inspect:mcp": "npx @modelcontextprotocol/inspector bun run src/mcp/index.ts",

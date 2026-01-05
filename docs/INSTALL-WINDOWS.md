@@ -132,7 +132,7 @@ echo $env:TANA_API_TOKEN
 
 ## Step 4: Install Playwright (Required for Export)
 
-The `supertag-export` tool uses Playwright for browser automation. The browser binaries cannot be bundled into the executable, so you need to install them separately.
+The `supertag-export` tool uses Playwright for browser automation. Due to Playwright's native dependencies, it must be installed globally.
 
 ### Option A: Using Bun (Recommended)
 
@@ -152,7 +152,21 @@ Bun is a fast JavaScript runtime that works well with Playwright.
 
 2. **Restart PowerShell** (important!)
 
-3. **Install Playwright Chromium:**
+3. **Install Playwright globally:**
+   ```powershell
+   bun add -g playwright
+   ```
+
+4. **Configure NODE_PATH:**
+
+   The compiled binary needs NODE_PATH to find the global playwright package:
+   ```powershell
+   [Environment]::SetEnvironmentVariable("NODE_PATH", "$env:USERPROFILE\.bun\install\global\node_modules", "User")
+   ```
+
+5. **Restart PowerShell** (important!)
+
+6. **Install Chromium browser:**
    ```powershell
    bunx playwright install chromium
    ```
@@ -160,8 +174,9 @@ Bun is a fast JavaScript runtime that works well with Playwright.
    This downloads Chromium to:
    `C:\Users\<YourName>\AppData\Local\ms-playwright\chromium-*`
 
-4. **Verify:**
+7. **Verify:**
    ```powershell
+   supertag-export --help
    supertag-export login
    ```
    A browser window should open.
@@ -174,13 +189,26 @@ Bun is a fast JavaScript runtime that works well with Playwright.
 
 2. **Open a new PowerShell window**
 
-3. **Install Playwright:**
+3. **Install Playwright globally:**
+   ```powershell
+   npm install -g playwright
+   ```
+
+4. **Configure NODE_PATH:**
+   ```powershell
+   [Environment]::SetEnvironmentVariable("NODE_PATH", "$env:APPDATA\npm\node_modules", "User")
+   ```
+
+5. **Restart PowerShell**
+
+6. **Install Chromium browser:**
    ```powershell
    npx playwright install chromium
    ```
 
-4. **Verify:**
+7. **Verify:**
    ```powershell
+   supertag-export --help
    supertag-export login
    ```
 
@@ -188,7 +216,12 @@ Bun is a fast JavaScript runtime that works well with Playwright.
 
 **Error: "Cannot find package 'playwright'"**
 
-This means Playwright isn't installed. Follow Option A or B above.
+This usually means playwright isn't installed globally or NODE_PATH isn't set:
+
+1. Install globally: `bun add -g playwright` (or `npm install -g playwright`)
+2. Set NODE_PATH (see steps above)
+3. Restart PowerShell
+4. Install browser: `bunx playwright install chromium`
 
 **Error: "Executable doesn't exist"**
 

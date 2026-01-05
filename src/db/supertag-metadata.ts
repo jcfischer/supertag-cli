@@ -244,6 +244,13 @@ export function extractSupertagMetadata(
       continue;
     }
 
+    // Skip trashed tagDefs - detected by _ownerId containing TRASH
+    // This matches the pattern used in transcript.ts for trash detection
+    const ownerId = node.props._ownerId;
+    if (ownerId && String(ownerId).includes("TRASH")) {
+      continue;
+    }
+
     tagDefsProcessed++;
 
     // Extract and store supertag-level metadata (T-2.4)

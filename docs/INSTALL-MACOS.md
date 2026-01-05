@@ -120,7 +120,7 @@ source ~/.bash_profile
 
 ## Step 5: Install Playwright (Required for Export)
 
-The `supertag-export` tool requires Playwright for browser automation.
+The `supertag-export` tool requires Playwright for browser automation. Due to Playwright's native dependencies, it must be installed globally.
 
 ### Using Homebrew (Recommended)
 
@@ -128,7 +128,10 @@ The `supertag-export` tool requires Playwright for browser automation.
 # Install Bun
 brew install oven-sh/bun/bun
 
-# Install Playwright browsers
+# Install Playwright globally (required for compiled binary)
+bun add -g playwright
+
+# Install Chromium browser
 bunx playwright install chromium
 ```
 
@@ -141,11 +144,34 @@ curl -fsSL https://bun.sh/install | bash
 # Reload shell
 source ~/.zshrc  # or ~/.bash_profile
 
-# Install Playwright
+# Install Playwright globally (required for compiled binary)
+bun add -g playwright
+
+# Install Chromium browser
 bunx playwright install chromium
 ```
 
+### Configure NODE_PATH
+
+The compiled binary needs `NODE_PATH` to find the global playwright package. Add to your shell config:
+
+```bash
+# For Zsh (default on modern macOS)
+echo 'export NODE_PATH="$HOME/.bun/install/global/node_modules"' >> ~/.zshrc
+source ~/.zshrc
+
+# For Bash
+echo 'export NODE_PATH="$HOME/.bun/install/global/node_modules"' >> ~/.bash_profile
+source ~/.bash_profile
+```
+
 ### Verify
+
+```bash
+supertag-export --help
+```
+
+You should see the help text. Then test login:
 
 ```bash
 supertag-export login
@@ -326,7 +352,20 @@ supertag sync index
 ### Playwright Issues
 
 **"Cannot find package 'playwright'"**
+
+This usually means playwright isn't installed globally or NODE_PATH isn't set:
+
 ```bash
+# 1. Install playwright globally
+bun add -g playwright
+
+# 2. Set NODE_PATH (add to ~/.zshrc or ~/.bash_profile)
+export NODE_PATH="$HOME/.bun/install/global/node_modules"
+
+# 3. Reload shell
+source ~/.zshrc
+
+# 4. Install Chromium browser
 bunx playwright install chromium
 ```
 

@@ -113,7 +113,7 @@ source ~/.zshrc
 
 ## Step 4: Install Playwright (Required for Export)
 
-The `supertag-export` tool requires Playwright for browser automation.
+The `supertag-export` tool requires Playwright for browser automation. Due to Playwright's native dependencies, it must be installed globally.
 
 ### Install Bun
 
@@ -122,7 +122,24 @@ curl -fsSL https://bun.sh/install | bash
 source ~/.bashrc
 ```
 
-### Install Playwright and Dependencies
+### Install Playwright Globally
+
+```bash
+# Install Playwright globally (required for compiled binary)
+bun add -g playwright
+```
+
+### Configure NODE_PATH
+
+The compiled binary needs `NODE_PATH` to find the global playwright package:
+
+```bash
+# Add to ~/.bashrc (or ~/.zshrc for Zsh users)
+echo 'export NODE_PATH="$HOME/.bun/install/global/node_modules"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Install System Dependencies and Chromium
 
 **Ubuntu/Debian:**
 ```bash
@@ -143,7 +160,7 @@ sudo apt-get install -y \
     libgbm1 \
     libasound2
 
-# Install Playwright Chromium
+# Install Chromium browser
 bunx playwright install chromium
 ```
 
@@ -165,7 +182,7 @@ sudo dnf install -y \
     mesa-libgbm \
     alsa-lib
 
-# Install Playwright
+# Install Chromium browser
 bunx playwright install chromium
 ```
 
@@ -174,11 +191,17 @@ bunx playwright install chromium
 # Most dependencies come with base
 sudo pacman -S --needed nss cups libdrm mesa
 
-# Install Playwright
+# Install Chromium browser
 bunx playwright install chromium
 ```
 
 ### Verify Playwright
+
+```bash
+supertag-export --help
+```
+
+You should see the help text. Then test login:
 
 ```bash
 supertag-export login
