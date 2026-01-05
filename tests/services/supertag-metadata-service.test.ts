@@ -386,6 +386,14 @@ describe("SupertagMetadataService", () => {
     });
 
     it("should find all tags with same name via findAllTagsByName", () => {
+      // Insert into supertag_metadata (primary table for findAllTagsByName)
+      db.run(`
+        INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+        VALUES
+          ('project-a', 'project', 'project'),
+          ('project-b', 'project', 'project')
+      `);
+      // Insert fields
       db.run(`
         INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
         VALUES

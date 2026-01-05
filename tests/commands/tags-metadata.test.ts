@@ -49,6 +49,15 @@ describe("Tags Metadata CLI Commands", () => {
       )
     `);
 
+    // Insert test supertag metadata
+    db.run(`
+      INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+      VALUES
+        ('contact-tag', 'contact', 'contact'),
+        ('employee-tag', 'employee', 'employee'),
+        ('manager-tag', 'manager', 'manager')
+    `);
+
     // Insert test inheritance: manager -> employee -> contact
     db.run(`
       INSERT INTO supertag_parents (child_tag_id, parent_tag_id)

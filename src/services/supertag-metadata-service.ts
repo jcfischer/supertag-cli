@@ -286,20 +286,20 @@ export class SupertagMetadataService {
     parentCount: number;
     usageCount: number;
   }> {
+    // Query supertag_metadata as primary table to find supertags even with 0 fields
     const results = this.db
       .query(`
         SELECT
-          sf.tag_id,
-          sf.tag_name,
-          COUNT(DISTINCT sf.field_name) as field_count,
-          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sf.tag_id) as parent_count,
-          (SELECT COUNT(*) FROM tag_applications ta WHERE ta.tag_id = sf.tag_id) as usage_count
-        FROM supertag_fields sf
-        WHERE sf.tag_name = ?
-        GROUP BY sf.tag_id
+          sm.tag_id,
+          sm.tag_name,
+          (SELECT COUNT(*) FROM supertag_fields sf WHERE sf.tag_id = sm.tag_id) as field_count,
+          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sm.tag_id) as parent_count,
+          (SELECT COUNT(*) FROM tag_applications ta WHERE ta.tag_id = sm.tag_id) as usage_count
+        FROM supertag_metadata sm
+        WHERE sm.tag_name = ? OR sm.normalized_name = ?
         ORDER BY parent_count DESC, field_count DESC
       `)
-      .all(tagName) as Array<{
+      .all(tagName, tagName.toLowerCase()) as Array<{
         tag_id: string;
         tag_name: string;
         field_count: number;
