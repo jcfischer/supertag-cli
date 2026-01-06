@@ -100,15 +100,25 @@ Files are named: `{rootFileId}@{date}.json`
 
 ## Daily Automation
 
-### Combined Script
+### Combined Workflow
+
+Run export, sync, and cleanup in sequence:
 
 ```bash
-./tana-daily               # Export + index + cleanup
-./tana-daily --export      # Export only
-./tana-daily --sync        # Index only
-./tana-daily --cleanup     # Cleanup only
-./tana-daily --no-cleanup  # Export + index without cleanup
-./tana-daily --all         # All workspaces
+# Full daily workflow
+supertag-export run && supertag sync index && supertag sync cleanup
+
+# Export all workspaces
+supertag-export run --all && supertag sync index --all && supertag sync cleanup --all
+
+# Export only (no indexing)
+supertag-export run
+
+# Index only (after manual export)
+supertag sync index
+
+# Cleanup only
+supertag sync cleanup
 ```
 
 ### Export Cleanup
@@ -129,12 +139,22 @@ supertag sync cleanup --keep 5
 supertag sync cleanup --all
 ```
 
-### macOS LaunchAgent (6 AM daily)
+### macOS LaunchAgent (Automated Scheduling)
+
+Use the install script to set up automated sync (runs every 6 hours):
 
 ```bash
-cp launchd/ch.invisible.supertag-daily.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/ch.invisible.supertag-daily.plist
+# Install the daily sync scheduler
+./scripts/install-launchd.sh daily
+
+# Check status
+launchctl list | grep supertag
+
+# View logs
+tail -f ~/.local/state/supertag/logs/supertag-daily.log
 ```
+
+See [LAUNCHD-SETUP.md](./LAUNCHD-SETUP.md) for full documentation.
 
 ---
 

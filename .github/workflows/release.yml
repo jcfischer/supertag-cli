@@ -154,7 +154,7 @@ jobs:
 
   build-windows:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -170,32 +170,35 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Build main CLI
-        run: bun build src/index.ts --compile --target=bun-windows-x64 --outfile=supertag.exe
+        run: bun build src/index.ts --compile --outfile=supertag.exe
 
       - name: Build MCP server
-        run: bun build src/mcp/index.ts --compile --target=bun-windows-x64 --outfile=supertag-mcp.exe
+        run: bun build src/mcp/index.ts --compile --outfile=supertag-mcp.exe
 
       - name: Build export CLI
-        run: |
-          EXTERNAL_FLAGS="--external playwright --external playwright-core --external electron --external chromium-bidi"
-          bun build export/index.ts --compile --target=bun-windows-x64 $EXTERNAL_FLAGS --outfile=supertag-export.exe
+        run: bun build export/index.ts --compile --external playwright --external playwright-core --external electron --external chromium-bidi --outfile=supertag-export.exe
 
       - name: Create distribution package
+        shell: pwsh
         run: |
-          DIST_NAME="supertag-cli-windows-x64"
-          mkdir -p "$DIST_NAME"
-          cp supertag.exe "$DIST_NAME/"
-          cp supertag-mcp.exe "$DIST_NAME/"
-          cp supertag-export.exe "$DIST_NAME/"
-          cp export/package.json "$DIST_NAME/"
-          cp README.md "$DIST_NAME/"
-          cp -r docs "$DIST_NAME/"
-          cp -r launchd "$DIST_NAME/"
-          cp -r scripts "$DIST_NAME/"
-          zip -r "supertag-cli-v${{ steps.version.outputs.VERSION }}-windows-x64.zip" "$DIST_NAME"
+          $distName = "supertag-cli-windows-x64"
+          $version = "${{ steps.version.outputs.VERSION }}"
+          New-Item -ItemType Directory -Force -Path $distName
+          Copy-Item supertag.exe "$distName/"
+          Copy-Item supertag-mcp.exe "$distName/"
+          Copy-Item supertag-export.exe "$distName/"
+          Copy-Item export/package.json "$distName/"
+          Copy-Item README.md "$distName/"
+          Copy-Item -Recurse docs "$distName/"
+          Copy-Item -Recurse launchd "$distName/"
+          Copy-Item -Recurse scripts "$distName/"
+          Compress-Archive -Path $distName -DestinationPath "supertag-cli-v$version-windows-x64.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

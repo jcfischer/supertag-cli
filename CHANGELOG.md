@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-01-06
+
+### Fixed
+
+- **Windows Native Build** - Windows binaries now build on native Windows runner instead of cross-compilation
+  - Fixes "Cannot require module @lancedb/lancedb-win32-x64-msvc" error on Windows
+  - LanceDB native modules are now properly bundled for Windows x64
+  - Semantic search (`--semantic`) and embedding commands now work on Windows
+
+- **Documentation** - Removed outdated `tana-daily` script references
+  - Updated `docs/export.md` with current `supertag-export` and `supertag sync` commands
+  - Added link to `LAUNCHD-SETUP.md` for macOS automation
+
 ## [1.6.3] - 2026-01-05
 
 ### Fixed

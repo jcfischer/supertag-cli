@@ -344,6 +344,30 @@ See [MCP Documentation](./mcp.md) for other AI tools.
 
 ## Troubleshooting
 
+### "Cannot require module @lancedb/lancedb-win32-x64-msvc"
+
+This error affects versions before v1.6.4 due to cross-compilation issues with native modules.
+
+**Solution:** Download v1.6.4 or later from [GitHub Releases](https://github.com/jcfischer/supertag-cli/releases).
+
+**Workaround for older versions:**
+1. Most features still work - only `embed` commands and `--semantic` search are affected
+2. Use regular search: `supertag search "meeting"` (not `supertag search "meeting" --semantic`)
+
+Or run from source:
+```powershell
+# Install Bun
+powershell -c "irm bun.sh/install.ps1 | iex"
+
+# Clone and run from source
+git clone https://github.com/jcfischer/supertag-cli.git
+cd supertag-cli
+bun install
+bun run src/index.ts --version
+```
+
+---
+
 ### "supertag is not recognized"
 
 PATH not configured. Either:
