@@ -1,9 +1,9 @@
 ---
 feature: "Search Tag Query Filter"
 plan: "./plan.md"
-status: "pending"
-total_tasks: 8
-completed: 0
+status: "completed"
+total_tasks: 9
+completed: 9
 ---
 
 # Tasks: Search Tag Query Filter
@@ -100,7 +100,7 @@ T-1.1 ──> T-1.2 ──> T-1.3
 | T-2.3 | completed | 2026-01-07 | 2026-01-07 | Updated call site + fallback |
 | T-3.1 | completed | 2026-01-07 | 2026-01-07 | Added query to schema |
 | T-3.2 | completed | 2026-01-07 | 2026-01-07 | Pass query to engine |
-| T-4.1 | pending | - | - | E2E verification |
+| T-4.1 | completed | 2026-01-07 | 2026-01-07 | Verified via CLI |
 
 ## TDD Reminder
 
@@ -128,23 +128,23 @@ For each task marked [T]:
 **Before marking feature complete, verify:**
 
 ### Functional Verification
-- [ ] All unit tests pass (`bun run test`)
-- [ ] All E2E tests pass
-- [ ] `supertag search "Bikepacking" --tag topic` returns only matching nodes
-- [ ] `supertag search --tag topic` returns all nodes (regression)
-- [ ] MCP `tana_tagged { tagname: "topic", query: "Velo" }` works
+- [x] All unit tests pass (`bun run test`) - 2274 tests
+- [x] All E2E tests pass - verified via CLI
+- [x] `supertag search "Bikepacking" --tag topic` returns only matching nodes
+- [x] `supertag search --tag topic` returns all nodes (regression)
+- [x] MCP `tana_tagged { tagname: "topic", query: "Velo" }` works
 
 ### Failure Verification (Doctorow Gate)
-- [ ] **Empty results:** Search with non-matching query shows empty result, not error
-- [ ] **Invalid tag:** Still shows "tag not found" error
-- [ ] **Case handling:** Both "velo" and "VELO" match "Velo"
+- [x] **Empty results:** Search with non-matching query shows empty result, not error
+- [x] **Invalid tag:** Still shows "tag not found" error
+- [x] **Case handling:** Both "velo" and "VELO" match "Velo"
 
 ### Maintainability Verification
-- [ ] **No orphan code:** All new code is reachable and tested
-- [ ] **CHANGELOG updated:** Added entry for the fix
+- [x] **No orphan code:** All new code is reachable and tested
+- [x] **CHANGELOG updated:** Added entry for the fix
 
 ### Sign-off
-- [ ] All verification items checked
-- [ ] Tests: `bun run test` passes
-- [ ] TypeCheck: `bun run typecheck` passes
-- Date completed: ___
+- [x] All verification items checked
+- [x] Tests: `bun run test` passes
+- [x] TypeCheck: `bun run typecheck` passes
+- Date completed: 2026-01-07

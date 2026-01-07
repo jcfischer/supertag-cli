@@ -1,8 +1,9 @@
 ---
 id: "089"
 feature: "Search Tag Query Filter"
-status: "draft"
+status: "implemented"
 created: "2026-01-07"
+implemented: "2026-01-07"
 ---
 
 # Specification: Search Tag Query Filter
