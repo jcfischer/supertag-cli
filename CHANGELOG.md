@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Graph Traversal (Spec 065)** - New `related` command and `tana_related` MCP tool
+  - Find nodes related through references, children, and field links
+  - CLI: `supertag related <nodeId>` - find all related nodes
+  - CLI: `supertag related <nodeId> --direction in` - incoming references only
+  - CLI: `supertag related <nodeId> --direction out` - outgoing references only
+  - CLI: `supertag related <nodeId> --types child,reference` - filter by relationship type
+  - CLI: `supertag related <nodeId> --depth 2` - multi-hop traversal (up to 5)
+  - MCP: `tana_related { nodeId: "abc123", direction: "both", depth: 2 }`
+  - Relationship types: child, parent, reference, field
+  - BFS traversal with cycle detection
+  - Returns relationship metadata (type, direction, distance, path)
+  - Output formats: table, json, csv, ids, minimal, jsonl
+  - 32+ tests passing
+
 ## [1.7.1] - 2026-01-07
 
 ### Added

@@ -33,6 +33,7 @@ The `supertag-mcp` binary runs locally on your machine as a subprocess - no serv
 | Tool | Description | Example Query |
 |------|-------------|---------------|
 | `tana_node` | Get node contents with depth | "Show node abc123 with children" |
+| `tana_related` | Find related nodes via graph traversal | "What nodes are connected to abc123?" |
 | `tana_stats` | Database statistics | "How many nodes in my Tana?" |
 | `tana_supertags` | List all supertags | "What supertags do I have?" |
 | `tana_supertag_info` | Query supertag inheritance and fields | "What fields does the meeting tag have?" |

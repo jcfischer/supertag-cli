@@ -99,6 +99,8 @@ supertag search "project" --semantic         # Semantic search
 supertag search "todo" --tag todo            # Find by supertag
 supertag search --tag meeting --field "Location=Zurich"  # Filter by field
 supertag nodes show <id> --depth 3           # Node contents
+supertag related <id>                        # Find related nodes
+supertag related <id> --depth 2              # Multi-hop traversal
 supertag tags top                            # Most used tags
 supertag tags inheritance manager            # Show tag hierarchy
 supertag tags fields meeting --all           # Show tag fields

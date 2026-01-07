@@ -33,7 +33,7 @@ Get a lightweight overview of available tools, categorized by function.
 
 **Categories:**
 - **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get, tana_query
-- **explore**: tana_node, tana_stats, tana_supertags, tana_supertag_info
+- **explore**: tana_node, tana_related, tana_stats, tana_supertags, tana_supertag_info
 - **transcript**: tana_transcript_list, tana_transcript_show, tana_transcript_search
 - **mutate**: tana_create, tana_batch_create
 - **system**: tana_sync, tana_cache_clear, tana_capabilities, tana_tool_schema
@@ -138,6 +138,34 @@ Get full contents of a specific node by ID.
 ```
 Show me node abc123 with its children
 Get the full contents of node xyz789 at depth 2
+```
+
+### tana_related
+Find nodes related to a given node through references, children, and field links. Uses BFS graph traversal with cycle detection.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodeId` | string | Yes | Source node ID to find related nodes from |
+| `direction` | string | No | Traversal direction: "in", "out", or "both" (default: "both") |
+| `types` | array | No | Relationship types: child, parent, reference, field (default: all) |
+| `depth` | number | No | Multi-hop traversal depth 0-5 (default: 1) |
+| `limit` | number | No | Max results 1-100 (default: 50) |
+| `workspace` | string | No | Workspace alias |
+| `select` | array | No | Fields to include in response |
+
+**Relationship types:**
+- `child`: Node is a child of source
+- `parent`: Node is parent of source
+- `reference`: Node is referenced by source (inline refs, field refs)
+- `field`: Node is connected through a field value
+
+**Example:**
+```
+Find all nodes related to abc123
+What nodes reference project xyz789?
+Show incoming connections to meeting abc123
+Find nodes connected within 2 hops of task def456
 ```
 
 ### tana_create
