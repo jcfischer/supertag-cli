@@ -295,4 +295,120 @@ describe('GraphTraversalService', () => {
       expect(result.count).toBe(2);
     });
   });
+
+  describe('traverse - multi-hop (depth > 1)', () => {
+    it('should find nodes at depth 2', async () => {
+      // A -> B -> E (via child relationships)
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child'],
+        depth: 2,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Should find B (depth 1) and E (depth 2)
+      expect(result.related.length).toBe(2);
+      const ids = result.related.map((r) => r.id);
+      expect(ids).toContain('nodeB');
+      expect(ids).toContain('nodeE');
+    });
+
+    it('should track correct distance for each node', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child'],
+        depth: 2,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      const nodeB = result.related.find((r) => r.id === 'nodeB');
+      const nodeE = result.related.find((r) => r.id === 'nodeE');
+
+      expect(nodeB?.relationship.distance).toBe(1);
+      expect(nodeE?.relationship.distance).toBe(2);
+    });
+
+    it('should track correct path for each node', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child'],
+        depth: 2,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      const nodeB = result.related.find((r) => r.id === 'nodeB');
+      const nodeE = result.related.find((r) => r.id === 'nodeE');
+
+      expect(nodeB?.relationship.path).toEqual(['nodeA', 'nodeB']);
+      expect(nodeE?.relationship.path).toEqual(['nodeA', 'nodeB', 'nodeE']);
+    });
+
+    it('should not traverse beyond specified depth', async () => {
+      // With depth 1, should only find B, not E
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      expect(result.related.length).toBe(1);
+      expect(result.related[0].id).toBe('nodeB');
+    });
+  });
+
+  describe('cycle detection', () => {
+    it('should not visit same node twice', async () => {
+      // With bidirectional traversal, A -> B and B -> A (parent)
+      // Should not loop infinitely
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'both',
+        types: ['child', 'parent', 'reference', 'field'],
+        depth: 3,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Count occurrences of each node
+      const counts = new Map<string, number>();
+      for (const r of result.related) {
+        counts.set(r.id, (counts.get(r.id) || 0) + 1);
+      }
+
+      // Each node should appear at most once
+      for (const [, count] of counts) {
+        expect(count).toBe(1);
+      }
+    });
+
+    it('should handle circular references gracefully', async () => {
+      // Traverse from A with both directions - should handle A -> B -> A cycle
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'both',
+        types: ['child', 'parent'],
+        depth: 5,
+        limit: 50,
+      };
+
+      // Should complete without infinite loop
+      const result = await service.traverse(query, 'main');
+
+      expect(result.related.length).toBeGreaterThan(0);
+    });
+  });
 });
