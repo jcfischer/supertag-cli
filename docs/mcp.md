@@ -481,3 +481,14 @@ mcphost --quiet -m ollama:qwen2.5:7b -p "List the top 5 supertags in workspace '
 | Database not found | Run `supertag sync index` |
 | Schema empty | Run `supertag schema sync` |
 | Debug mode | Add `"DEBUG": "true"` to env |
+
+---
+
+## Alternative MCP Clients
+
+Looking for cheaper alternatives to Claude Code or Cursor? See [MCP Alternatives](./mcp-alternatives.md) for:
+
+- **Local LLMs**: Ollama + MCP Client, Ollama MCP Bridge
+- **BYOK (Bring Your Own Key)**: Cline, Continue, OpenAI Codex CLI
+- **Self-hosted**: LibreChat with per-user MCP configs
+- **Cost comparison**: From $0 (local) to $100/month (Claude Max)

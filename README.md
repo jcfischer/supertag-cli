@@ -569,6 +569,7 @@ The `supertag-export` tool requires Playwright for browser automation. See the p
 | [macOS Install](./docs/INSTALL-MACOS.md) | macOS installation with launchd automation |
 | [Linux Install](./docs/INSTALL-LINUX.md) | Linux installation with systemd automation |
 | [MCP Integration](./docs/mcp.md) | AI tool setup (Claude, ChatGPT, Cursor, etc.) |
+| [MCP Alternatives](./docs/mcp-alternatives.md) | Cheaper options: Ollama, BYOK, local LLMs |
 | [Embeddings](./docs/embeddings.md) | Semantic search configuration |
 | [Field Values](./docs/fields.md) | Query and search field data from nodes |
 | [Aggregation](./docs/aggregation.md) | Group and count nodes by field or time period |
