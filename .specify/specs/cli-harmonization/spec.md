@@ -1,8 +1,9 @@
 ---
 id: "017"
 feature: "CLI Harmonization"
-status: "draft"
+status: "completed"
 created: "2025-12-22"
+completed: "2025-12-23"
 ---
 
 # Specification: CLI Harmonization

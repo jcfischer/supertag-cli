@@ -1,8 +1,9 @@
 ---
 id: "073"
 feature: "Error Context"
-status: "draft"
+status: "completed"
 created: "2026-01-01"
+completed: "2026-01-01"
 ---
 
 # Specification: Error Context

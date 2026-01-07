@@ -1,8 +1,9 @@
 ---
 id: "019"
 feature: "Supertag Metadata Storage"
-status: "draft"
+status: "completed"
 created: "2025-12-23"
+completed: "2025-12-23"
 ---
 
 # Specification: Supertag Metadata Storage

@@ -1,8 +1,9 @@
 ---
 id: "062"
 feature: "Batch Operations"
-status: "draft"
+status: "completed"
 created: "2026-01-01"
+completed: "2026-01-01"
 ---
 
 # Specification: Batch Operations

@@ -1,8 +1,9 @@
 ---
 id: "004"
 feature: "resona-migration"
-status: "draft"
+status: "completed"
 created: "2025-12-18"
+completed: "2025-12-20"
 ---
 
 # Specification: Migrate Embeddings from SQLite-vec to Resona

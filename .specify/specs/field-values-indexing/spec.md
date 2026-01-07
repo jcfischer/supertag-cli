@@ -1,8 +1,9 @@
 ---
 id: "018"
 feature: "Field Values Indexing"
-status: "draft"
+status: "completed"
 created: "2025-12-23"
+completed: "2025-12-23"
 ---
 
 # Specification: Field Values Indexing

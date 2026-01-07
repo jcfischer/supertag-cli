@@ -1,8 +1,9 @@
 ---
 id: "060"
 feature: "Universal Format Options"
-status: "draft"
+status: "completed"
 created: "2026-01-01"
+completed: "2026-01-01"
 ---
 
 # Specification: Universal Format Options

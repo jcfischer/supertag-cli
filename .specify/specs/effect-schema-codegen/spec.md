@@ -1,8 +1,9 @@
 # Spec: Effect Schema Codegen from Supertags
 
-**Status**: Draft
+**Status**: Completed
 **Author**: PAI
 **Date**: 2025-12-28
+**Completed**: 2025-12-28
 **Priority**: Medium
 
 ## Summary

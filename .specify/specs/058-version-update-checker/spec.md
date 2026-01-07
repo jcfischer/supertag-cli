@@ -1,8 +1,9 @@
 ---
 id: "058"
 feature: "Version Update Checker"
-status: "draft"
+status: "completed"
 created: "2025-12-31"
+completed: "2026-01-01"
 ---
 
 # Specification: Version Update Checker

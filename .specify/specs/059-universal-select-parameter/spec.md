@@ -1,8 +1,9 @@
 ---
 id: "059"
 feature: "Universal Select Parameter"
-status: "draft"
+status: "completed"
 created: "2026-01-01"
+completed: "2026-01-01"
 ---
 
 # Specification: Universal Select Parameter

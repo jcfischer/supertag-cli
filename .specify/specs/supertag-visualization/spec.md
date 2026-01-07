@@ -1,8 +1,9 @@
 # Supertag Inheritance Visualization Specification
 
 **Feature**: Graphical Overview of Supertag Inheritance Hierarchy
-**Status**: Draft
+**Status**: Completed
 **Created**: 2025-12-24
+**Completed**: 2025-12-24
 
 ## Overview
 
