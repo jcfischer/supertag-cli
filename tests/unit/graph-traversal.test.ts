@@ -411,4 +411,83 @@ describe('GraphTraversalService', () => {
       expect(result.related.length).toBeGreaterThan(0);
     });
   });
+
+  describe('limits and truncation', () => {
+    it('should truncate results when limit is reached', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'both',
+        types: ['child', 'parent', 'reference', 'field'],
+        depth: 3,
+        limit: 2, // Only allow 2 results
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      expect(result.related.length).toBe(2);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('should not truncate when under limit', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should return empty related array for isolated node', async () => {
+      // Node C has no outbound child/parent relationships
+      const query: RelatedQuery = {
+        nodeId: 'nodeC',
+        direction: 'out',
+        types: ['child'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      expect(result.related).toEqual([]);
+      expect(result.count).toBe(0);
+      expect(result.truncated).toBe(false);
+    });
+
+    it('should handle depth 0 (no traversal)', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'both',
+        types: ['child', 'parent', 'reference', 'field'],
+        depth: 0,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Depth 0 means no traversal - return empty
+      expect(result.related).toEqual([]);
+    });
+
+    it('should return empty for empty type filter', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'both',
+        types: [], // No types
+        depth: 2,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      expect(result.related).toEqual([]);
+    });
+  });
 });
