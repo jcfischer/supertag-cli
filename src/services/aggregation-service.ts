@@ -159,19 +159,23 @@ export class AggregationService {
     // ORDER BY count DESC (default sort by count)
     sql += " ORDER BY count DESC";
 
-    // LIMIT if specified
-    const limit = ast.limit ?? 100;
+    // Apply top or limit
+    const effectiveLimit = ast.top ?? ast.limit ?? 100;
     sql += " LIMIT ?";
-    params.push(limit);
+    params.push(effectiveLimit + 1); // Fetch one extra to detect if capped
 
     // Execute query
     const rows = this.db.query(sql).all(...params) as Array<{
       [key: string]: string | number;
     }>;
 
+    // Check if results were capped
+    const wasCapped = rows.length > effectiveLimit;
+    const cappedRows = wasCapped ? rows.slice(0, effectiveLimit) : rows;
+
     // Build groups from results
     const groups: Record<string, number> = {};
-    for (const row of rows) {
+    for (const row of cappedRows) {
       const key = String(row[alias]);
       groups[key] = Number(row.count);
     }
@@ -184,11 +188,31 @@ export class AggregationService {
     const totalRow = this.db.query(totalSql).get(...totalParams) as { total: number };
     const total = totalRow?.total ?? 0;
 
-    return {
+    // Calculate percentages if requested
+    let percentages: Record<string, number> | undefined;
+    if (ast.showPercent && total > 0) {
+      percentages = {};
+      for (const [key, count] of Object.entries(groups)) {
+        percentages[key] = Math.round((count / total) * 100);
+      }
+    }
+
+    // Build result
+    const result: AggregateResult = {
       total,
       groupCount: Object.keys(groups).length,
       groups,
     };
+
+    if (percentages) {
+      result.percentages = percentages;
+    }
+
+    if (wasCapped) {
+      result.warning = `Results capped at ${effectiveLimit} groups`;
+    }
+
+    return result;
   }
 
   /**

@@ -396,4 +396,91 @@ describe("AggregationService", () => {
       }
     });
   });
+
+  describe("aggregate - showPercent and top options", () => {
+    let testDb: { dbPath: string; cleanup: () => void };
+    let service: AggregationService;
+
+    beforeEach(() => {
+      testDb = createTestDatabase();
+      service = new AggregationService(testDb.dbPath);
+    });
+
+    afterEach(() => {
+      service.close();
+      testDb.cleanup();
+    });
+
+    it("should include percentages when showPercent is true", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Status" }],
+        aggregate: [{ fn: "count" }],
+        showPercent: true,
+      });
+
+      expect(result.percentages).toBeDefined();
+      expect(result.percentages!["Done"]).toBe(40); // 4/10 = 40%
+      expect(result.percentages!["In Progress"]).toBe(20); // 2/10 = 20%
+      expect(result.percentages!["Open"]).toBe(30); // 3/10 = 30%
+      expect(result.percentages!["(none)"]).toBe(10); // 1/10 = 10%
+
+      // Sum should be ~100%
+      const sum = Object.values(result.percentages!).reduce(
+        (a, b) => (a as number) + (b as number),
+        0
+      );
+      expect(sum).toBe(100);
+    });
+
+    it("should return only top N groups when top is specified", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Status" }],
+        aggregate: [{ fn: "count" }],
+        top: 2,
+      });
+
+      expect(result.groupCount).toBe(2);
+      expect(Object.keys(result.groups).length).toBe(2);
+
+      // Should have the top 2 by count (Done: 4, Open: 3)
+      expect(result.groups["Done"]).toBe(4);
+      expect(result.groups["Open"]).toBe(3);
+      expect(result.groups["In Progress"]).toBeUndefined();
+    });
+
+    it("should include percentages for top N groups", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Status" }],
+        aggregate: [{ fn: "count" }],
+        top: 2,
+        showPercent: true,
+      });
+
+      expect(result.percentages).toBeDefined();
+      // Percentages should reflect the full total, not just top N
+      expect(result.percentages!["Done"]).toBe(40);
+      expect(result.percentages!["Open"]).toBe(30);
+    });
+
+    it("should add warning when groups exceed default limit", () => {
+      // Create more unique field values than the default limit
+      // For this test, we verify warning behavior with limit
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Priority" }],
+        aggregate: [{ fn: "count" }],
+        limit: 2,
+      });
+
+      // With limit of 2, we should only get 2 groups but have a warning if there were more
+      expect(result.groupCount).toBe(2);
+      // Warning should indicate results were capped
+      // (In our test data we have 3 priorities, so warning should appear)
+      expect(result.warning).toBeDefined();
+      expect(result.warning).toContain("capped");
+    });
+  });
 });
