@@ -114,6 +114,34 @@ export const nodeSchema = z.object({
 });
 export type NodeInput = z.infer<typeof nodeSchema>;
 
+// tana_related (Spec 065: Graph Traversal)
+export const relatedSchema = z.object({
+  nodeId: z.string().min(1).describe('Source node ID to find related nodes from'),
+  direction: z
+    .enum(['in', 'out', 'both'])
+    .default('both')
+    .describe('Traversal direction: "in" (nodes pointing to this), "out" (this points to), "both"'),
+  types: z
+    .array(z.enum(['child', 'parent', 'reference', 'field']))
+    .default(['child', 'parent', 'reference', 'field'])
+    .describe('Relationship types to include: child, parent, reference, field'),
+  depth: z
+    .number()
+    .min(0)
+    .max(5)
+    .default(1)
+    .describe('Maximum traversal depth (0-5). 0 = direct connections only.'),
+  limit: z
+    .number()
+    .min(1)
+    .max(100)
+    .default(50)
+    .describe('Maximum number of related nodes to return (1-100)'),
+  workspace: workspaceSchema,
+  select: selectSchema,
+});
+export type RelatedInput = z.infer<typeof relatedSchema>;
+
 // Recursive child node schema for nested structures
 interface ChildNode {
   name: string;
