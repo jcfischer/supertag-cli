@@ -6,6 +6,20 @@
  */
 
 /**
+ * Metadata for a system field (SYS_A*).
+ * Used to provide rich type information for system fields like Date, Attendees, Due Date.
+ * Spec 074: System Field Discovery
+ */
+export interface SystemFieldMetadata {
+  /** Human-readable field name (e.g., "Date", "Attendees") */
+  name: string;
+  /** Normalized name for matching (e.g., "date", "attendees") */
+  normalizedName: string;
+  /** Data type for proper value handling */
+  dataType: 'date' | 'reference' | 'text';
+}
+
+/**
  * Supertag field definition stored in database.
  * Extracted from tagDef tuple children during indexing.
  */
@@ -44,6 +58,7 @@ export interface InheritedField {
   inferredDataType?: string; // Inferred data type (text, date, email, etc.) - Spec 020
   targetSupertagId?: string; // Target supertag ID for reference fields (Options from Supertag)
   targetSupertagName?: string; // Target supertag name for reference fields
+  system?: boolean; // True if this is a system field (SYS_A*) - Spec 074
 }
 
 /**
