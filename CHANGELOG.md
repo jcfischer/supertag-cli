@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-01-07
+
 ### Added
 
 - **System Field Discovery (Spec 074)** - Automatic detection and inclusion of Tana system fields
