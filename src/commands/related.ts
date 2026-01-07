@@ -81,10 +81,10 @@ export function createRelatedCommand(): Command {
     const types = parseTypes(options.types);
 
     // Parse depth
-    const depth = Math.min(5, Math.max(0, parseInt(options.depth || '1', 10)));
+    const depth = Math.min(5, Math.max(0, parseInt(String(options.depth || '1'), 10)));
 
     // Parse limit
-    const limit = Math.min(100, parseInt(options.limit || '50', 10));
+    const limit = Math.min(100, parseInt(String(options.limit || '50'), 10));
 
     const service = new GraphTraversalService(dbPath);
 
