@@ -73,6 +73,16 @@ describe("tags visualize command", () => {
       )
     `);
 
+    // Spec 074: System field sources table (for system field discovery)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS system_field_sources (
+        id INTEGER PRIMARY KEY,
+        field_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        UNIQUE(field_id, tag_id)
+      )
+    `);
+
     // Insert test data - include nodes for metadata service fallback
     db.run(`INSERT INTO supertag_metadata (tag_id, tag_name, color) VALUES
       ('tag_entity', 'entity', '#E8E8E8'),

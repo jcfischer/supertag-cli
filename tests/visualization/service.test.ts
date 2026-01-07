@@ -9,6 +9,7 @@ import { Database } from "bun:sqlite";
 import { VisualizationService } from "../../src/visualization/service";
 import type { VisualizationData } from "../../src/visualization/types";
 import { migrateSchemaConsolidation, migrateSupertagMetadataSchema } from "../../src/db/migrate";
+import { migrateSystemFieldSources } from "../../src/db/system-fields";
 
 describe("VisualizationService", () => {
   let db: Database;
@@ -21,6 +22,7 @@ describe("VisualizationService", () => {
     // Use migrations to create schema
     migrateSupertagMetadataSchema(db);
     migrateSchemaConsolidation(db);
+    migrateSystemFieldSources(db);
 
     db.run(`
       CREATE TABLE tag_applications (

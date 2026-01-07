@@ -19,6 +19,7 @@ import type {
   Ancestor,
   FieldValidationResult,
 } from "../types/supertag-metadata";
+import { SYSTEM_FIELD_METADATA } from "../db/system-fields";
 
 export class SupertagMetadataService {
   private db: Database;
@@ -195,14 +196,16 @@ export class SupertagMetadataService {
   }
 
   /**
-   * Get all fields for a supertag including inherited fields.
+   * Get all fields for a supertag including inherited fields and system fields (Spec 074).
    * Tracks origin tag and depth for each field.
+   *
+   * User-defined fields take precedence over system fields with the same name.
    */
   getAllFields(tagId: string): InheritedField[] {
     const allFields: InheritedField[] = [];
     const seenFields = new Set<string>(); // Prevent duplicates by field name
 
-    // Own fields (depth 0)
+    // Own fields (depth 0) - these take highest precedence
     const ownFields = this.getFields(tagId);
     for (const field of ownFields) {
       if (!seenFields.has(field.fieldName)) {
@@ -240,6 +243,16 @@ export class SupertagMetadataService {
             targetSupertagName: field.targetSupertagName,
           });
         }
+      }
+    }
+
+    // Spec 074: Add system fields (only if not already defined)
+    // System fields are added last so user-defined fields take precedence
+    const systemFields = this.getSystemFieldsForTag(tagId);
+    for (const sysField of systemFields) {
+      if (!seenFields.has(sysField.fieldName)) {
+        seenFields.add(sysField.fieldName);
+        allFields.push(sysField);
       }
     }
 
@@ -339,6 +352,122 @@ export class SupertagMetadataService {
       .get(tagId) as { tag_name: string } | null;
 
     return result?.tag_name ?? null;
+  }
+
+  // =========================================================================
+  // Spec 074: System Field Discovery Methods
+  // =========================================================================
+
+  /**
+   * T-3.1: Get tagDef IDs that define a given system field.
+   * Queries the system_field_sources table.
+   *
+   * @param fieldId System field ID (e.g., "SYS_A90")
+   * @returns Array of tagDef IDs that define this system field
+   */
+  getSystemFieldSourceTags(fieldId: string): string[] {
+    try {
+      const results = this.db
+        .query(`SELECT tag_id FROM system_field_sources WHERE field_id = ?`)
+        .all(fieldId) as Array<{ tag_id: string }>;
+
+      return results.map(r => r.tag_id);
+    } catch (error) {
+      // Table may not exist in older databases - gracefully return empty
+      // This allows backwards compatibility until user re-syncs
+      if (error instanceof Error && error.message.includes("no such table")) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * T-3.2: Get all system fields available to a tag based on its inheritance chain.
+   * A tag gets system fields if it or any of its ancestors defines the system field.
+   *
+   * @param tagId Tag ID to check
+   * @returns Array of InheritedField for system fields
+   */
+  getSystemFieldsForTag(tagId: string): InheritedField[] {
+    const systemFields: InheritedField[] = [];
+
+    // Get all ancestor tag IDs (including this tag)
+    const ancestorIds = new Set<string>([tagId]);
+    const ancestors = this.getAncestors(tagId);
+    for (const ancestor of ancestors) {
+      ancestorIds.add(ancestor.tagId);
+    }
+
+    // Check each known system field
+    for (const [fieldId, meta] of Object.entries(SYSTEM_FIELD_METADATA)) {
+      // Get tags that define this system field
+      const sourceTags = this.getSystemFieldSourceTags(fieldId);
+
+      // Does any ancestor (or the tag itself) define this system field?
+      const definingTag = sourceTags.find(sourceId => ancestorIds.has(sourceId));
+
+      if (definingTag) {
+        // Get the defining tag's name
+        const tagName = this.getTagName(definingTag) || definingTag;
+
+        systemFields.push({
+          fieldName: meta.name,
+          fieldLabelId: fieldId, // Use system field ID as the label ID
+          originTagId: definingTag,
+          originTagName: tagName,
+          depth: definingTag === tagId ? 0 : (ancestors.find(a => a.tagId === definingTag)?.depth ?? 1),
+          inferredDataType: meta.dataType,
+          system: true,
+        });
+      }
+    }
+
+    return systemFields;
+  }
+
+  /**
+   * Get own fields (depth 0) including system fields defined on this tag.
+   *
+   * This fixes the bug where system fields at depth 0 were not included
+   * in "own fields" queries because they're stored in system_field_sources
+   * rather than supertag_fields.
+   *
+   * @param tagId Tag ID to get fields for
+   * @returns Array of InheritedField for own fields + own system fields
+   */
+  getOwnFieldsWithSystem(tagId: string): InheritedField[] {
+    const ownFields: InheritedField[] = [];
+    const seenFields = new Set<string>();
+
+    // Own fields from supertag_fields table
+    const directFields = this.getFields(tagId);
+    for (const field of directFields) {
+      if (!seenFields.has(field.fieldName)) {
+        seenFields.add(field.fieldName);
+        ownFields.push({
+          fieldName: field.fieldName,
+          fieldLabelId: field.fieldLabelId,
+          originTagId: tagId,
+          originTagName: field.tagName,
+          depth: 0,
+          inferredDataType: field.inferredDataType,
+          targetSupertagId: field.targetSupertagId,
+          targetSupertagName: field.targetSupertagName,
+        });
+      }
+    }
+
+    // Add system fields at depth 0 (defined on this tag, not inherited)
+    const systemFields = this.getSystemFieldsForTag(tagId);
+    for (const sysField of systemFields) {
+      if (sysField.depth === 0 && !seenFields.has(sysField.fieldName)) {
+        seenFields.add(sysField.fieldName);
+        ownFields.push(sysField);
+      }
+    }
+
+    return ownFields;
   }
 
   /**

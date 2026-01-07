@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **System Field Discovery (Spec 074)** - Automatic detection and inclusion of Tana system fields
+  - System fields (SYS_A90 Date, SYS_A61 Due Date, SYS_A142 Attendees) are now discovered during sync
+  - Fields like "Attendees" appear in `tags fields --all` with `system: true` flag
+  - MCP `tana_supertag_info` tool returns system field information
+  - CLI shows `[system]` marker for system fields in table output
+  - Backwards compatible: gracefully handles databases without the new table
+
 ## [1.7.0] - 2026-01-07
 
 ### Added
