@@ -114,14 +114,17 @@ export class AggregationService {
       throw new Error("Aggregation requires at least one groupBy field");
     }
 
+    // Handle two-field nested aggregation separately
+    if (ast.groupBy.length >= 2) {
+      return this.aggregateTwoFields(ast);
+    }
+
     const params: SQLQueryBindings[] = [];
     const joins: string[] = [];
-    const groupByExprs: string[] = [];
 
     // Build group-by expressions for the first dimension only (single-field)
     const spec = ast.groupBy[0];
     const { expr, alias, join: specJoin } = this.buildGroupByExpr(spec, 0);
-    groupByExprs.push(expr);
     if (specJoin) {
       joins.push(specJoin);
     }
@@ -171,6 +174,87 @@ export class AggregationService {
     for (const row of rows) {
       const key = String(row[alias]);
       groups[key] = Number(row.count);
+    }
+
+    // Calculate total (separate query for accuracy)
+    const totalSql = ast.find === "*"
+      ? "SELECT COUNT(*) AS total FROM nodes"
+      : "SELECT COUNT(DISTINCT n.id) AS total FROM nodes n INNER JOIN tag_applications ta ON ta.data_node_id = n.id WHERE ta.tag_name = ?";
+    const totalParams: SQLQueryBindings[] = ast.find === "*" ? [] : [ast.find];
+    const totalRow = this.db.query(totalSql).get(...totalParams) as { total: number };
+    const total = totalRow?.total ?? 0;
+
+    return {
+      total,
+      groupCount: Object.keys(groups).length,
+      groups,
+    };
+  }
+
+  /**
+   * Execute two-field nested aggregation
+   * Returns nested structure like: { "Done": { "High": 10, "Low": 5 }, ... }
+   */
+  private aggregateTwoFields(ast: AggregateAST): AggregateResult {
+    const params: SQLQueryBindings[] = [];
+    const joins: string[] = [];
+
+    // Build group-by expressions for both dimensions
+    const spec1 = ast.groupBy[0];
+    const spec2 = ast.groupBy[1];
+    const { expr: expr1, alias: alias1, join: join1 } = this.buildGroupByExpr(spec1, 0);
+    const { expr: expr2, alias: alias2, join: join2 } = this.buildGroupByExpr(spec2, 1);
+
+    if (join1) joins.push(join1);
+    if (join2) joins.push(join2);
+
+    // Base query with two GROUP BY dimensions
+    let sql = `
+      SELECT
+        COALESCE(${expr1}, '(none)') AS ${alias1},
+        COALESCE(${expr2}, '(none)') AS ${alias2},
+        COUNT(DISTINCT n.id) AS count
+      FROM nodes n
+    `;
+
+    // Join with tag_applications if filtering by tag
+    if (ast.find !== "*") {
+      joins.push("INNER JOIN tag_applications ta ON ta.data_node_id = n.id");
+    }
+
+    // Add all joins
+    if (joins.length > 0) {
+      sql += " " + joins.join(" ");
+    }
+
+    // WHERE clause for tag filter
+    if (ast.find !== "*") {
+      sql += " WHERE ta.tag_name = ?";
+      params.push(ast.find);
+    }
+
+    // GROUP BY both dimensions
+    sql += ` GROUP BY COALESCE(${expr1}, '(none)'), COALESCE(${expr2}, '(none)')`;
+
+    // ORDER BY first dimension, then count DESC
+    sql += ` ORDER BY ${alias1}, count DESC`;
+
+    // Execute query
+    const rows = this.db.query(sql).all(...params) as Array<{
+      [key: string]: string | number;
+    }>;
+
+    // Build nested groups structure
+    const groups: Record<string, Record<string, number>> = {};
+    for (const row of rows) {
+      const key1 = String(row[alias1]);
+      const key2 = String(row[alias2]);
+      const count = Number(row.count);
+
+      if (!groups[key1]) {
+        groups[key1] = {};
+      }
+      groups[key1][key2] = count;
     }
 
     // Calculate total (separate query for accuracy)

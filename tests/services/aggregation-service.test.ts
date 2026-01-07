@@ -318,4 +318,82 @@ describe("AggregationService", () => {
       expect(result.groups["(none)"]).toBe(10);
     });
   });
+
+  describe("aggregate - two-field nested", () => {
+    let testDb: { dbPath: string; cleanup: () => void };
+    let service: AggregationService;
+
+    beforeEach(() => {
+      testDb = createTestDatabase();
+      service = new AggregationService(testDb.dbPath);
+    });
+
+    afterEach(() => {
+      service.close();
+      testDb.cleanup();
+    });
+
+    it("should count tasks by Status and Priority (nested)", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Status" }, { field: "Priority" }],
+        aggregate: [{ fn: "count" }],
+      });
+
+      expect(result.total).toBe(10);
+      expect(result.groupCount).toBe(4); // Done, In Progress, Open, (none)
+
+      // Check nested structure
+      const doneGroup = result.groups["Done"] as Record<string, number>;
+      expect(doneGroup).toBeDefined();
+      expect(typeof doneGroup).toBe("object");
+      expect(doneGroup["High"]).toBe(2);
+      expect(doneGroup["Medium"]).toBe(1);
+      expect(doneGroup["Low"]).toBe(1);
+
+      const inProgressGroup = result.groups["In Progress"] as Record<string, number>;
+      expect(inProgressGroup["High"]).toBe(1);
+      expect(inProgressGroup["Medium"]).toBe(1);
+
+      const openGroup = result.groups["Open"] as Record<string, number>;
+      expect(openGroup["High"]).toBe(1);
+      expect(openGroup["Medium"]).toBe(1);
+      expect(openGroup["Low"]).toBe(1);
+    });
+
+    it("should count tasks by Status and time period", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ field: "Status" }, { period: "month" }],
+        aggregate: [{ fn: "count" }],
+      });
+
+      expect(result.total).toBe(10);
+
+      // Check nested structure has YYYY-MM keys
+      const doneGroup = result.groups["Done"] as Record<string, number>;
+      expect(doneGroup).toBeDefined();
+      for (const key of Object.keys(doneGroup)) {
+        expect(key).toMatch(/^\d{4}-\d{2}$/);
+      }
+    });
+
+    it("should count tasks by time period and field", () => {
+      const result = service.aggregate({
+        find: "task",
+        groupBy: [{ period: "month" }, { field: "Status" }],
+        aggregate: [{ fn: "count" }],
+      });
+
+      expect(result.total).toBe(10);
+
+      // Top level should be YYYY-MM keys
+      for (const key of Object.keys(result.groups)) {
+        expect(key).toMatch(/^\d{4}-\d{2}$/);
+        // Nested should have Status values
+        const nested = result.groups[key] as Record<string, number>;
+        expect(typeof nested).toBe("object");
+      }
+    });
+  });
 });
