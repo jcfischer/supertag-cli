@@ -227,6 +227,8 @@ Open      20      20%
 Total: 100 nodes in 3 groups
 ```
 
+See [Aggregation Documentation](./docs/aggregation.md) for more examples.
+
 ### EXPORT - Automated Backup
 
 ```bash
@@ -569,6 +571,7 @@ The `supertag-export` tool requires Playwright for browser automation. See the p
 | [MCP Integration](./docs/mcp.md) | AI tool setup (Claude, ChatGPT, Cursor, etc.) |
 | [Embeddings](./docs/embeddings.md) | Semantic search configuration |
 | [Field Values](./docs/fields.md) | Query and search field data from nodes |
+| [Aggregation](./docs/aggregation.md) | Group and count nodes by field or time period |
 | [Transcripts](./docs/transcripts.md) | Query and search meeting transcripts |
 | [Visualization](./docs/visualization.md) | Inheritance graph rendering (Mermaid, DOT, PNG) |
 | [Codegen](./docs/codegen.md) | Generate Effect Schema classes from supertags |
