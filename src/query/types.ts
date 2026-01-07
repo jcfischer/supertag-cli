@@ -133,3 +133,97 @@ export function isRelativeDate(value: string): value is RelativeDate {
   }
   return /^\d+[dwmy]$/.test(value);
 }
+
+// ============================================================================
+// Aggregation Types (Spec 064)
+// ============================================================================
+
+/**
+ * Time periods for date-based grouping
+ */
+export type TimePeriod = "day" | "week" | "month" | "quarter" | "year";
+
+/**
+ * Valid time periods
+ */
+const VALID_TIME_PERIODS: TimePeriod[] = ["day", "week", "month", "quarter", "year"];
+
+/**
+ * Check if a string is a valid time period
+ */
+export function isTimePeriod(value: string): value is TimePeriod {
+  return VALID_TIME_PERIODS.includes(value as TimePeriod);
+}
+
+/**
+ * Group-by specification for aggregation
+ */
+export interface GroupBySpec {
+  /** Field name to group by (for field-based grouping) */
+  field?: string;
+  /** Time period for date-based grouping */
+  period?: TimePeriod;
+  /** Date field to use: 'created' or 'updated' (default: 'created') */
+  dateField?: "created" | "updated";
+}
+
+/**
+ * Check if GroupBySpec is field-based grouping
+ */
+export function isGroupByField(spec: GroupBySpec): boolean {
+  return spec.field !== undefined;
+}
+
+/**
+ * Check if GroupBySpec is time-based grouping (no field, just period)
+ */
+export function isGroupByTime(spec: GroupBySpec): boolean {
+  return spec.field === undefined && spec.period !== undefined;
+}
+
+/**
+ * Aggregation function specification
+ */
+export interface AggregateFunction {
+  /** Function name */
+  fn: "count" | "sum" | "avg" | "min" | "max";
+  /** Field to aggregate (required for sum/avg/min/max) */
+  field?: string;
+  /** Alias for the result */
+  alias?: string;
+}
+
+/**
+ * Aggregation query AST (extends QueryAST)
+ */
+export interface AggregateAST extends QueryAST {
+  /** Fields to group by */
+  groupBy: GroupBySpec[];
+  /** Aggregation functions to apply (default: [{ fn: "count" }]) */
+  aggregate: AggregateFunction[];
+  /** Show percentage of total alongside counts */
+  showPercent?: boolean;
+  /** Return only top N groups by count */
+  top?: number;
+}
+
+/**
+ * Nested groups type for two-level grouping
+ */
+export type NestedGroups = Record<string, number>;
+
+/**
+ * Aggregation result
+ */
+export interface AggregateResult {
+  /** Total count before grouping */
+  total: number;
+  /** Number of groups returned */
+  groupCount: number;
+  /** Grouped results (flat or nested) */
+  groups: Record<string, number | NestedGroups>;
+  /** Percentages (if showPercent enabled) */
+  percentages?: Record<string, number | NestedGroups>;
+  /** Warning message (e.g., if groups were capped) */
+  warning?: string;
+}
