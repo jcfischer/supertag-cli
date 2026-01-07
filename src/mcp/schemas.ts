@@ -72,6 +72,7 @@ export type SearchInput = z.infer<typeof searchSchema>;
 // tana_tagged
 export const taggedSchema = z.object({
   tagname: z.string().min(1).describe('Supertag name to filter by (e.g., "todo", "meeting", "contact")'),
+  query: z.string().optional().describe('Filter results to nodes whose name contains this text (case-insensitive substring match)'),
   workspace: workspaceSchema,
   limit: limitSchema,
   select: selectSchema,

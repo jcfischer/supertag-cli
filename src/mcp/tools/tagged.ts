@@ -50,6 +50,7 @@ export async function tagged(input: TaggedInput): Promise<TaggedResult> {
     const nodes = await engine.findNodesByTag(tagName, {
       limit: input.limit || 20,
       orderBy: input.orderBy || 'created',
+      nameContains: input.query,  // Spec 089: Filter by name
       ...dateRange,
     });
 
