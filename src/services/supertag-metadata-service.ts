@@ -427,6 +427,50 @@ export class SupertagMetadataService {
   }
 
   /**
+   * Get own fields (depth 0) including system fields defined on this tag.
+   *
+   * This fixes the bug where system fields at depth 0 were not included
+   * in "own fields" queries because they're stored in system_field_sources
+   * rather than supertag_fields.
+   *
+   * @param tagId Tag ID to get fields for
+   * @returns Array of InheritedField for own fields + own system fields
+   */
+  getOwnFieldsWithSystem(tagId: string): InheritedField[] {
+    const ownFields: InheritedField[] = [];
+    const seenFields = new Set<string>();
+
+    // Own fields from supertag_fields table
+    const directFields = this.getFields(tagId);
+    for (const field of directFields) {
+      if (!seenFields.has(field.fieldName)) {
+        seenFields.add(field.fieldName);
+        ownFields.push({
+          fieldName: field.fieldName,
+          fieldLabelId: field.fieldLabelId,
+          originTagId: tagId,
+          originTagName: field.tagName,
+          depth: 0,
+          inferredDataType: field.inferredDataType,
+          targetSupertagId: field.targetSupertagId,
+          targetSupertagName: field.targetSupertagName,
+        });
+      }
+    }
+
+    // Add system fields at depth 0 (defined on this tag, not inherited)
+    const systemFields = this.getSystemFieldsForTag(tagId);
+    for (const sysField of systemFields) {
+      if (sysField.depth === 0 && !seenFields.has(sysField.fieldName)) {
+        seenFields.add(sysField.fieldName);
+        ownFields.push(sysField);
+      }
+    }
+
+    return ownFields;
+  }
+
+  /**
    * Validate that a field name exists for a supertag (including inherited fields).
    * Returns validation result with field label ID if valid.
    */

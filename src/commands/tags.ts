@@ -684,15 +684,16 @@ export function createTagsCommand(): Command {
             system: f.system,
           }));
       } else {
-        // Default: own fields only (depth === 0)
-        fields = service.getFields(tagId).map(f => ({
+        // Default: own fields only (depth === 0) including system fields
+        fields = service.getOwnFieldsWithSystem(tagId).map(f => ({
           fieldName: f.fieldName,
           fieldLabelId: f.fieldLabelId,
-          originTagName: f.tagName,
+          originTagName: f.originTagName,
           depth: 0,
           inferredDataType: f.inferredDataType,
           targetSupertagId: f.targetSupertagId,
           targetSupertagName: f.targetSupertagName,
+          system: f.system,
         }));
       }
 

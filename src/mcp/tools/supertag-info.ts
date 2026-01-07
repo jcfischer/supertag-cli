@@ -64,11 +64,12 @@ export async function supertagInfo(
           system: f.system || undefined, // Only include if true
         }));
       } else {
-        // Get only own fields
-        const ownFields = service.getFieldsByName(input.tagname);
+        // Get own fields including system fields at depth 0
+        const ownFields = tagId ? service.getOwnFieldsWithSystem(tagId) : [];
         result.fields = ownFields.map((f) => ({
           name: f.fieldName,
           inferredDataType: f.inferredDataType,
+          system: f.system || undefined, // Only include if true
         }));
       }
     }
