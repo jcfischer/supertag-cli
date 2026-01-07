@@ -14,6 +14,7 @@ export interface FieldInfo {
   name: string;
   origin?: string; // For inherited fields, shows the origin tag name
   inferredDataType?: string; // Inferred data type (text, date, email, etc.) - T-5.4
+  system?: boolean; // True if this is a system field (SYS_A*) - Spec 074
 }
 
 export interface AncestorInfo {
@@ -54,12 +55,13 @@ export async function supertagInfo(
 
     if (mode === "fields" || mode === "full") {
       if (input.includeInherited) {
-        // Get all fields including inherited
+        // Get all fields including inherited (and system fields - Spec 074)
         const allFields = tagId ? service.getAllFields(tagId) : [];
         result.fields = allFields.map((f) => ({
           name: f.fieldName,
           origin: f.depth > 0 ? f.originTagName : undefined,
           inferredDataType: f.inferredDataType,
+          system: f.system || undefined, // Only include if true
         }));
       } else {
         // Get only own fields

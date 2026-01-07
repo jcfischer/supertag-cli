@@ -366,11 +366,20 @@ export class SupertagMetadataService {
    * @returns Array of tagDef IDs that define this system field
    */
   getSystemFieldSourceTags(fieldId: string): string[] {
-    const results = this.db
-      .query(`SELECT tag_id FROM system_field_sources WHERE field_id = ?`)
-      .all(fieldId) as Array<{ tag_id: string }>;
+    try {
+      const results = this.db
+        .query(`SELECT tag_id FROM system_field_sources WHERE field_id = ?`)
+        .all(fieldId) as Array<{ tag_id: string }>;
 
-    return results.map(r => r.tag_id);
+      return results.map(r => r.tag_id);
+    } catch (error) {
+      // Table may not exist in older databases - gracefully return empty
+      // This allows backwards compatibility until user re-syncs
+      if (error instanceof Error && error.message.includes("no such table")) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   /**

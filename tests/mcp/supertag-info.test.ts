@@ -9,6 +9,7 @@ import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { Database } from "bun:sqlite";
 import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from "../../src/db/migrate";
+import { migrateSystemFieldSources } from "../../src/db/system-fields";
 import { supertagInfo } from "../../src/mcp/tools/supertag-info";
 
 describe("tana_supertag_info MCP Tool", () => {
@@ -35,6 +36,7 @@ describe("tana_supertag_info MCP Tool", () => {
 
     migrateSupertagMetadataSchema(db);
     migrateSchemaConsolidation(db);
+    migrateSystemFieldSources(db);
 
     // Insert test inheritance: manager -> employee -> contact
     db.run(`

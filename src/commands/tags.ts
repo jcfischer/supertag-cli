@@ -654,10 +654,11 @@ export function createTagsCommand(): Command {
         inferredDataType?: string;
         targetSupertagId?: string;
         targetSupertagName?: string;
+        system?: boolean; // Spec 074: True if this is a system field (SYS_A*)
       }>;
 
       if (options.all) {
-        // All fields including inherited
+        // All fields including inherited (and system fields - Spec 074)
         fields = service.getAllFields(tagId).map(f => ({
           fieldName: f.fieldName,
           fieldLabelId: f.fieldLabelId,
@@ -666,9 +667,10 @@ export function createTagsCommand(): Command {
           inferredDataType: f.inferredDataType,
           targetSupertagId: f.targetSupertagId,
           targetSupertagName: f.targetSupertagName,
+          system: f.system,
         }));
       } else if (options.inherited) {
-        // Only inherited fields (depth > 0)
+        // Only inherited fields (depth > 0) - includes system fields
         fields = service.getAllFields(tagId)
           .filter(f => f.depth > 0)
           .map(f => ({
@@ -679,6 +681,7 @@ export function createTagsCommand(): Command {
             inferredDataType: f.inferredDataType,
             targetSupertagId: f.targetSupertagId,
             targetSupertagName: f.targetSupertagName,
+            system: f.system,
           }));
       } else {
         // Default: own fields only (depth === 0)
@@ -710,6 +713,7 @@ export function createTagsCommand(): Command {
               dataType: field.inferredDataType,
               origin: field.originTagName,
               inherited: field.depth > 0,
+              system: field.system,
             });
             for (const line of lines) {
               console.log(line);
@@ -735,13 +739,14 @@ export function createTagsCommand(): Command {
           verbose: outputOpts.verbose,
         });
 
-        const headers = ["fieldName", "fieldLabelId", "dataType", "depth", "originTagName"];
+        const headers = ["fieldName", "fieldLabelId", "dataType", "depth", "originTagName", "system"];
         const rows = fields.map((field) => [
           field.fieldName,
           field.fieldLabelId,
           field.inferredDataType || "",
           String(field.depth),
           field.originTagName,
+          field.system ? "true" : "",
         ]);
 
         formatter.table(headers, rows);
@@ -927,14 +932,17 @@ export function formatFieldLines(
     dataType?: string | null;
     origin?: string;
     inherited?: boolean;
+    system?: boolean; // Spec 074: True if this is a system field (SYS_A*)
   }
 ): string[] {
   const lines: string[] = [];
 
   // Build the main field line: "- Name (id)" or "- Name (id, from origin)"
-  let mainLine = `   - ${field.name} (${field.id})`;
+  // Spec 074: Add [system] marker for system fields
+  const systemMarker = field.system ? " [system]" : "";
+  let mainLine = `   - ${field.name} (${field.id})${systemMarker}`;
   if (field.inherited && field.origin) {
-    mainLine = `   - ${field.name} (${field.id}, from ${field.origin})`;
+    mainLine = `   - ${field.name} (${field.id}, from ${field.origin})${systemMarker}`;
   }
   lines.push(mainLine);
 
