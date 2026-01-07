@@ -11,6 +11,7 @@ import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { SupertagMetadataService } from "../../src/services/supertag-metadata-service";
 import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from "../../src/db/migrate";
+import { migrateSystemFieldSources } from "../../src/db/system-fields";
 
 describe("SupertagMetadataService", () => {
   const testDir = join(process.cwd(), "tmp-test-metadata-service");
@@ -41,6 +42,7 @@ describe("SupertagMetadataService", () => {
     db = new Database(dbPath);
     migrateSupertagMetadataSchema(db);
     migrateSchemaConsolidation(db);
+    migrateSystemFieldSources(db);
 
     // Create tag_applications table (used for usage counts)
     db.run(`
@@ -456,6 +458,178 @@ describe("SupertagMetadataService", () => {
       // Employee should have access to Email (inherited from contact)
       const result = service.validateFieldName("employee-tag", "Email");
       expect(result.valid).toBe(true);
+    });
+  });
+
+  // Spec 074: System Field Discovery Tests
+  describe("System Field Retrieval (Spec 074)", () => {
+    beforeEach(async () => {
+      // Import and run migration for system_field_sources table
+      const { migrateSystemFieldSources } = await import("../../src/db/system-fields");
+      migrateSystemFieldSources(db);
+
+      // Set up inheritance: meeting -> Type|Event -> type
+      db.run(`
+        INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
+        VALUES
+          ('meeting-tag', 'event-type-tag'),
+          ('event-type-tag', 'type-tag')
+      `);
+
+      // Add regular fields to tags
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES
+          ('type-tag', 'type', 'Description', 'type-desc', 0),
+          ('event-type-tag', 'Type | Event', 'Location', 'event-loc', 0),
+          ('meeting-tag', 'meeting', 'Agenda', 'meeting-agenda', 0)
+      `);
+
+      // Register system fields defined on event-type-tag
+      db.run(`
+        INSERT INTO system_field_sources (field_id, tag_id)
+        VALUES
+          ('SYS_A90', 'event-type-tag'),
+          ('SYS_A142', 'event-type-tag')
+      `);
+    });
+
+    describe("T-3.1: getSystemFieldSourceTags", () => {
+      it("should return tagDef IDs that define a system field", () => {
+        const sources = service.getSystemFieldSourceTags("SYS_A90");
+        expect(sources).toContain("event-type-tag");
+      });
+
+      it("should return empty array for unknown system field", () => {
+        const sources = service.getSystemFieldSourceTags("SYS_A999");
+        expect(sources.length).toBe(0);
+      });
+
+      it("should return multiple sources if multiple tags define the same field", () => {
+        // Add another tag that defines SYS_A90
+        db.run(`
+          INSERT INTO system_field_sources (field_id, tag_id)
+          VALUES ('SYS_A90', 'another-tag')
+        `);
+
+        const sources = service.getSystemFieldSourceTags("SYS_A90");
+        expect(sources.length).toBe(2);
+        expect(sources).toContain("event-type-tag");
+        expect(sources).toContain("another-tag");
+      });
+    });
+
+    describe("T-3.2: getSystemFieldsForTag", () => {
+      it("should return system fields for tag that inherits from system field source", () => {
+        const systemFields = service.getSystemFieldsForTag("meeting-tag");
+        expect(systemFields.length).toBe(2);
+
+        const fieldNames = systemFields.map(f => f.fieldName);
+        expect(fieldNames).toContain("Date");
+        expect(fieldNames).toContain("Attendees");
+      });
+
+      it("should return system fields for tag that directly defines them", () => {
+        const systemFields = service.getSystemFieldsForTag("event-type-tag");
+        expect(systemFields.length).toBe(2);
+
+        const fieldNames = systemFields.map(f => f.fieldName);
+        expect(fieldNames).toContain("Date");
+        expect(fieldNames).toContain("Attendees");
+      });
+
+      it("should return empty array for tag without system field ancestors", () => {
+        // person tag has no connection to event-type-tag
+        db.run(`
+          INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+          VALUES ('person-tag', 'person', 'Name', 'person-name', 0)
+        `);
+
+        const systemFields = service.getSystemFieldsForTag("person-tag");
+        expect(systemFields.length).toBe(0);
+      });
+
+      it("should mark system fields with system: true", () => {
+        const systemFields = service.getSystemFieldsForTag("meeting-tag");
+        expect(systemFields.every(f => f.system === true)).toBe(true);
+      });
+
+      it("should include correct dataType from SYSTEM_FIELD_METADATA", () => {
+        const systemFields = service.getSystemFieldsForTag("meeting-tag");
+        const dateField = systemFields.find(f => f.fieldName === "Date");
+        const attendeesField = systemFields.find(f => f.fieldName === "Attendees");
+
+        expect(dateField?.inferredDataType).toBe("date");
+        expect(attendeesField?.inferredDataType).toBe("reference");
+      });
+    });
+
+    describe("T-3.3: getAllFields includes system fields", () => {
+      it("should include system fields in getAllFields result", () => {
+        const allFields = service.getAllFields("meeting-tag");
+
+        const fieldNames = allFields.map(f => f.fieldName);
+        expect(fieldNames).toContain("Date");
+        expect(fieldNames).toContain("Attendees");
+        expect(fieldNames).toContain("Agenda"); // own field
+        expect(fieldNames).toContain("Location"); // inherited from event-type-tag
+      });
+
+      it("should not duplicate system fields that are already defined as regular fields", () => {
+        // Define Date as a regular field on meeting
+        db.run(`
+          INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type)
+          VALUES ('meeting-tag', 'meeting', 'Date', 'meeting-date-custom', 1, 'date')
+        `);
+
+        const allFields = service.getAllFields("meeting-tag");
+        const dateFields = allFields.filter(f => f.fieldName === "Date");
+
+        // Should only have ONE Date field (the user-defined one takes precedence)
+        expect(dateFields.length).toBe(1);
+        expect(dateFields[0].fieldLabelId).toBe("meeting-date-custom");
+        expect(dateFields[0].system).toBeUndefined(); // Not a system field anymore
+      });
+
+      it("should return system fields with correct origin information", () => {
+        const allFields = service.getAllFields("meeting-tag");
+        const dateField = allFields.find(f => f.fieldName === "Date" && f.system === true);
+
+        // System fields have origin from where the system field was discovered
+        expect(dateField?.system).toBe(true);
+        expect(dateField?.originTagName).toBe("Type | Event");
+      });
+    });
+
+    describe("T-3.4 & T-3.5: Edge cases", () => {
+      it("should not include system fields for unrelated tags (no inheritance)", () => {
+        // Create isolated tag with no inheritance
+        db.run(`
+          INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+          VALUES ('isolated-tag', 'isolated', 'Notes', 'isolated-notes', 0)
+        `);
+
+        const allFields = service.getAllFields("isolated-tag");
+        const systemFields = allFields.filter(f => f.system === true);
+
+        expect(systemFields.length).toBe(0);
+      });
+
+      it("user-defined fields should take precedence over system fields", () => {
+        // User defines Attendees field with different type
+        db.run(`
+          INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type)
+          VALUES ('meeting-tag', 'meeting', 'Attendees', 'custom-attendees', 2, 'text')
+        `);
+
+        const allFields = service.getAllFields("meeting-tag");
+        const attendeesFields = allFields.filter(f => f.fieldName === "Attendees");
+
+        expect(attendeesFields.length).toBe(1);
+        expect(attendeesFields[0].fieldLabelId).toBe("custom-attendees");
+        expect(attendeesFields[0].inferredDataType).toBe("text");
+        expect(attendeesFields[0].system).toBeUndefined();
+      });
     });
   });
 });
