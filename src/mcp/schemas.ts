@@ -546,6 +546,83 @@ function isOptional(zodType: AnyZodType): boolean {
   return false;
 }
 
+// tana_aggregate (Spec 064: Aggregation Queries)
+/**
+ * Group-by specification for aggregation
+ */
+const groupBySpecSchema = z.union([
+  // Shorthand: "Status" or "month" - will be parsed by service
+  z.string(),
+  // Full object form
+  z.object({
+    field: z.string().optional().describe('Field name to group by'),
+    period: z
+      .enum(['day', 'week', 'month', 'quarter', 'year'])
+      .optional()
+      .describe('Time period for date-based grouping'),
+    dateField: z
+      .enum(['created', 'updated'])
+      .optional()
+      .describe('Date field to use: "created" or "updated" (default: "created")'),
+  }),
+]);
+
+/**
+ * Aggregation function specification
+ */
+const aggregateFunctionSchema = z.object({
+  fn: z
+    .enum(['count', 'sum', 'avg', 'min', 'max'])
+    .describe('Aggregation function'),
+  field: z
+    .string()
+    .optional()
+    .describe('Field to aggregate (required for sum/avg/min/max)'),
+  alias: z
+    .string()
+    .optional()
+    .describe('Alias for the result'),
+});
+
+export const aggregateSchema = z.object({
+  find: z
+    .string()
+    .min(1)
+    .describe('Supertag to find (e.g., "task", "meeting") or "*" for all nodes'),
+  groupBy: z
+    .array(groupBySpecSchema)
+    .min(1)
+    .max(2)
+    .describe('Fields to group by (1-2 fields). Strings like "Status" or "month" are auto-parsed.'),
+  where: z
+    .record(z.string(), whereConditionSchema)
+    .optional()
+    .describe('Filter conditions by field name'),
+  aggregate: z
+    .array(aggregateFunctionSchema)
+    .optional()
+    .default([{ fn: 'count' }])
+    .describe('Aggregation functions to apply (default: count)'),
+  showPercent: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Show percentage of total alongside counts'),
+  top: z
+    .number()
+    .min(1)
+    .optional()
+    .describe('Return only top N groups by count'),
+  limit: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(100)
+    .describe('Maximum groups to return (default: 100)'),
+  workspace: workspaceSchema,
+});
+export type AggregateInput = z.infer<typeof aggregateSchema>;
+
 /**
  * Parse date range strings into UNIX timestamps (ms)
  */

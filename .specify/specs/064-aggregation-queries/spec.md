@@ -1,8 +1,9 @@
 ---
 id: "064"
 feature: "Aggregation Queries"
-status: "draft"
+status: "approved"
 created: "2026-01-01"
+approved: "2026-01-07"
 ---
 
 # Specification: Aggregation Queries

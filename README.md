@@ -26,6 +26,8 @@
   - [READ - Query Workspace](#read---query-workspace)
   - [WRITE - Create Nodes](#write---create-nodes)
   - [QUERY - Unified Query Language](#query---unified-query-language)
+  - [BATCH - Multi-Node Operations](#batch---multi-node-operations)
+  - [AGGREGATE - Group and Count](#aggregate---group-and-count)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [FIELDS - Query Field Values](#fields---query-field-values)
@@ -189,6 +191,43 @@ supertag batch create --file nodes.json --dry-run
 ```
 
 **Limits:** 100 nodes for `batch get`, 50 nodes for `batch create`.
+
+### AGGREGATE - Group and Count
+
+Aggregate nodes by field values or time periods. Useful for analytics, status breakdowns, and time-series analysis.
+
+```bash
+# Count tasks by status
+supertag aggregate --tag task --group-by Status
+
+# Time-based aggregation
+supertag aggregate --tag meeting --group-by month
+supertag aggregate --tag todo --group-by week
+
+# Two-dimensional grouping
+supertag aggregate --tag task --group-by Status,Priority
+
+# Show percentages and top N
+supertag aggregate --tag task --group-by Status --show-percent
+supertag aggregate --tag meeting --group-by month --top 5
+
+# Output formats
+supertag aggregate --tag task --group-by Status --json
+supertag aggregate --tag task --group-by Status --format csv
+```
+
+**Time periods:** `day`, `week`, `month`, `quarter`, `year`
+
+**Output:**
+```
+Status    Count   Percent
+Done      50      50%
+Active    30      30%
+Open      20      20%
+Total: 100 nodes in 3 groups
+```
+
+See [Aggregation Documentation](./docs/aggregation.md) for more examples.
 
 ### EXPORT - Automated Backup
 
@@ -532,6 +571,7 @@ The `supertag-export` tool requires Playwright for browser automation. See the p
 | [MCP Integration](./docs/mcp.md) | AI tool setup (Claude, ChatGPT, Cursor, etc.) |
 | [Embeddings](./docs/embeddings.md) | Semantic search configuration |
 | [Field Values](./docs/fields.md) | Query and search field data from nodes |
+| [Aggregation](./docs/aggregation.md) | Group and count nodes by field or time period |
 | [Transcripts](./docs/transcripts.md) | Query and search meeting transcripts |
 | [Visualization](./docs/visualization.md) | Inheritance graph rendering (Mermaid, DOT, PNG) |
 | [Codegen](./docs/codegen.md) | Generate Effect Schema classes from supertags |

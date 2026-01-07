@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Aggregation Queries (Spec 064)** - New `aggregate` command and `tana_aggregate` MCP tool
+  - Group and count nodes by field values or time periods
+  - CLI: `supertag aggregate --tag task --group-by Status`
+  - CLI: `supertag aggregate --tag meeting --group-by month`
+  - MCP: `tana_aggregate { find: "task", groupBy: ["Status"] }`
+  - Supports single-field and two-field nested aggregation
+  - Time periods: day, week, month, quarter, year
+  - Options: `--show-percent` for percentages, `--top N` for top groups
+  - Output formats: table, json, csv, jsonl
+  - 26 tests passing
+
 ## [1.6.4] - 2026-01-06
 
 ### Fixed

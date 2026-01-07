@@ -169,6 +169,7 @@ export const EMOJI = {
   link: '🔗',
   recent: '⏱️',
   transcribe: '🎙️',
+  aggregate: '📈',
 } as const;
 
 /**
