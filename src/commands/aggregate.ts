@@ -128,13 +128,7 @@ export function createAggregateCommand(): Command {
     .requiredOption("--tag <tagname>", "Supertag to aggregate (e.g., task, meeting)")
     .requiredOption("--group-by <fields>", "Field(s) to group by (comma-separated)")
     .option("--show-percent", "Show percentage of total alongside counts")
-    .option("--top <n>", "Return only top N groups by count", parseInt)
-    .option(
-      "--format <type>",
-      "Output format: table, json, csv, jsonl",
-      "table"
-    )
-    .option("--no-header", "Omit header row in CSV output");
+    .option("--top <n>", "Return only top N groups by count", parseInt);
 
   addStandardOptions(aggregate);
 
