@@ -5,13 +5,14 @@
  * Provides grouping and counting capabilities for Tana nodes.
  */
 
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type {
   AggregateAST,
   AggregateResult,
   GroupBySpec,
   TimePeriod,
 } from "../query/types";
-import { isTimePeriod } from "../query/types";
+import { isTimePeriod, isGroupByField, isGroupByTime } from "../query/types";
 
 /**
  * Service for executing aggregation queries on Tana nodes.
@@ -28,7 +29,18 @@ import { isTimePeriod } from "../query/types";
  * ```
  */
 export class AggregationService {
-  constructor(private dbPath: string) {}
+  private db: Database;
+
+  constructor(private dbPath: string) {
+    this.db = new Database(dbPath);
+  }
+
+  /**
+   * Close the database connection
+   */
+  close(): void {
+    this.db.close();
+  }
 
   /**
    * Parse group-by specification from CLI string
@@ -96,12 +108,119 @@ export class AggregationService {
    * @param ast - Parsed aggregation query AST
    * @returns Aggregation result with grouped counts
    */
-  aggregate(_ast: AggregateAST): AggregateResult {
-    // TODO: Implement in T-2.4
+  aggregate(ast: AggregateAST): AggregateResult {
+    // Validate we have at least one groupBy
+    if (!ast.groupBy || ast.groupBy.length === 0) {
+      throw new Error("Aggregation requires at least one groupBy field");
+    }
+
+    const params: SQLQueryBindings[] = [];
+    const joins: string[] = [];
+    const groupByExprs: string[] = [];
+
+    // Build group-by expressions for the first dimension only (single-field)
+    const spec = ast.groupBy[0];
+    const { expr, alias, join: specJoin } = this.buildGroupByExpr(spec, 0);
+    groupByExprs.push(expr);
+    if (specJoin) {
+      joins.push(specJoin);
+    }
+
+    // Base query: count nodes, grouped by expression
+    let sql = `
+      SELECT
+        COALESCE(${expr}, '(none)') AS ${alias},
+        COUNT(DISTINCT n.id) AS count
+      FROM nodes n
+    `;
+
+    // Join with tag_applications if filtering by tag
+    if (ast.find !== "*") {
+      joins.push("INNER JOIN tag_applications ta ON ta.data_node_id = n.id");
+    }
+
+    // Add all joins
+    if (joins.length > 0) {
+      sql += " " + joins.join(" ");
+    }
+
+    // WHERE clause for tag filter
+    if (ast.find !== "*") {
+      sql += " WHERE ta.tag_name = ?";
+      params.push(ast.find);
+    }
+
+    // GROUP BY
+    sql += ` GROUP BY COALESCE(${expr}, '(none)')`;
+
+    // ORDER BY count DESC (default sort by count)
+    sql += " ORDER BY count DESC";
+
+    // LIMIT if specified
+    const limit = ast.limit ?? 100;
+    sql += " LIMIT ?";
+    params.push(limit);
+
+    // Execute query
+    const rows = this.db.query(sql).all(...params) as Array<{
+      [key: string]: string | number;
+    }>;
+
+    // Build groups from results
+    const groups: Record<string, number> = {};
+    for (const row of rows) {
+      const key = String(row[alias]);
+      groups[key] = Number(row.count);
+    }
+
+    // Calculate total (separate query for accuracy)
+    const totalSql = ast.find === "*"
+      ? "SELECT COUNT(*) AS total FROM nodes"
+      : "SELECT COUNT(DISTINCT n.id) AS total FROM nodes n INNER JOIN tag_applications ta ON ta.data_node_id = n.id WHERE ta.tag_name = ?";
+    const totalParams: SQLQueryBindings[] = ast.find === "*" ? [] : [ast.find];
+    const totalRow = this.db.query(totalSql).get(...totalParams) as { total: number };
+    const total = totalRow?.total ?? 0;
+
     return {
-      total: 0,
-      groupCount: 0,
-      groups: {},
+      total,
+      groupCount: Object.keys(groups).length,
+      groups,
     };
+  }
+
+  /**
+   * Build SQL expression for a single groupBy spec
+   */
+  private buildGroupByExpr(
+    spec: GroupBySpec,
+    index: number
+  ): { expr: string; alias: string; join?: string } {
+    const alias = `group${index}`;
+
+    if (isGroupByTime(spec)) {
+      // Time-based grouping on created/updated field
+      const dateField = spec.dateField ?? "created";
+      const expr = this.formatTimePeriod(spec.period!, `n.${dateField}`);
+      return { expr, alias };
+    }
+
+    if (isGroupByField(spec)) {
+      // Field-based grouping requires LEFT JOIN to field_values
+      const fieldName = spec.field!;
+      const joinAlias = `fv${index}`;
+      const join = `LEFT JOIN field_values ${joinAlias} ON ${joinAlias}.parent_id = n.id AND ${joinAlias}.field_name = ?`;
+      // Note: We'll need to add the field name to params in the caller
+      // For now, inline it (since SQLite allows expressions in GROUP BY)
+      const joinWithParam = `LEFT JOIN field_values ${joinAlias} ON ${joinAlias}.parent_id = n.id AND ${joinAlias}.field_name = '${fieldName.replace(/'/g, "''")}'`;
+      const expr = `${joinAlias}.value_text`;
+      return { expr, alias, join: joinWithParam };
+    }
+
+    // Fallback: treat as field name
+    const fieldName = spec.field ?? "unknown";
+    const joinAlias = `fv${index}`;
+    const joinWithParam = `LEFT JOIN field_values ${joinAlias} ON ${joinAlias}.parent_id = n.id AND ${joinAlias}.field_name = '${fieldName.replace(/'/g, "''")}'`;
+    const expr = `${joinAlias}.value_text`;
+    return { expr, alias, join: joinWithParam };
   }
 }
