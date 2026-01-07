@@ -557,6 +557,7 @@ export class TanaQueryEngine {
     options?: {
       limit?: number;
       orderBy?: "created" | "updated";
+      nameContains?: string;  // Spec 089: Filter by name (case-insensitive)
       createdAfter?: number;
       createdBefore?: number;
       updatedAfter?: number;
@@ -569,6 +570,12 @@ export class TanaQueryEngine {
     // Build WHERE conditions
     const conditions = ["ta.tag_name = ?"];
     const params: (string | number)[] = [tagName];
+
+    // Spec 089: Filter by name (case-insensitive substring match)
+    if (options?.nameContains) {
+      conditions.push("LOWER(n.name) LIKE '%' || LOWER(?) || '%'");
+      params.push(options.nameContains);
+    }
 
     if (options?.createdAfter) {
       conditions.push("n.created > ?");

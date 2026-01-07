@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Previously only inline references were found; field references were missing
   - Example: `related <topic-id> --direction in` now shows all nodes that use this topic as a field value
 
+- **Search Tag Query Filter (Spec 089)** - The `search` command now respects the query when combined with `--tag`
+  - `supertag search "Velo" --tag topic` now returns only #topic nodes whose name contains "Velo"
+  - Previously the query was ignored and all #topic nodes were returned
+  - MCP `tana_tagged` tool now supports optional `query` parameter for the same filtering
+  - Substring matching is case-insensitive
+
 ## [1.7.1] - 2026-01-07
 
 ### Added

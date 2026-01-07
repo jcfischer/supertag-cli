@@ -96,7 +96,8 @@ Get your token from: https://app.tana.inc/?bundle=settings&panel=api
 ```bash
 supertag search "project"                    # Full-text search
 supertag search "project" --semantic         # Semantic search
-supertag search "todo" --tag todo            # Find by supertag
+supertag search --tag todo                   # All nodes with #todo tag
+supertag search "groceries" --tag todo       # #todo nodes containing "groceries"
 supertag search --tag meeting --field "Location=Zurich"  # Filter by field
 supertag nodes show <id> --depth 3           # Node contents
 supertag related <id>                        # Find related nodes
