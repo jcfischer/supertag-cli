@@ -7,11 +7,13 @@
 
 import { Database } from "bun:sqlite";
 import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
-import { eq, like, sql, inArray, gt, lt, and, desc } from "drizzle-orm";
+import { eq, like, sql, inArray, gt, lt, and, desc, or } from "drizzle-orm";
 import { nodes, supertags, fields, references } from "../db/schema";
 import type { Node, Supertag, Reference } from "../db/schema";
 import { withDbRetrySync } from "../db/retry";
 import { buildPagination, buildOrderBy } from "../db/query-builder";
+import type { RelationshipType, Direction } from "../types/graph";
+import { mapDbType } from "../types/graph";
 
 export interface NodeQuery {
   name?: string;
@@ -45,6 +47,16 @@ export interface DatabaseStatistics {
   totalSupertags: number;
   totalFields: number;
   totalReferences: number;
+}
+
+/**
+ * Result from getRelatedNodes query
+ */
+export interface RelatedNodeResult {
+  /** Target node ID */
+  nodeId: string;
+  /** Relationship type (mapped from DB type) */
+  type: RelationshipType;
 }
 
 /**
@@ -651,6 +663,62 @@ export class TanaQueryEngine {
     );
 
     return result.map((r) => r.tag_name);
+  }
+
+  /**
+   * Get related nodes in a single direction with type filtering.
+   * Used for graph traversal (Spec 065).
+   *
+   * @param nodeId - Source node ID
+   * @param direction - 'in' (nodes pointing to this), 'out' (this points to)
+   * @param types - Relationship types to include
+   * @param limit - Maximum results
+   * @returns Array of related node IDs with relationship type
+   */
+  async getRelatedNodes(
+    nodeId: string,
+    direction: 'in' | 'out',
+    types: RelationshipType[],
+    limit: number
+  ): Promise<RelatedNodeResult[]> {
+    // Map RelationshipType to database reference_type values
+    const dbTypes: string[] = [];
+    for (const t of types) {
+      if (t === 'reference') {
+        dbTypes.push('inline_ref');
+      } else if (t === 'child' || t === 'parent') {
+        dbTypes.push(t);
+      }
+      // 'field' type is stored as inline_ref in DB, handled above
+    }
+
+    if (dbTypes.length === 0) {
+      return [];
+    }
+
+    // Build query based on direction
+    const query = direction === 'out'
+      ? this.sqlite.prepare(`
+          SELECT to_node as nodeId, reference_type as refType
+          FROM "references"
+          WHERE from_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+          LIMIT ?
+        `)
+      : this.sqlite.prepare(`
+          SELECT from_node as nodeId, reference_type as refType
+          FROM "references"
+          WHERE to_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+          LIMIT ?
+        `);
+
+    const params = [nodeId, ...dbTypes, limit];
+    const rows = query.all(...params) as Array<{ nodeId: string; refType: string }>;
+
+    // Map database types back to RelationshipType
+    return rows.map((row) => ({
+      nodeId: row.nodeId,
+      type: mapDbType(row.refType),
+    }));
   }
 
   /**
