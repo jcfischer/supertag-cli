@@ -76,12 +76,12 @@ export class AggregationService {
    * Generate SQLite strftime expression for time-based grouping
    *
    * @param period - Time period (day, week, month, quarter, year)
-   * @param field - Date field to use (created or updated)
+   * @param field - Date field to use (e.g., "created", "updated", "n.created")
    * @returns SQL expression for GROUP BY
    */
   formatTimePeriod(
     period: TimePeriod,
-    field: "created" | "updated" = "created"
+    field: string = "created"
   ): string {
     // SQLite timestamps are in milliseconds, divide by 1000 for unixepoch
     const baseExpr = `${field}/1000, 'unixepoch'`;
