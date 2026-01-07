@@ -101,6 +101,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Find active tasks with parent project',
   },
+  {
+    name: 'tana_aggregate',
+    description: 'Aggregate nodes with grouping and counting',
+    category: 'query',
+    example: 'Count tasks by Status: { find: "task", groupBy: ["Status"] }',
+  },
 
   // Explore tools
   {
@@ -213,6 +219,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_capabilities: schemas.zodToJsonSchema(schemas.capabilitiesSchema),
   tana_tool_schema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
   tana_query: schemas.zodToJsonSchema(schemas.querySchema),
+  tana_aggregate: schemas.zodToJsonSchema(schemas.aggregateSchema),
 };
 
 // =============================================================================

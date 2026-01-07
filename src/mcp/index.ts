@@ -35,6 +35,7 @@ import { toolSchema } from './tools/tool-schema.js';
 import { batchGet } from './tools/batch-get.js';
 import { batchCreate } from './tools/batch-create.js';
 import { query } from './tools/query.js';
+import { aggregate } from './tools/aggregate.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -207,6 +208,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Unified query with tag, field, and date filtering. Single tool that replaces multi-step discovery workflows. Supports: find by tag, filter by field values (Status=Done), date ranges (created after 7d), contains (~), exists checks, ordering (-created for descending), and field projection (select). Example: find task where Status=Active and created>7d order by -created limit 20',
         inputSchema: schemas.zodToJsonSchema(schemas.querySchema),
       },
+      {
+        name: 'tana_aggregate',
+        description:
+          'Aggregate nodes with grouping and counting. Returns grouped counts, percentages, and nested results. Supports: find by tag, group by field or time period (day/week/month/quarter/year), show percentages, top N groups. Example: { find: "task", groupBy: ["Status"] }',
+        inputSchema: schemas.zodToJsonSchema(schemas.aggregateSchema),
+      },
     ],
   };
 });
@@ -313,6 +320,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_query': {
         const validated = schemas.querySchema.parse(args);
         result = await query(validated);
+        break;
+      }
+      case 'tana_aggregate': {
+        const validated = schemas.aggregateSchema.parse(args);
+        result = await aggregate(validated);
         break;
       }
       default:
