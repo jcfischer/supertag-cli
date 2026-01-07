@@ -35,6 +35,7 @@ import { createTranscriptCommand } from './commands/transcript';
 import { createBatchCommand } from './commands/batch';
 import { createQueryCommand } from './commands/query';
 import { createAggregateCommand } from './commands/aggregate';
+import { createRelatedCommand } from './commands/related';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -164,6 +165,7 @@ program.addCommand(createTranscriptCommand()); // supertag transcript list|show|
 program.addCommand(createBatchCommand());      // supertag batch get|create
 program.addCommand(createQueryCommand());      // supertag query "find task where..."
 program.addCommand(createAggregateCommand());  // supertag aggregate --tag --group-by
+program.addCommand(createRelatedCommand());    // supertag related <nodeId> [--direction] [--types]
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
 program.addCommand(createErrorsCommand());     // supertag errors [--last N] [--clear] [--export] [--json]
@@ -189,6 +191,7 @@ program.on('--help', () => {
   console.log('    supertag nodes show <id>       Display node contents');
   console.log('    supertag nodes refs <id>       Show node references');
   console.log('    supertag nodes recent          Recently updated nodes');
+  console.log('    supertag related <id>          Find related nodes (graph traversal)');
   console.log('');
   console.log('  TAGS:');
   console.log('    supertag tags list             List all supertags');

@@ -11,6 +11,31 @@ created: "2026-01-01"
 
 Add tools and commands to traverse the Tana node graph, finding nodes related to a given node through parent/child relationships, references, and field links. Enables answering "what's connected to this?" without multiple node lookups.
 
+## System Context
+
+### Upstream Dependencies
+
+| Dependency | Purpose | Failure Impact |
+|------------|---------|----------------|
+| `nodes` table | Source of node data | Query fails completely |
+| `references` table | Inline reference data | Missing reference relationships |
+| `tag_applications` table | Tag relationships | Missing tag-based connections |
+| SQLite database | Storage layer | Service unavailable |
+
+### Downstream Consumers
+
+| Consumer | Usage | Breaking Change Risk |
+|----------|-------|---------------------|
+| MCP clients | `tana_related` tool calls | API changes break agents |
+| CLI users | `supertag related` command | Flag/output changes break scripts |
+| Future path-finding features | Graph primitives | Internal API changes |
+
+### Implicit Coupling
+
+- Result format couples to `tana_node` and other MCP tools (consistency expected)
+- Performance assumptions couple to database indexing strategy
+- Depth limits couple to typical Tana graph density
+
 ## User Scenarios
 
 ### Scenario 1: Find All Related Content
@@ -25,6 +50,8 @@ Add tools and commands to traverse the Tana node graph, finding nodes related to
 - [ ] Configurable depth for traversal
 - [ ] Can filter by relationship type
 
+**Failure Behavior:** Returns empty array with warning if node not found. Returns partial results with `truncated: true` if limit exceeded.
+
 ### Scenario 2: Show Node References
 
 **As a** user understanding how a concept is used
@@ -35,6 +62,8 @@ Add tools and commands to traverse the Tana node graph, finding nodes related to
 - [ ] `supertag related <nodeId> --direction in` shows incoming references
 - [ ] Shows which nodes link to this node via inline refs or field values
 - [ ] Includes the context (parent node) of each reference
+
+**Failure Behavior:** Returns empty array if no references found (not an error).
 
 ### Scenario 3: Explore Outgoing Links
 
@@ -47,6 +76,8 @@ Add tools and commands to traverse the Tana node graph, finding nodes related to
 - [ ] Includes references in node content
 - [ ] Includes field values that are node references
 
+**Failure Behavior:** Returns empty array if node has no outgoing links.
+
 ### Scenario 4: Relationship Depth Traversal
 
 **As a** user exploring a knowledge graph
@@ -58,6 +89,8 @@ Add tools and commands to traverse the Tana node graph, finding nodes related to
 - [ ] Each result includes its distance from the source
 - [ ] Cycles are detected and handled (don't infinite loop)
 - [ ] Results are deduplicated
+
+**Failure Behavior:** Cycles detected return visited nodes once with shortest path. Timeout at 5s returns partial results with `timeout: true`.
 
 ## Functional Requirements
 
@@ -81,6 +114,8 @@ supertag related <nodeId> --direction both --depth 2
 
 **Validation:** Returns related nodes with relationship metadata.
 
+**Failure Behavior:** Invalid nodeId returns structured error with `NODE_NOT_FOUND` code.
+
 ### FR-2: Relationship Types
 
 Support different relationship types:
@@ -94,6 +129,8 @@ Support different relationship types:
 
 **Validation:** Can filter by one or more relationship types.
 
+**Failure Behavior:** Unknown relationship type ignored with warning in response.
+
 ### FR-3: Direction Parameter
 
 Control traversal direction:
@@ -106,6 +143,8 @@ Control traversal direction:
 
 **Validation:** Direction correctly filters relationship direction.
 
+**Failure Behavior:** Invalid direction returns validation error.
+
 ### FR-4: Depth Traversal
 
 Multi-hop traversal with depth tracking:
@@ -116,6 +155,8 @@ Multi-hop traversal with depth tracking:
 - Each result includes `distance` field
 - Circular references don't cause infinite loops
 - Default max depth is 3
+
+**Failure Behavior:** Depth > 5 clamped to 5 with warning. Cycle detected adds `cycleDetected: true` to affected paths.
 
 ### FR-5: Result Structure
 
@@ -141,6 +182,7 @@ Each related node includes relationship metadata:
 - **Performance:** Depth-1 traversal < 200ms, depth-2 < 1s
 - **Limits:** Max 100 results, max depth 5
 - **Memory:** Stream results, don't build full graph in memory
+- **Graceful Degradation:** Partial results better than failure
 
 ## Key Entities
 
@@ -156,18 +198,26 @@ Each related node includes relationship metadata:
 - [ ] Depth traversal works without infinite loops
 - [ ] Relationship type filtering reduces noise
 - [ ] Results include enough context to understand connections
+- [ ] Graceful handling of edge cases (cycles, missing nodes, timeouts)
 
 ## Assumptions
 
-- References are indexed in the database (tag_applications or similar)
-- Node graph is not too dense (avg < 20 connections per node)
-- Users understand graph traversal concepts
+| Assumption | Invalidation Condition | Mitigation |
+|------------|----------------------|------------|
+| References indexed in database | `references` table empty or missing | Fall back to node content parsing |
+| Graph not too dense (avg < 20 connections) | Nodes with 100+ connections common | Add connection count limits per node |
+| Users understand graph concepts | User confusion in feedback | Add examples to help text |
+| SQLite can handle recursive queries | Performance issues at scale | Pre-compute common traversals |
 
-## [NEEDS CLARIFICATION]
+## Failure Mode Analysis
 
-- Should we include "weak" relationships (same parent = sibling)?
-- Should we support path queries (find path from A to B)?
-- How to handle field references that aren't explicit node links?
+| Failure Mode | Likelihood | Impact | Detection | Recovery |
+|--------------|------------|--------|-----------|----------|
+| Node not found | Medium | Low | Query returns null | Return structured error |
+| Cycle in graph | High | Medium | Visited set check | Return partial with flag |
+| Query timeout | Low | Medium | Timer | Return partial results |
+| Memory exhaustion | Low | High | Result count check | Stream + limit |
+| Missing references table | Low | High | Table existence check | Graceful degradation |
 
 ## Out of Scope
 
@@ -176,3 +226,6 @@ Each related node includes relationship metadata:
 - Community detection / clustering
 - Weighted relationships
 - Cross-workspace relationships
+- Sibling relationships (same parent)
+- Path queries (find path from A to B)
+- Field references that aren't explicit node links
