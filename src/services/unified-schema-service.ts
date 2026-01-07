@@ -592,7 +592,12 @@ export class UnifiedSchemaService {
       case "options":
         // Both reference and options fields use node IDs
         // Handle both single values and arrays of references
-        const refValues = Array.isArray(value) ? value : [value];
+        // Also split comma-separated strings into arrays
+        const refValues = Array.isArray(value)
+          ? value
+          : typeof value === "string" && value.includes(",")
+            ? value.split(",").map((s) => s.trim())
+            : [value];
         for (const v of refValues) {
           const strValue = String(v);
           // Check if it's a node ID (8+ alphanumeric chars with dashes/underscores)

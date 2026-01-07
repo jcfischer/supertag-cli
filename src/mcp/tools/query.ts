@@ -28,9 +28,17 @@ function convertInputToAST(input: QueryInput): QueryAST {
     const clauses: WhereClause[] = [];
 
     for (const [field, condition] of Object.entries(input.where)) {
-      // Shorthand: string/number value means equality
+      // Shorthand: string/number value
       if (typeof condition === "string" || typeof condition === "number") {
-        clauses.push({ field, operator: "=", value: condition });
+        if (typeof condition === "string" && condition.startsWith("~")) {
+          // Contains operator shorthand: "~value" means contains "value"
+          clauses.push({ field, operator: "~", value: condition.slice(1) });
+        } else if (typeof condition === "string" && condition.startsWith("\\~")) {
+          // Escaped tilde: "\~value" means literal "~value"
+          clauses.push({ field, operator: "=", value: condition.slice(1) });
+        } else {
+          clauses.push({ field, operator: "=", value: condition });
+        }
         continue;
       }
 

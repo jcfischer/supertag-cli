@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI shows `[system]` marker for system fields in table output
   - Backwards compatible: gracefully handles databases without the new table
 
+- **Contains Operator Shorthand** - Query filters now support `~value` shorthand for contains queries
+  - `where: { name: "~meeting" }` is equivalent to `where: { name: { contains: "meeting" } }`
+  - Use `\~value` to search for literal tilde prefix
+  - Works in both MCP `tana_query` tool and unified query engine
+
+- **Comma-Separated Reference Fields** - Reference field values can now be comma-separated strings
+  - Values like `"abc123, def456"` are automatically split into arrays
+  - Improves compatibility with Tana API responses that return comma-joined IDs
+
 ## [1.7.0] - 2026-01-07
 
 ### Added
