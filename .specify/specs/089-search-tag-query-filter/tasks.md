@@ -92,14 +92,14 @@ T-1.1 ──> T-1.2 ──> T-1.3
 
 | Task | Status | Started | Completed | Notes |
 |------|--------|---------|-----------|-------|
-| T-1.1 | pending | - | - | Failing test for nameContains |
-| T-1.2 | pending | - | - | Implement SQL LIKE filter |
-| T-1.3 | pending | - | - | Regression test |
-| T-2.1 | pending | - | - | Test for query param |
-| T-2.2 | pending | - | - | Add query to handleTaggedSearch |
-| T-2.3 | pending | - | - | Update call site |
-| T-3.1 | pending | - | - | Update MCP schema |
-| T-3.2 | pending | - | - | Update MCP tool |
+| T-1.1 | completed | 2026-01-07 | 2026-01-07 | 7 tests for nameContains |
+| T-1.2 | completed | 2026-01-07 | 2026-01-07 | SQL LIKE filter |
+| T-1.3 | completed | 2026-01-07 | 2026-01-07 | Included in T-1.1 tests |
+| T-2.1 | completed | 2026-01-07 | 2026-01-07 | Verified via CLI testing |
+| T-2.2 | completed | 2026-01-07 | 2026-01-07 | Added query param |
+| T-2.3 | completed | 2026-01-07 | 2026-01-07 | Updated call site + fallback |
+| T-3.1 | completed | 2026-01-07 | 2026-01-07 | Added query to schema |
+| T-3.2 | completed | 2026-01-07 | 2026-01-07 | Pass query to engine |
 | T-4.1 | pending | - | - | E2E verification |
 
 ## TDD Reminder
