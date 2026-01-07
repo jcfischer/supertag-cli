@@ -24,6 +24,8 @@ The `supertag-mcp` binary runs locally on your machine as a subprocess - no serv
 | `tana_search` | Full-text search across workspace | "Search my Tana for project notes" |
 | `tana_semantic_search` | Vector similarity search | "Find notes about knowledge management" |
 | `tana_tagged` | Find nodes by supertag | "Find all my todos" |
+| `tana_query` | Unified query with field/date filtering | "Find active tasks created this week" |
+| `tana_aggregate` | Group and count nodes | "Count tasks by status" |
 | `tana_field_values` | Query text-based field values | "Get values for 'Summary' field" |
 
 ### Explore Tools
@@ -465,6 +467,9 @@ mcphost --quiet -m ollama:qwen2.5:7b -p "List the top 5 supertags in workspace '
 - "Which meetings have transcripts?"
 - "Show me the transcript from last week's planning meeting"
 - "Find where we discussed the pricing strategy in meetings"
+- "Count my tasks by status"
+- "Show me how many meetings I had per month"
+- "What percentage of my todos are done?"
 
 ---
 

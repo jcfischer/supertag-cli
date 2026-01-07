@@ -26,6 +26,8 @@
   - [READ - Query Workspace](#read---query-workspace)
   - [WRITE - Create Nodes](#write---create-nodes)
   - [QUERY - Unified Query Language](#query---unified-query-language)
+  - [BATCH - Multi-Node Operations](#batch---multi-node-operations)
+  - [AGGREGATE - Group and Count](#aggregate---group-and-count)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [FIELDS - Query Field Values](#fields---query-field-values)
@@ -189,6 +191,41 @@ supertag batch create --file nodes.json --dry-run
 ```
 
 **Limits:** 100 nodes for `batch get`, 50 nodes for `batch create`.
+
+### AGGREGATE - Group and Count
+
+Aggregate nodes by field values or time periods. Useful for analytics, status breakdowns, and time-series analysis.
+
+```bash
+# Count tasks by status
+supertag aggregate --tag task --group-by Status
+
+# Time-based aggregation
+supertag aggregate --tag meeting --group-by month
+supertag aggregate --tag todo --group-by week
+
+# Two-dimensional grouping
+supertag aggregate --tag task --group-by Status,Priority
+
+# Show percentages and top N
+supertag aggregate --tag task --group-by Status --show-percent
+supertag aggregate --tag meeting --group-by month --top 5
+
+# Output formats
+supertag aggregate --tag task --group-by Status --json
+supertag aggregate --tag task --group-by Status --format csv
+```
+
+**Time periods:** `day`, `week`, `month`, `quarter`, `year`
+
+**Output:**
+```
+Status    Count   Percent
+Done      50      50%
+Active    30      30%
+Open      20      20%
+Total: 100 nodes in 3 groups
+```
 
 ### EXPORT - Automated Backup
 
