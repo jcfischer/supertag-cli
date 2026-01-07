@@ -47,6 +47,16 @@ describe('TanaQueryEngine.getRelatedNodes', () => {
       )
     `);
 
+    db.run(`
+      CREATE TABLE IF NOT EXISTS field_values (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_id TEXT NOT NULL,
+        field_name TEXT NOT NULL,
+        value_node_id TEXT,
+        value_text TEXT
+      )
+    `);
+
     // Insert test nodes
     // A -> B (child), A -> C (inline_ref), D -> A (inline_ref)
     const insertNode = db.prepare('INSERT INTO nodes (id, name, created, updated) VALUES (?, ?, ?, ?)');
