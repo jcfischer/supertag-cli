@@ -1,8 +1,9 @@
 ---
 id: "074"
 feature: "System Field Discovery"
-status: "draft"
+status: "implemented"
 created: "2026-01-07"
+implemented: "2026-01-07"
 ---
 
 # Specification: System Field Discovery
