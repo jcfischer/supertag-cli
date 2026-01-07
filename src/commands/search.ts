@@ -159,7 +159,7 @@ export function createSearchCommand(): Command {
         await handleSemanticSearch(query!, options, dbPath);
         break;
       case "tagged":
-        await handleTaggedSearch(options.tag!, options, dbPath);
+        await handleTaggedSearch(options.tag!, query, options, dbPath);  // Spec 089: Pass query
         break;
     }
   });
@@ -703,6 +703,7 @@ function findDescendantTagIds(db: Database, rootTagName: string): string[] {
 
 async function handleTaggedSearch(
   tagname: string,
+  query: string | undefined,  // Spec 089: Filter by name
   options: SearchOptions,
   dbPath: string
 ): Promise<void> {
@@ -792,6 +793,7 @@ async function handleTaggedSearch(
       results = await engine.findNodesByTag(tagname, {
         limit,
         orderBy: "created",
+        nameContains: query,  // Spec 089: Filter by name
         ...dateRange,
       });
     }
@@ -808,6 +810,7 @@ async function handleTaggedSearch(
         results = await engine.findNodesByTag(alt, {
           limit,
           orderBy: "created",
+          nameContains: query,  // Spec 089: Pass query to fallback too
           ...dateRange,
         });
         if (results.length > 0) {
