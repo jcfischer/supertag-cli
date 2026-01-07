@@ -45,9 +45,9 @@ The `tana_related` MCP tool provides the same functionality for AI assistants:
 
 ```json
 {
-  "nodeId": "abc123xyz",
+  "nodeId": "mMHt6NjbI9sH",
   "direction": "both",
-  "types": ["reference", "child"],
+  "types": ["reference", "field"],
   "depth": 2,
   "limit": 20
 }
@@ -62,26 +62,30 @@ The `tana_related` MCP tool provides the same functionality for AI assistants:
 Find all nodes connected to a topic node:
 
 ```bash
-supertag related abc123xyz --pretty
+supertag related mMHt6NjbI9sH --pretty
 ```
 
 **Output:**
 ```
-🔗 Related to: Security:
+🔗 Related to: Tana:
 
-📥 Incoming (47):
-  ← Discussion about cloud infrastructure and security team structure
-     Type: reference
-  ← Meeting notes mentioning security operations center setup
-     Type: reference
-  ← Project planning document for security reorganization
-     Type: reference
-  ← Notes about training for security awareness
-     Type: reference
-  ← Transcript discussing security incident response procedures
-     Type: reference
+📤 Outgoing (1):
+  → Gather Stream Storage [Vault]
+     Type: field
 
-Total: 47
+📥 Incoming (8):
+  ← Tana (merged into main topic)
+     Type: reference
+  ← Try the summary tool again for meeting summaries [todo]
+     Type: reference
+  ← Send information about Tana to contact [todo]
+     Type: reference
+  ← The Workflowy Timeline [resource, toread]
+     Type: field
+  ← CLI todo name
+     Type: field
+
+Total: 9
 ```
 
 ---
@@ -91,26 +95,18 @@ Total: 47
 Find what a node references (outgoing connections):
 
 ```bash
-supertag related def456xyz --direction out --pretty
+supertag related epQm19hntCYm --direction out --pretty
 ```
 
 **Output:**
 ```
-🔗 Related to: Meeting Transcript March 10:
+🔗 Related to: Tana Input API:
 
-📤 Outgoing (15):
-  → MISP [topic]
-     Type: reference
-  → Azure [product]
-     Type: reference
-  → API [concept]
-     Type: reference
-  → Sentinel [product]
-     Type: reference
-  → Microsoft [organization]
-     Type: reference
+📤 Outgoing (1):
+  → Gather Stream Storage [Vault]
+     Type: field
 
-Total: 15
+Total: 1
 ```
 
 ---
@@ -120,24 +116,24 @@ Total: 15
 Find what nodes reference a given topic:
 
 ```bash
-supertag related abc123xyz --direction in --limit 5 --pretty
+supertag related mMHt6NjbI9sH --direction in --limit 5 --pretty
 ```
 
 **Output:**
 ```
-🔗 Related to: Security:
+🔗 Related to: Tana:
 
 📥 Incoming (5):
-  ← Notes about security team expansion plans
+  ← Tana (merged into main topic)
      Type: reference
-  ← Meeting minutes from Q4 planning session
+  ← Try the summary tool again for meeting summaries [todo]
      Type: reference
-  ← Discussion transcript about infrastructure
+  ← Send information about Tana to contact [todo]
      Type: reference
-  ← Project document mentioning security review
-     Type: reference
-  ← Summary of security operations analysis
-     Type: reference
+  ← The Workflowy Timeline [resource, toread]
+     Type: field
+  ← CLI todo name
+     Type: field
 
 Total: 5
 ```
@@ -149,22 +145,30 @@ Total: 5
 Find nodes within 2 hops of the source:
 
 ```bash
-supertag related abc123xyz --depth 2 --limit 10 --pretty
+supertag related mMHt6NjbI9sH --depth 2 --limit 10 --pretty
 ```
 
 **Output:**
 ```
-🔗 Related to: Security:
+🔗 Related to: Tana:
 
-📥 Incoming (10):
-  ← Direct reference in meeting notes
+📤 Outgoing (2):
+  → Gather Stream Storage [Vault]
+     Type: field
+  → Vault Library
+     Type: field (2 hops)
+
+📥 Incoming (8):
+  ← Tana (merged into main topic)
      Type: reference
-  ← Another direct reference in project doc
+  ← Try the summary tool again for meeting summaries [todo]
      Type: reference
-  ← Connected via intermediate topic (2 hops)
-     Type: reference (2 hops)
-  ← Referenced through a person node (2 hops)
-     Type: reference (2 hops)
+  ← Send information about Tana to contact [todo]
+     Type: reference
+  ← The Workflowy Timeline [resource, toread]
+     Type: field
+  ← CLI todo name
+     Type: field
 
 Total: 10 (truncated)
 ```
@@ -173,29 +177,25 @@ Total: 10 (truncated)
 
 ### Example 5: Filter by relationship type
 
-Find only reference-type connections (no child/parent):
+Find only reference-type connections (no field/child/parent):
 
 ```bash
-supertag related abc123xyz --types reference --limit 5 --pretty
+supertag related mMHt6NjbI9sH --types reference --limit 5 --pretty
 ```
 
 **Output:**
 ```
-🔗 Related to: Topic Node:
+🔗 Related to: Tana:
 
-📤 Outgoing (5):
-  → JavaScript [topic]
+📥 Incoming (3):
+  ← Tana (merged into main topic)
      Type: reference
-  → Updates [topic]
+  ← Try the summary tool again for meeting summaries [todo]
      Type: reference
-  → API Documentation
-     Type: reference
-  → Azure [product]
-     Type: reference
-  → Sentinel [product]
+  ← Send information about Tana to contact [todo]
      Type: reference
 
-Total: 5
+Total: 3
 ```
 
 ---
@@ -205,35 +205,35 @@ Total: 5
 Get related nodes as JSON for processing:
 
 ```bash
-supertag related abc123xyz --direction in --limit 3 --json
+supertag related mMHt6NjbI9sH --direction in --limit 3 --json
 ```
 
 **Output:**
 ```json
 [
   {
-    "id": "node123abc",
-    "name": "Discussion about team structure and planning",
+    "id": "0fRqAhVFb_W4",
+    "name": "Tana (merged into main topic)",
     "type": "reference",
     "direction": "in",
     "distance": "1",
     "tags": ""
   },
   {
-    "id": "node456def",
-    "name": "Meeting notes from quarterly review",
+    "id": "FLiUiuqD0i4D",
+    "name": "Try the summary tool again for meeting summaries",
     "type": "reference",
     "direction": "in",
     "distance": "1",
-    "tags": ""
+    "tags": "todo"
   },
   {
-    "id": "node789ghi",
-    "name": "Project planning document",
+    "id": "x7bVqUUemYpX",
+    "name": "Send information about Tana to contact",
     "type": "reference",
     "direction": "in",
     "distance": "1",
-    "tags": "project"
+    "tags": "todo"
   }
 ]
 ```
@@ -245,17 +245,17 @@ supertag related abc123xyz --direction in --limit 3 --json
 Export to CSV for analysis:
 
 ```bash
-supertag related abc123xyz --direction in --limit 5 --format csv
+supertag related mMHt6NjbI9sH --direction in --limit 5 --format csv
 ```
 
 **Output:**
 ```csv
 id,name,type,direction,distance,tags
-node123abc,"Discussion about team structure",reference,in,1,
-node456def,"Meeting notes from quarterly review",reference,in,1,
-node789ghi,"Project planning document",reference,in,1,project
-node012jkl,"Summary of operations analysis",reference,in,1,
-node345mno,"Notes about expansion plans",reference,in,1,
+0fRqAhVFb_W4,"Tana (merged into main topic)",reference,in,1,
+FLiUiuqD0i4D,"Try the summary tool again for meeting summaries",reference,in,1,todo
+x7bVqUUemYpX,"Send information about Tana to contact",reference,in,1,todo
+KjL2mPqR3nVw,"The Workflowy Timeline",field,in,1,"resource,toread"
+QrS4tUvW5xYz,"CLI todo name",field,in,1,
 ```
 
 ---
@@ -265,16 +265,16 @@ node345mno,"Notes about expansion plans",reference,in,1,
 Get just the node IDs for piping to other commands:
 
 ```bash
-supertag related abc123xyz --direction in --limit 5 --format ids
+supertag related mMHt6NjbI9sH --direction in --limit 5 --format ids
 ```
 
 **Output:**
 ```
-node123abc
-node456def
-node789ghi
-node012jkl
-node345mno
+0fRqAhVFb_W4
+FLiUiuqD0i4D
+x7bVqUUemYpX
+KjL2mPqR3nVw
+QrS4tUvW5xYz
 ```
 
 ---
@@ -284,14 +284,14 @@ node345mno
 Stream results for log processing:
 
 ```bash
-supertag related abc123xyz --direction in --limit 3 --format jsonl
+supertag related mMHt6NjbI9sH --direction in --limit 3 --format jsonl
 ```
 
 **Output:**
 ```jsonl
-{"id":"node123abc","name":"Discussion about team structure","type":"reference","direction":"in","distance":"1","tags":""}
-{"id":"node456def","name":"Meeting notes from review","type":"reference","direction":"in","distance":"1","tags":""}
-{"id":"node789ghi","name":"Project planning document","type":"reference","direction":"in","distance":"1","tags":"project"}
+{"id":"0fRqAhVFb_W4","name":"Tana (merged into main topic)","type":"reference","direction":"in","distance":"1","tags":""}
+{"id":"FLiUiuqD0i4D","name":"Try the summary tool again for meeting summaries","type":"reference","direction":"in","distance":"1","tags":"todo"}
+{"id":"x7bVqUUemYpX","name":"Send information about Tana to contact","type":"reference","direction":"in","distance":"1","tags":"project"}
 ```
 
 ---
@@ -301,49 +301,52 @@ supertag related abc123xyz --direction in --limit 3 --format jsonl
 ### Discover What References a Topic
 
 ```bash
-# Find all nodes that mention "Security"
-supertag related <security-topic-id> --direction in --limit 20 --pretty
+# First, find the topic ID
+supertag search "Security" --tag topic --format ids --limit 1
+
+# Then find all nodes that reference it
+supertag related LVKnyxTeX6ej --direction in --limit 20 --pretty
 ```
 
 ### Find Outgoing Links from a Document
 
 ```bash
 # What does this meeting transcript reference?
-supertag related <transcript-id> --direction out --types reference --pretty
+supertag related mMHt6NjbI9sH --direction out --types reference --pretty
 ```
 
 ### Export Citation Graph
 
 ```bash
 # Export all incoming references as CSV
-supertag related <topic-id> --direction in --format csv > citations.csv
+supertag related mMHt6NjbI9sH --direction in --format csv > citations.csv
 ```
 
 ### Batch Process Related Nodes
 
 ```bash
 # Get IDs and process each
-supertag related <id> --format ids | xargs -I{} supertag nodes show {}
+supertag related mMHt6NjbI9sH --format ids | xargs -I{} supertag nodes show {}
 ```
 
 ### Find Extended Network (2 hops)
 
 ```bash
 # Discover nodes within 2 hops
-supertag related <id> --depth 2 --limit 50 --pretty
+supertag related mMHt6NjbI9sH --depth 2 --limit 50 --pretty
 ```
 
 ### Filter to Specific Relationship Types
 
 ```bash
 # Only child relationships
-supertag related <id> --types child --pretty
+supertag related mMHt6NjbI9sH --types child --pretty
 
 # Only references (inline refs)
-supertag related <id> --types reference --pretty
+supertag related mMHt6NjbI9sH --types reference --pretty
 
 # References and fields
-supertag related <id> --types reference,field --pretty
+supertag related mMHt6NjbI9sH --types reference,field --pretty
 ```
 
 ---
