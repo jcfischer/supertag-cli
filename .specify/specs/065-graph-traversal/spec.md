@@ -4,6 +4,7 @@ feature: "Graph Traversal"
 status: "implemented"
 created: "2026-01-01"
 implemented: "2026-01-07"
+updated: "2026-01-07"
 ---
 
 # Specification: Graph Traversal (Related Nodes)

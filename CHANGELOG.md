@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Output formats: table, json, csv, ids, minimal, jsonl
   - 32+ tests passing
 
+### Fixed
+
+- **Field References in Graph Traversal** - The `related` command now correctly finds field references
+  - Nodes used as field values (e.g., Topic, Focus fields) are now discovered
+  - Previously only inline references were found; field references were missing
+  - Example: `related <topic-id> --direction in` now shows all nodes that use this topic as a field value
+
 ## [1.7.1] - 2026-01-07
 
 ### Added

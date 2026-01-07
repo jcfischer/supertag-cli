@@ -681,7 +681,10 @@ export class TanaQueryEngine {
     types: RelationshipType[],
     limit: number
   ): Promise<RelatedNodeResult[]> {
-    // Map RelationshipType to database reference_type values
+    const results: RelatedNodeResult[] = [];
+    const includeField = types.includes('field');
+
+    // Map RelationshipType to database reference_type values for references table
     const dbTypes: string[] = [];
     for (const t of types) {
       if (t === 'reference') {
@@ -689,36 +692,73 @@ export class TanaQueryEngine {
       } else if (t === 'child' || t === 'parent') {
         dbTypes.push(t);
       }
-      // 'field' type is stored as inline_ref in DB, handled above
+      // 'field' type is handled separately via field_values table
     }
 
-    if (dbTypes.length === 0) {
-      return [];
+    // Query references table for inline_ref, child, parent types
+    if (dbTypes.length > 0) {
+      const query = direction === 'out'
+        ? this.sqlite.prepare(`
+            SELECT to_node as nodeId, reference_type as refType
+            FROM "references"
+            WHERE from_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+            LIMIT ?
+          `)
+        : this.sqlite.prepare(`
+            SELECT from_node as nodeId, reference_type as refType
+            FROM "references"
+            WHERE to_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+            LIMIT ?
+          `);
+
+      const params = [nodeId, ...dbTypes, limit];
+      const rows = query.all(...params) as Array<{ nodeId: string; refType: string }>;
+
+      // Map database types back to RelationshipType
+      for (const row of rows) {
+        results.push({
+          nodeId: row.nodeId,
+          type: mapDbType(row.refType),
+        });
+      }
     }
 
-    // Build query based on direction
-    const query = direction === 'out'
-      ? this.sqlite.prepare(`
-          SELECT to_node as nodeId, reference_type as refType
-          FROM "references"
-          WHERE from_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
-          LIMIT ?
-        `)
-      : this.sqlite.prepare(`
-          SELECT from_node as nodeId, reference_type as refType
-          FROM "references"
-          WHERE to_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
-          LIMIT ?
-        `);
+    // Query field_values table for field references
+    if (includeField) {
+      const remainingLimit = limit - results.length;
+      if (remainingLimit > 0) {
+        // direction='out': Find nodes this node references via field values
+        //   A uses F as "Topic" means A has outbound field reference to F
+        //   Query: parent_id = nodeId → value_node_id
+        // direction='in': Find nodes that reference this node via field values
+        //   F is used by A means F has inbound field reference from A
+        //   Query: value_node_id = nodeId → parent_id
+        const fieldQuery = direction === 'out'
+          ? this.sqlite.prepare(`
+              SELECT DISTINCT value_node_id as nodeId
+              FROM field_values
+              WHERE parent_id = ?
+              LIMIT ?
+            `)
+          : this.sqlite.prepare(`
+              SELECT DISTINCT parent_id as nodeId
+              FROM field_values
+              WHERE value_node_id = ?
+              LIMIT ?
+            `);
 
-    const params = [nodeId, ...dbTypes, limit];
-    const rows = query.all(...params) as Array<{ nodeId: string; refType: string }>;
+        const fieldRows = fieldQuery.all(nodeId, remainingLimit) as Array<{ nodeId: string }>;
 
-    // Map database types back to RelationshipType
-    return rows.map((row) => ({
-      nodeId: row.nodeId,
-      type: mapDbType(row.refType),
-    }));
+        for (const row of fieldRows) {
+          results.push({
+            nodeId: row.nodeId,
+            type: 'field',
+          });
+        }
+      }
+    }
+
+    return results;
   }
 
   /**

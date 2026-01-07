@@ -44,19 +44,40 @@ describe('GraphTraversalService', () => {
       )
     `);
 
+    // Add field_values table for field reference tests (Spec 065 fix)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS field_values (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tuple_id TEXT NOT NULL,
+        parent_id TEXT NOT NULL,
+        field_def_id TEXT NOT NULL,
+        field_name TEXT NOT NULL,
+        value_node_id TEXT NOT NULL,
+        value_text TEXT NOT NULL,
+        value_order INTEGER DEFAULT 0,
+        created INTEGER
+      )
+    `);
+
     /*
      * Test graph structure:
      *
      *     D --ref--> A --child--> B --child--> E
      *                |
      *                +---ref---> C
+     *                |
+     *                +--field--> F (A uses F as "Topic" field value)
+     *                            |
+     *                G --field--> F (G also uses F as "Focus" field value)
      *
      * A is the central node with:
-     *   - outbound: B (child), C (inline_ref)
+     *   - outbound: B (child), C (inline_ref), F (field)
      *   - inbound: D (inline_ref)
      * B has:
      *   - outbound: E (child)
      *   - inbound: A (parent)
+     * F (Topic node) has:
+     *   - inbound: A (field "Topic"), G (field "Focus")
      */
     const now = Date.now();
     const insertNode = db.prepare('INSERT INTO nodes (id, name, created, updated) VALUES (?, ?, ?, ?)');
@@ -65,6 +86,8 @@ describe('GraphTraversalService', () => {
     insertNode.run('nodeC', 'Node C', now, now);
     insertNode.run('nodeD', 'Node D', now, now);
     insertNode.run('nodeE', 'Node E', now, now);
+    insertNode.run('nodeF', 'Topic F', now, now);  // Used as field value
+    insertNode.run('nodeG', 'Node G', now, now);   // Has field pointing to F
 
     const insertRef = db.prepare('INSERT INTO "references" (from_node, to_node, reference_type) VALUES (?, ?, ?)');
     // A -> B (child)
@@ -82,6 +105,16 @@ describe('GraphTraversalService', () => {
     const insertTag = db.prepare('INSERT INTO tag_applications (data_node_id, tag_id, tag_name) VALUES (?, ?, ?)');
     insertTag.run('nodeB', 'tag1', 'todo');
     insertTag.run('nodeC', 'tag2', 'project');
+    insertTag.run('nodeF', 'tag3', 'topic');  // F is a #topic
+
+    // Field values - nodes used as field values (Spec 065 fix)
+    const insertField = db.prepare(
+      'INSERT INTO field_values (tuple_id, parent_id, field_def_id, field_name, value_node_id, value_text, created) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    // A uses F as "Topic" field value
+    insertField.run('tuple1', 'nodeA', 'fieldDef1', 'Topic', 'nodeF', 'Topic F', now);
+    // G uses F as "Focus" field value
+    insertField.run('tuple2', 'nodeG', 'fieldDef2', 'Focus', 'nodeF', 'Topic F', now);
 
     db.close();
   });
@@ -159,11 +192,12 @@ describe('GraphTraversalService', () => {
 
       const result = await service.traverse(query, 'main');
 
-      // A's outbound: B (child), C (ref)
-      expect(result.related.length).toBe(2);
+      // A's outbound: B (child), C (ref), F (field)
+      expect(result.related.length).toBe(3);
       const ids = result.related.map((r) => r.id);
       expect(ids).toContain('nodeB');
       expect(ids).toContain('nodeC');
+      expect(ids).toContain('nodeF'); // F is field reference
       expect(ids).not.toContain('nodeD'); // D is inbound
     });
   });
@@ -488,6 +522,91 @@ describe('GraphTraversalService', () => {
       const result = await service.traverse(query, 'main');
 
       expect(result.related).toEqual([]);
+    });
+  });
+
+  describe('field references (via field_values table)', () => {
+    it('should find outbound field references (nodes used as field values)', async () => {
+      // A uses F as "Topic" field value, so A --field--> F
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['field'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Should find F (field value)
+      expect(result.related.length).toBe(1);
+      expect(result.related[0].id).toBe('nodeF');
+      expect(result.related[0].relationship.type).toBe('field');
+      expect(result.related[0].relationship.direction).toBe('out');
+    });
+
+    it('should find inbound field references (nodes that use this as field value)', async () => {
+      // F is used as field value by A (Topic) and G (Focus)
+      const query: RelatedQuery = {
+        nodeId: 'nodeF',
+        direction: 'in',
+        types: ['field'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Should find A and G (both use F as field value)
+      expect(result.related.length).toBe(2);
+      const ids = result.related.map((r) => r.id);
+      expect(ids).toContain('nodeA');
+      expect(ids).toContain('nodeG');
+
+      // All should be field type with 'in' direction
+      for (const node of result.related) {
+        expect(node.relationship.type).toBe('field');
+        expect(node.relationship.direction).toBe('in');
+      }
+    });
+
+    it('should include field references with other types when types includes field', async () => {
+      // A has outbound: B (child), C (ref), F (field)
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child', 'reference', 'field'],
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Should find B (child), C (ref), F (field)
+      expect(result.related.length).toBe(3);
+      const ids = result.related.map((r) => r.id);
+      expect(ids).toContain('nodeB');
+      expect(ids).toContain('nodeC');
+      expect(ids).toContain('nodeF');
+    });
+
+    it('should exclude field references when types does not include field', async () => {
+      const query: RelatedQuery = {
+        nodeId: 'nodeA',
+        direction: 'out',
+        types: ['child', 'reference'], // No 'field'
+        depth: 1,
+        limit: 50,
+      };
+
+      const result = await service.traverse(query, 'main');
+
+      // Should only find B (child), C (ref) - NOT F (field)
+      expect(result.related.length).toBe(2);
+      const ids = result.related.map((r) => r.id);
+      expect(ids).toContain('nodeB');
+      expect(ids).toContain('nodeC');
+      expect(ids).not.toContain('nodeF');
     });
   });
 });
