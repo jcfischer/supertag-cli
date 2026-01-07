@@ -23,6 +23,7 @@ import { tagged } from './tools/tagged.js';
 import { stats } from './tools/stats.js';
 import { supertags } from './tools/supertags.js';
 import { showNode } from './tools/node.js';
+import { related } from './tools/related.js';
 import { create } from './tools/create.js';
 import { sync } from './tools/sync.js';
 import { semanticSearch } from './tools/semantic-search.js';
@@ -99,6 +100,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description:
           'Show full contents of a specific node by ID, including name, fields, tags, and optionally child nodes. Use depth > 0 to include nested children.',
         inputSchema: schemas.zodToJsonSchema(schemas.nodeSchema),
+      },
+      {
+        name: 'tana_related',
+        description:
+          'Find nodes related to a given node through references, children, and field links. Returns nodes connected within the specified depth with relationship metadata.',
+        inputSchema: schemas.zodToJsonSchema(schemas.relatedSchema),
       },
       {
         name: 'tana_create',
@@ -250,6 +257,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_node': {
         const validated = schemas.nodeSchema.parse(args);
         result = await showNode(validated);
+        break;
+      }
+      case 'tana_related': {
+        const validated = schemas.relatedSchema.parse(args);
+        result = await related(validated);
         break;
       }
       case 'tana_create': {

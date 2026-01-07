@@ -133,6 +133,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'explore',
     example: 'Get full contents of a node',
   },
+  {
+    name: 'tana_related',
+    description: 'Find nodes related via references and children',
+    category: 'explore',
+    example: 'Find all nodes connected to a project',
+  },
 
   // Transcript tools
   {
@@ -210,6 +216,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_stats: schemas.zodToJsonSchema(schemas.statsSchema),
   tana_supertag_info: schemas.zodToJsonSchema(schemas.supertagInfoSchema),
   tana_node: schemas.zodToJsonSchema(schemas.nodeSchema),
+  tana_related: schemas.zodToJsonSchema(schemas.relatedSchema),
   tana_transcript_list: schemas.zodToJsonSchema(schemas.transcriptListSchema),
   tana_transcript_show: schemas.zodToJsonSchema(schemas.transcriptShowSchema),
   tana_transcript_search: schemas.zodToJsonSchema(schemas.transcriptSearchSchema),
