@@ -84,8 +84,9 @@ describe("--select parameter support", () => {
       const tags = JSON.parse(tagsResult);
       if (tags.length === 0) return;
 
-      const tagName = tags[0].tagName;
-      const result = await $`bun run src/index.ts tags show ${tagName} --json --select id,name`.text();
+      // Trim whitespace from tag name (some test data has leading spaces)
+      const tagName = tags[0].tagName.trim();
+      const result = await $`bun run src/index.ts tags show "${tagName}" --json --select id,name`.text();
       const parsed = JSON.parse(result);
 
       expect(parsed).toHaveProperty("id");
@@ -100,8 +101,9 @@ describe("--select parameter support", () => {
       const tags = JSON.parse(tagsResult);
       if (tags.length === 0) return;
 
-      const tagName = tags[0].tagName;
-      const result = await $`bun run src/index.ts tags show ${tagName} --select id,name`.text();
+      // Trim whitespace from tag name (some test data has leading spaces)
+      const tagName = tags[0].tagName.trim();
+      const result = await $`bun run src/index.ts tags show "${tagName}" --select id,name`.text();
 
       // Non-TTY now defaults to JSON format per Spec 060
       const parsed = JSON.parse(result);

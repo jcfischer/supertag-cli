@@ -1,6 +1,6 @@
 {
   "name": "supertag-cli",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "CLI for Tana integration - query, create, sync, and manage Tana workspaces with semantic search",
   "type": "module",
   "bin": {
@@ -15,7 +15,7 @@
     "inspect:mcp": "npx @modelcontextprotocol/inspector bun run src/mcp/index.ts",
     "test": "bun test ./tests/*.test.ts ./tests/codegen/ ./tests/commands/ ./tests/config/ ./tests/db/ ./tests/e2e/ ./tests/embeddings/ ./tests/integration/ ./tests/mcp/ ./tests/services/ ./tests/types/ ./tests/utils/ ./tests/visualization/ ./src/**/*.test.ts",
     "test:slow": "bun test ./tests/slow/",
-    "test:full": "bun test",
+    "test:full": "bun test --bail",
     "typecheck": "tsc --noEmit",
     "precommit": "bun run test:full"
   },
