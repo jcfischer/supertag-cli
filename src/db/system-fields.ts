@@ -65,3 +65,84 @@ export function migrateSystemFieldSources(db: Database): void {
     ON system_field_sources(tag_id)
   `);
 }
+
+/**
+ * Minimal document interface for discovery.
+ * Compatible with Tana export format.
+ */
+interface TanaDoc {
+  id: string;
+  props?: {
+    _docType?: string;
+    name?: string;
+  };
+  children?: string[] | null;
+}
+
+/**
+ * Discover which tagDefs define system fields by scanning their tuples.
+ *
+ * System fields are identified by SYS_A* IDs in the first child of tuple nodes.
+ * Only known system fields (in SYSTEM_FIELD_METADATA) are tracked.
+ *
+ * @param docs Array of Tana export documents
+ * @param docsById Map of document ID to document for child lookup
+ * @returns Map of field ID (SYS_A*) -> Set of tagDef IDs that define it
+ */
+export function discoverSystemFieldSources(
+  docs: TanaDoc[],
+  docsById: Map<string, TanaDoc>
+): Map<string, Set<string>> {
+  const fieldSources = new Map<string, Set<string>>();
+
+  for (const doc of docs) {
+    // Only process tagDef documents
+    if (doc.props?._docType !== 'tagDef') continue;
+    if (!doc.children) continue;
+
+    // Check each tuple child for system field definitions
+    for (const childId of doc.children) {
+      const child = docsById.get(childId);
+      if (child?.props?._docType === 'tuple' && child.children?.length) {
+        const fieldId = child.children[0];
+
+        // Is this a known system field?
+        if (fieldId.startsWith('SYS_A') && SYSTEM_FIELD_METADATA[fieldId]) {
+          if (!fieldSources.has(fieldId)) {
+            fieldSources.set(fieldId, new Set());
+          }
+          fieldSources.get(fieldId)!.add(doc.id);
+        }
+      }
+    }
+  }
+
+  return fieldSources;
+}
+
+/**
+ * Insert discovered system field sources into the database.
+ *
+ * Clears existing sources before inserting (full replace).
+ *
+ * @param db Database instance
+ * @param sources Map of field ID -> Set of tagDef IDs
+ */
+export function insertSystemFieldSources(
+  db: Database,
+  sources: Map<string, Set<string>>
+): void {
+  // Clear existing sources (full replace on each sync)
+  db.run('DELETE FROM system_field_sources');
+
+  // Insert new sources
+  const stmt = db.prepare(
+    'INSERT INTO system_field_sources (field_id, tag_id) VALUES (?, ?)'
+  );
+
+  for (const [fieldId, tagIds] of sources) {
+    for (const tagId of tagIds) {
+      stmt.run(fieldId, tagId);
+    }
+  }
+}

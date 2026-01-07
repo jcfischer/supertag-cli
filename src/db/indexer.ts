@@ -37,6 +37,7 @@ import { extractFieldValuesFromNodes, insertFieldValues } from "./field-values";
 import { extractSupertagMetadata } from "./supertag-metadata";
 import { updateFieldTypesFromValues } from "./value-type-inference";
 import { extractFieldTypesFromDocs, updateFieldTypesFromExport, extractTargetSupertagsFromDocs, updateTargetSupertagsFromExport } from "./explicit-type-extraction";
+import { migrateSystemFieldSources, discoverSystemFieldSources, insertSystemFieldSources } from "./system-fields";
 import type { NodeDump } from "../types/tana-dump";
 import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
 
@@ -212,6 +213,9 @@ export class TanaIndexer {
 
     // Apply schema consolidation migrations (Spec 020 T-4.3)
     migrateSchemaConsolidation(this.sqlite);
+
+    // Create system field sources table (Spec 074: System Field Discovery)
+    migrateSystemFieldSources(this.sqlite);
   }
 
   /**
@@ -434,6 +438,12 @@ export class TanaIndexer {
       // T-2.4: Clear and extract supertag metadata (fields and inheritance)
       clearSupertagMetadata(this.sqlite);
       const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+
+      // Spec 074: Discover and store system field sources
+      // This finds which tagDefs define SYS_A* fields (Date, Attendees, etc.)
+      const docsById = new Map(docs.map(d => [d.id, d]));
+      const systemFieldSources = discoverSystemFieldSources(docs, docsById);
+      insertSystemFieldSources(this.sqlite, systemFieldSources);
 
       // Post-process field types using explicit type extraction from Tana's typeChoice structure
       // This is the most reliable source - extracts actual type definitions from the export
@@ -739,6 +749,12 @@ export class TanaIndexer {
       // STEP 5.6: T-2.4 - Clear and rebuild supertag metadata
       clearSupertagMetadata(this.sqlite);
       const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+
+      // STEP 5.6.5: Spec 074 - Discover and store system field sources
+      // This finds which tagDefs define SYS_A* fields (Date, Attendees, etc.)
+      const docsById = new Map(dump.docs.map(d => [d.id, d]));
+      const systemFieldSources = discoverSystemFieldSources(dump.docs, docsById);
+      insertSystemFieldSources(this.sqlite, systemFieldSources);
 
       // STEP 5.7: Post-process field types using explicit type extraction from Tana's typeChoice structure
       // This is the most reliable source - extracts actual type definitions from the export
