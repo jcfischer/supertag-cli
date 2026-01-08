@@ -690,16 +690,24 @@ export async function installUpdate(
         throw new Error(`Binary not found in archive: ${binaryName}`);
       }
 
-      // Unlink target first to handle symlinks/sockets (ENOTSUP fix)
-      if (existsSync(binaryPath)) {
+      // Always try to unlink target first - handles symlinks, sockets, and other
+      // special files that copyFileSync cannot overwrite (ENOTSUP fix).
+      // existsSync may return false for sockets, so always try unlink.
+      try {
         unlinkSync(binaryPath);
+      } catch {
+        // Ignore errors - file might not exist
       }
       // Copy the fallback
       copyFileSync(fallbackPath, binaryPath);
     } else {
-      // Unlink target first to handle symlinks/sockets (ENOTSUP fix)
-      if (existsSync(binaryPath)) {
+      // Always try to unlink target first - handles symlinks, sockets, and other
+      // special files that copyFileSync cannot overwrite (ENOTSUP fix).
+      // existsSync may return false for sockets, so always try unlink.
+      try {
         unlinkSync(binaryPath);
+      } catch {
+        // Ignore errors - file might not exist
       }
       // Copy the extracted binary
       copyFileSync(extractedBinaryPath, binaryPath);

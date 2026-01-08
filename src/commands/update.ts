@@ -160,13 +160,29 @@ async function downloadCommand(options: { output?: string }): Promise<void> {
  * Install command - install a downloaded update
  */
 async function installCommand(options: { file?: string; yes?: boolean }): Promise<void> {
-  // Get current binary path
-  const currentBinaryPath = process.execPath;
+  // Get current binary path - this is the path to the running executable
+  // For compiled binaries, this is the binary itself
+  // For development (running via bun), fall back to looking for supertag in cwd
+  let binaryPath = process.execPath;
 
-  // If this is running via Bun, get the script path instead
-  const binaryPath = currentBinaryPath.includes("bun")
-    ? join(process.cwd(), "supertag")
-    : currentBinaryPath;
+  // If running via Bun in development, try to find the actual binary
+  if (binaryPath.includes("bun")) {
+    // Try common locations
+    const candidates = [
+      join(process.cwd(), "supertag"),
+      join(process.cwd(), "dist", "supertag"),
+    ];
+    const found = candidates.find(p => existsSync(p));
+    if (found) {
+      binaryPath = found;
+    } else {
+      console.log("");
+      console.log("  ❌ Cannot determine binary path when running via Bun");
+      console.log("  Please specify the target binary path or run the compiled binary.");
+      console.log("");
+      process.exit(1);
+    }
+  }
 
   // Default zip path
   const zipPath = options.file ?? (() => {

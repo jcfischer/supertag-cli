@@ -133,15 +133,43 @@ export function syncSchema(exportPath: string, verbose: boolean, workspace?: str
  * @throws Error if database doesn't exist
  */
 export function getSchemaRegistryFromDatabase(dbPath: string): SchemaRegistry {
+  const isDebug = process.env.DEBUG_SCHEMA === "1";
+  const startTime = Date.now();
+
   if (!existsSync(dbPath)) {
     throw new Error(`Database not found: ${dbPath}`);
   }
 
+  if (isDebug) {
+    console.error(`[schema-debug] getSchemaRegistryFromDatabase: opening ${dbPath}`);
+  }
+
   const db = new Database(dbPath);
   try {
+    if (isDebug) {
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: creating UnifiedSchemaService...`);
+    }
     const schemaService = new UnifiedSchemaService(db);
+
+    if (isDebug) {
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: calling toSchemaRegistryJSON()...`);
+    }
+    const jsonStart = Date.now();
     const json = schemaService.toSchemaRegistryJSON();
-    return SchemaRegistry.fromJSON(json);
+
+    if (isDebug) {
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: toSchemaRegistryJSON took ${Date.now() - jsonStart}ms`);
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: parsing JSON (${(json.length / 1024).toFixed(1)} KB)...`);
+    }
+    const parseStart = Date.now();
+    const registry = SchemaRegistry.fromJSON(json);
+
+    if (isDebug) {
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: fromJSON took ${Date.now() - parseStart}ms`);
+      console.error(`[schema-debug] getSchemaRegistryFromDatabase: total ${Date.now() - startTime}ms`);
+    }
+
+    return registry;
   } finally {
     db.close();
   }

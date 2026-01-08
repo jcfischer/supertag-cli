@@ -170,6 +170,15 @@ export const EMOJI = {
   recent: '⏱️',
   transcribe: '🎙️',
   aggregate: '📈',
+  // Attachments
+  download: '📥',
+  file: '📎',
+  folder: '📁',
+  check: '✓',
+  skip: '⏭️',
+  info: 'ℹ️',
+  time: '⏱️',
+  data: '💾',
 } as const;
 
 /**
