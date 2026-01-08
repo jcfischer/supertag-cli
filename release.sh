@@ -77,9 +77,9 @@ log_error() {
 # Check if guide-only mode
 if [ "$1" = "--guide-only" ]; then
     log_step "Rebuilding website guide only..."
-    cd "$WEBSITE_DIR/tana"
+    cd "$WEBSITE_DIR/supertag"
     bun run build-guide.ts
-    log_success "Guide rebuilt: $WEBSITE_DIR/tana/guide.html"
+    log_success "Guide rebuilt: $WEBSITE_DIR/supertag/guide.html"
     exit 0
 fi
 
@@ -110,9 +110,9 @@ log_success "All tests passed"
 
 # Update website guide
 log_step "Updating website guide..."
-cd "$WEBSITE_DIR/tana"
+cd "$WEBSITE_DIR/supertag"
 bun run build-guide.ts
-log_success "Guide rebuilt: $WEBSITE_DIR/tana/guide.html"
+log_success "Guide rebuilt: $WEBSITE_DIR/supertag/guide.html"
 
 # Build the website (Vite)
 log_step "Building website with Vite..."
@@ -148,8 +148,8 @@ if [ "$DO_PUSH" = true ]; then
 
     # Commit and push website changes
     cd "$WEBSITE_DIR"
-    if [ -n "$(git status --porcelain tana/ 2>/dev/null)" ]; then
-        git add tana/
+    if [ -n "$(git status --porcelain supertag/ 2>/dev/null)" ]; then
+        git add supertag/
         git commit -m "docs: update Supertag CLI guide for v${VERSION}"
     fi
     git push
@@ -177,7 +177,7 @@ else
     echo ""
     echo "3. Review and commit website changes:"
     echo "   cd $WEBSITE_DIR"
-    echo "   git add tana/"
+    echo "   git add supertag/"
     echo "   git status"
     echo "   git commit -m \"docs: update Supertag CLI guide for v${VERSION}\""
     echo "   git push"
