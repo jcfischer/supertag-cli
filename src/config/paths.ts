@@ -52,10 +52,10 @@ export const BROWSER_DATA_DIR = join(TANA_CONFIG_DIR, 'browser-data');
 
 /**
  * Default export directory
- * - macOS: ~/Documents/Tana-Export (traditional location, kept for backward compatibility)
- * - Linux/Others: ~/.local/share/supertag/exports (XDG compliant)
+ * - macOS/Windows: ~/Documents/Tana-Export (user-friendly location)
+ * - Linux: ~/.local/share/supertag/exports (XDG compliant)
  */
-export const DEFAULT_EXPORT_DIR = process.platform === 'darwin'
+export const DEFAULT_EXPORT_DIR = process.platform === 'darwin' || process.platform === 'win32'
   ? join(HOME, 'Documents', 'Tana-Export')
   : join(XDG_DATA_HOME, 'supertag', 'exports');
 
