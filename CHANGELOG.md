@@ -5,6 +5,16 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-01-08
+
+### Fixed
+
+- **Update Install ENOTSUP Error** - Fixed `supertag update install` failing with "operation not supported on socket, copyfile" error
+  - The issue occurred when the target binary path was a symlink, socket, or other special file type
+  - `existsSync()` may return false for sockets, causing the unlink to be skipped before copy
+  - Now always attempts to unlink the target file first (catching errors if file doesn't exist)
+  - This allows the update installer to correctly replace symlinked binaries
+
 ## [1.8.2] - 2026-01-08
 
 ### Fixed
