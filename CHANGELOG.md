@@ -5,6 +5,26 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Attachment Extraction (Spec 090)** - Discover and download attachments from Tana exports
+  - New `supertag attachments list` command - List all attachments with metadata (filename, extension, tags)
+  - New `supertag attachments extract` command - Download attachments to local directory
+  - New `supertag attachments get <nodeId>` command - Download a single attachment by node ID
+  - New `supertag attachments stats` command - Show attachment statistics by type and tag
+  - Supports Firebase Storage URLs embedded in Tana exports
+  - Organization strategies: `flat` (default), `date`, `tag`, `node`
+  - Concurrent downloads with configurable parallelism (1-10, default 3)
+  - Retry logic with exponential backoff for failed downloads
+  - Skip existing files with `--skip-existing` flag
+  - Dry-run mode to preview without downloading
+  - Filter by extension: `-e png -e jpg` or `--extension pdf`
+  - Filter by tag: `-t meeting` or `--tag project`
+  - All standard output formats supported (table, json, csv, ids, minimal, jsonl)
+  - Discovered 1,277 attachments in test export (images, audio, video, PDFs)
+
 ## [1.8.3] - 2026-01-08
 
 ### Fixed

@@ -254,14 +254,32 @@ export function registerSyncCommands(program: Command): void {
 
         // Generate schema registry from database (includes targetSupertag data)
         logger.info('Syncing schema registry...');
+        const isDebug = process.env.DEBUG_SCHEMA === "1";
         try {
+          if (isDebug) {
+            logger.info('[schema-debug] Opening database and creating service...');
+          }
+          const schemaStart = Date.now();
           const registry = getSchemaRegistryFromDatabase(paths.dbPath);
+          if (isDebug) {
+            logger.info(`[schema-debug] getSchemaRegistryFromDatabase took ${Date.now() - schemaStart}ms`);
+            logger.info('[schema-debug] Writing schema cache file...');
+          }
           // Write the registry to the schema cache file
           const schemaDir = dirname(paths.schemaPath);
           if (!existsSync(schemaDir)) {
             mkdirSync(schemaDir, { recursive: true });
           }
-          writeFileSync(paths.schemaPath, registry.toJSON());
+          const writeStart = Date.now();
+          const json = registry.toJSON();
+          if (isDebug) {
+            logger.info(`[schema-debug] registry.toJSON() took ${Date.now() - writeStart}ms (${(json.length / 1024).toFixed(1)} KB)`);
+          }
+          writeFileSync(paths.schemaPath, json);
+          if (isDebug) {
+            logger.info(`[schema-debug] File write took ${Date.now() - writeStart}ms`);
+            logger.info(`[schema-debug] Total schema sync: ${Date.now() - schemaStart}ms`);
+          }
           logger.info(`Schema: ${registry.listSupertags().length} supertags synced to ${paths.schemaPath}`);
         } catch (schemaError) {
           logger.warn(`Schema sync failed: ${schemaError}`);

@@ -191,6 +191,13 @@ export class UnifiedSchemaService {
    * @returns Array of all unified supertags
    */
   listSupertags(): UnifiedSupertag[] {
+    const startTime = Date.now();
+    const isDebug = process.env.DEBUG_SCHEMA === "1";
+
+    if (isDebug) {
+      console.error(`[schema-debug] listSupertags: starting...`);
+    }
+
     const hasNodes = this.checkNodesTable();
     const query = hasNodes
       ? `
@@ -207,6 +214,11 @@ export class UnifiedSchemaService {
         ORDER BY tag_name
       `;
 
+    if (isDebug) {
+      console.error(`[schema-debug] listSupertags: executing query (hasNodes=${hasNodes})...`);
+    }
+
+    const queryStart = Date.now();
     const rows = this.db.query(query).all() as Array<{
       tag_id: string;
       tag_name: string;
@@ -215,7 +227,28 @@ export class UnifiedSchemaService {
       color: string | null;
     }>;
 
-    return rows.map((row) => this.buildUnifiedSupertag(row));
+    if (isDebug) {
+      console.error(`[schema-debug] listSupertags: query returned ${rows.length} rows in ${Date.now() - queryStart}ms`);
+      console.error(`[schema-debug] listSupertags: building supertag objects...`);
+    }
+
+    const buildStart = Date.now();
+    let lastLog = Date.now();
+    const result = rows.map((row, index) => {
+      // Log progress every 5 seconds or every 100 items in debug mode
+      if (isDebug && (Date.now() - lastLog > 5000 || (index > 0 && index % 100 === 0))) {
+        console.error(`[schema-debug] listSupertags: processed ${index}/${rows.length} supertags (${Date.now() - buildStart}ms elapsed)`);
+        lastLog = Date.now();
+      }
+      return this.buildUnifiedSupertag(row);
+    });
+
+    if (isDebug) {
+      console.error(`[schema-debug] listSupertags: built ${result.length} supertags in ${Date.now() - buildStart}ms`);
+      console.error(`[schema-debug] listSupertags: total time ${Date.now() - startTime}ms`);
+    }
+
+    return result;
   }
 
   /**
@@ -466,20 +499,28 @@ export class UnifiedSchemaService {
     };
   }
 
+  // Performance: pre-built prepared statements for N+1 queries
+  private fieldsStatement: ReturnType<Database["query"]> | null = null;
+  private parentsStatement: ReturnType<Database["query"]> | null = null;
+  private fieldQueryCount = 0;
+  private parentQueryCount = 0;
+
   /**
    * Load fields for a supertag from database.
    */
   private loadFieldsForTag(tagId: string): UnifiedField[] {
-    const rows = this.db
-      .query(
-        `
+    // Use prepared statement for performance
+    if (!this.fieldsStatement) {
+      this.fieldsStatement = this.db.query(`
         SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type, target_supertag_id, target_supertag_name
         FROM supertag_fields
         WHERE tag_id = ?
         ORDER BY field_order
-      `
-      )
-      .all(tagId) as Array<{
+      `);
+    }
+
+    this.fieldQueryCount++;
+    const rows = this.fieldsStatement.all(tagId) as Array<{
       tag_id: string;
       field_name: string;
       field_label_id: string;
@@ -508,17 +549,26 @@ export class UnifiedSchemaService {
    * Load parent tag IDs for a supertag.
    */
   private loadParentIds(tagId: string): string[] {
-    const rows = this.db
-      .query(
-        `
+    // Use prepared statement for performance
+    if (!this.parentsStatement) {
+      this.parentsStatement = this.db.query(`
         SELECT parent_tag_id
         FROM supertag_parents
         WHERE child_tag_id = ?
-      `
-      )
-      .all(tagId) as Array<{ parent_tag_id: string }>;
+      `);
+    }
+
+    this.parentQueryCount++;
+    const rows = this.parentsStatement.all(tagId) as Array<{ parent_tag_id: string }>;
 
     return rows.map((row) => row.parent_tag_id);
+  }
+
+  /**
+   * Get query counts for debugging
+   */
+  getQueryCounts(): { fields: number; parents: number } {
+    return { fields: this.fieldQueryCount, parents: this.parentQueryCount };
   }
 
   // ==========================================================================
@@ -734,7 +784,20 @@ export class UnifiedSchemaService {
    * @returns JSON string in SchemaRegistry format
    */
   toSchemaRegistryJSON(): string {
+    const startTime = Date.now();
+    const isDebug = process.env.DEBUG_SCHEMA === "1";
+
+    if (isDebug) {
+      console.error(`[schema-debug] toSchemaRegistryJSON: starting...`);
+    }
+
     const supertags = this.listSupertags();
+
+    if (isDebug) {
+      const counts = this.getQueryCounts();
+      console.error(`[schema-debug] toSchemaRegistryJSON: listSupertags returned ${supertags.length} tags`);
+      console.error(`[schema-debug] toSchemaRegistryJSON: query counts - fields: ${counts.fields}, parents: ${counts.parents}`);
+    }
 
     // Deduplicate: only export canonical supertag for each name
     // Apply same logic as SchemaRegistry: prefer more parents, then more fields
@@ -812,7 +875,19 @@ export class UnifiedSchemaService {
       supertags: schemaSupertags,
     };
 
-    return JSON.stringify(data, null, 2);
+    if (isDebug) {
+      console.error(`[schema-debug] toSchemaRegistryJSON: serializing ${schemaSupertags.length} canonical supertags...`);
+    }
+
+    const jsonStart = Date.now();
+    const json = JSON.stringify(data, null, 2);
+
+    if (isDebug) {
+      console.error(`[schema-debug] toSchemaRegistryJSON: JSON serialization took ${Date.now() - jsonStart}ms (${(json.length / 1024).toFixed(1)} KB)`);
+      console.error(`[schema-debug] toSchemaRegistryJSON: total time ${Date.now() - startTime}ms`);
+    }
+
+    return json;
   }
 
   // ==========================================================================

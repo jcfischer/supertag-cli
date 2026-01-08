@@ -33,6 +33,7 @@
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [FIELDS - Query Field Values](#fields---query-field-values)
   - [TRANSCRIPTS - Meeting Recordings](#transcripts---meeting-recordings)
+  - [ATTACHMENTS - Extract Attachments](#attachments---extract-attachments)
   - [SERVER - Webhook API](#server---webhook-api)
   - [VISUALIZE - Inheritance Graphs](#visualize---inheritance-graphs)
   - [CODEGEN - Generate Effect Schema Classes](#codegen---generate-effect-schema-classes)
@@ -351,6 +352,54 @@ supertag embed generate --include-transcripts  # Opt-in for semantic search
 ```
 
 See [Transcript Documentation](./docs/transcripts.md) for details.
+
+### ATTACHMENTS - Extract Attachments
+
+Discover and download attachments (images, PDFs, audio, video) from your Tana exports.
+
+```bash
+# List all attachments
+supertag attachments list                       # JSON output (default)
+supertag attachments list --format table        # Human-readable table
+supertag attachments list --extension png       # Filter by extension
+supertag attachments list --tag meeting         # Filter by parent tag
+
+# Show statistics
+supertag attachments stats                      # Count by extension and tag
+
+# Download attachments
+supertag attachments extract                    # Download all to ~/Downloads/tana-attachments
+supertag attachments extract -o ./my-files      # Custom output directory
+supertag attachments extract --organize-by date # Organize by date (YYYY/MM/)
+supertag attachments extract --organize-by tag  # Organize by supertag
+supertag attachments extract --skip-existing    # Skip already downloaded files
+supertag attachments extract --dry-run          # Preview without downloading
+
+# Download single attachment (use --id since Tana IDs start with -)
+supertag attachments get --id <nodeId>               # Download by node ID
+supertag attachments get --id <nodeId> -o ./file.png # Custom output path
+```
+
+**Organization Strategies:**
+
+| Strategy | Description | Example Path |
+|----------|-------------|--------------|
+| `flat` | All files in output directory (default) | `./attachments/image.png` |
+| `date` | By year/month | `./attachments/2025/04/image.png` |
+| `tag` | By parent supertag | `./attachments/meeting/image.png` |
+| `node` | By parent node ID | `./attachments/abc123/image.png` |
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <dir>` | Output directory (default: `~/Downloads/tana-attachments`) |
+| `--organize-by <strategy>` | Organization: flat, date, tag, node |
+| `-c, --concurrency <n>` | Parallel downloads 1-10 (default: 3) |
+| `--skip-existing` | Skip files that already exist |
+| `-t, --tag <tags...>` | Filter by supertag |
+| `-e, --extension <exts...>` | Filter by extension (png, pdf, etc.) |
+| `--dry-run` | List files without downloading |
 
 ### SERVER - Webhook API
 
