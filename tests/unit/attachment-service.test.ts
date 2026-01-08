@@ -35,7 +35,7 @@ describe("AttachmentService", () => {
     db.run(`
       CREATE TABLE IF NOT EXISTS tag_applications (
         id INTEGER PRIMARY KEY,
-        node_id TEXT,
+        data_node_id TEXT,
         tag_name TEXT
       )
     `);
@@ -62,9 +62,9 @@ describe("AttachmentService", () => {
     db.run(`INSERT INTO nodes (id, name) VALUES (?, ?)`, ["parent1", "Parent Node 1"]);
     db.run(`INSERT INTO nodes (id, name) VALUES (?, ?)`, ["parent2", "Parent Node 2"]);
 
-    // Insert tag applications
-    db.run(`INSERT INTO tag_applications (node_id, tag_name) VALUES (?, ?)`, ["parent1", "#photo"]);
-    db.run(`INSERT INTO tag_applications (node_id, tag_name) VALUES (?, ?)`, ["parent2", "#document"]);
+    // Insert tag applications (use data_node_id to match real schema)
+    db.run(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES (?, ?)`, ["parent1", "#photo"]);
+    db.run(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES (?, ?)`, ["parent2", "#document"]);
 
     // Insert a non-attachment node
     db.run(`INSERT INTO nodes (id, name) VALUES (?, ?)`, ["regular", "Just a regular node"]);
