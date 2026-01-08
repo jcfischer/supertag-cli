@@ -28,6 +28,7 @@
   - [QUERY - Unified Query Language](#query---unified-query-language)
   - [BATCH - Multi-Node Operations](#batch---multi-node-operations)
   - [AGGREGATE - Group and Count](#aggregate---group-and-count)
+  - [RELATED - Graph Traversal](#related---graph-traversal)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [FIELDS - Query Field Values](#fields---query-field-values)
@@ -231,6 +232,55 @@ Total: 100 nodes in 3 groups
 ```
 
 See [Aggregation Documentation](./docs/aggregation.md) for more examples.
+
+### RELATED - Graph Traversal
+
+Find nodes related to a given node through references, children, and field links.
+
+```bash
+# Find all nodes connected to a topic
+supertag related <id> --pretty
+
+# Direction filtering
+supertag related <id> --direction out    # What this node references
+supertag related <id> --direction in     # What references this node
+
+# Filter by relationship type
+supertag related <id> --types reference  # Only inline references
+supertag related <id> --types field      # Only field connections
+supertag related <id> --types child,parent  # Structural relationships
+
+# Multi-hop traversal (depth 1-5)
+supertag related <id> --depth 2          # Find nodes within 2 hops
+
+# Output formats
+supertag related <id> --json             # JSON for scripting
+supertag related <id> --format csv       # CSV for spreadsheets
+supertag related <id> --format ids       # IDs for piping to other commands
+```
+
+**Relationship types:** `child`, `parent`, `reference`, `field`
+
+**Output:**
+```
+🔗 Related to: Project Alpha:
+
+📤 Outgoing (3):
+  → John Smith [person]
+     Type: field
+  → Product Roadmap
+     Type: reference
+
+📥 Incoming (5):
+  ← Meeting notes from Q4 planning [meeting]
+     Type: reference
+  ← Task: Review project scope [todo]
+     Type: field
+
+Total: 8
+```
+
+See [Graph Traversal Documentation](./docs/graph-traversal.md) for more examples.
 
 ### EXPORT - Automated Backup
 
