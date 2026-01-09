@@ -698,12 +698,20 @@ describe("downloadUpdate", () => {
 // =============================================================================
 
 describe("installUpdate", () => {
-  const testInstallDir = "/tmp/supertag-install-test";
-  const testBinaryPath = join(testInstallDir, "supertag");
-  const testBackupDir = join(testInstallDir, "backups");
-  const testZipPath = join(testInstallDir, "update.zip");
+  // Use unique temp directory per test run to avoid race conditions in CI
+  let testInstallDir: string;
+  let testBinaryPath: string;
+  let testBackupDir: string;
+  let testZipPath: string;
 
   beforeEach(async () => {
+    // Generate unique directory name to avoid conflicts with parallel test runs
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    testInstallDir = `/tmp/supertag-install-test-${uniqueId}`;
+    testBinaryPath = join(testInstallDir, "supertag");
+    testBackupDir = join(testInstallDir, "backups");
+    testZipPath = join(testInstallDir, "update.zip");
+
     if (existsSync(testInstallDir)) {
       rmSync(testInstallDir, { recursive: true });
     }
