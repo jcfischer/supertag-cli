@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/jcfischer/supertag-cli/actions/workflows/test.yml/badge.svg)](https://github.com/jcfischer/supertag-cli/actions/workflows/test.yml)
+[![MCP](https://lobehub.com/badge/mcp/jcfischer-supertag-cli)](https://lobehub.com/mcp/jcfischer-supertag-cli)
 
 **Complete Tana integration**: Query, write, search, and automate your Tana workspace from the command line.
 
