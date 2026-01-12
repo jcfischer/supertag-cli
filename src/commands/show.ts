@@ -13,6 +13,7 @@ import { Database } from "bun:sqlite";
 import { getDatabasePath } from "../config/paths";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import { withDbRetrySync } from "../db/retry";
+import { formatInlineRefs } from "../utils/inline-ref-formatter";
 
 // Default database path - uses XDG with legacy fallback
 const DEFAULT_DB_PATH = getDatabasePath();
@@ -109,28 +110,7 @@ function isFieldName(name: string | null | undefined): boolean {
 
 function formatValue(name: string | null | undefined, id: string): string {
   if (!name) return id;
-
-  if (name.includes("data-inlineref-date")) {
-    const decoded = name
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
-
-    const match = decoded.match(/dateTimeString":\s*"([^"]+)"/);
-    if (match) {
-      return match[1];
-    }
-  }
-
-  if (name.includes("data-inlineref-node")) {
-    const match = name.match(/data-inlineref-node="([^"]+)"/);
-    if (match) {
-      return `[[${match[1]}]]`;
-    }
-  }
-
-  return name;
+  return formatInlineRefs(name, { fallback: id });
 }
 
 /**

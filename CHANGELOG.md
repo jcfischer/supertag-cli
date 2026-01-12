@@ -5,6 +5,17 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2026-01-12
+
+### Fixed
+
+- **Field Values with Inline References Truncated** - Fixed field values containing multiple inline node references being truncated to only the first reference (#26)
+  - Root cause: Three duplicate `formatValue()` functions used `.match()` which only returns the first regex match
+  - Created centralized `formatInlineRefs()` utility using `.replace()` with global regex to process ALL inline references
+  - Affected: CLI `nodes show`, MCP `tana_node_show`, and internal display functions
+  - Example: `"Meeting with [[abc]] and [[def]]"` now displays completely instead of `"[[abc]]"` only
+  - Added 35 unit tests covering all edge cases (multiple refs, adjacent refs, mixed node+date refs, etc.)
+
 ## [1.9.2] - 2026-01-11
 
 ### Fixed

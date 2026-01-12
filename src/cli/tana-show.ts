@@ -15,6 +15,7 @@ import { Database } from "bun:sqlite";
 import { getDatabasePath } from "../config/paths";
 import { withDbRetrySync } from "../db/retry";
 import { VERSION } from "../version";
+import { formatInlineRefs } from "../utils/inline-ref-formatter";
 
 const program = new Command();
 // Default database path - uses XDG paths with legacy fallback
@@ -237,31 +238,7 @@ function isFieldName(name: string | null | undefined): boolean {
 
 function formatValue(name: string | null | undefined, id: string): string {
   if (!name) return id;
-
-  // Handle inline date references (with HTML entity encoding)
-  if (name.includes("data-inlineref-date")) {
-    // Decode HTML entities first
-    const decoded = name
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
-
-    const match = decoded.match(/dateTimeString":\s*"([^"]+)"/);
-    if (match) {
-      return match[1]; // Return just the date string like "2026-01-14"
-    }
-  }
-
-  // Handle inline node references
-  if (name.includes("data-inlineref-node")) {
-    const match = name.match(/data-inlineref-node="([^"]+)"/);
-    if (match) {
-      return `[[${match[1]}]]`;
-    }
-  }
-
-  return name;
+  return formatInlineRefs(name, { fallback: id });
 }
 
 function formatNodeOutput(contents: NodeContents, indent: string = ""): string {

@@ -14,6 +14,7 @@ import {
   parseSelectPaths,
   applyProjection,
 } from '../../utils/select-projection.js';
+import { formatInlineRefs } from '../../utils/inline-ref-formatter.js';
 
 interface NodeData {
   id: string;
@@ -76,28 +77,7 @@ function isFieldName(name: string | null | undefined): boolean {
 
 function formatValue(name: string | null | undefined, id: string): string {
   if (!name) return id;
-
-  if (name.includes('data-inlineref-date')) {
-    const decoded = name
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
-
-    const match = decoded.match(/dateTimeString":\s*"([^"]+)"/);
-    if (match) {
-      return match[1];
-    }
-  }
-
-  if (name.includes('data-inlineref-node')) {
-    const match = name.match(/data-inlineref-node="([^"]+)"/);
-    if (match) {
-      return `[[${match[1]}]]`;
-    }
-  }
-
-  return name;
+  return formatInlineRefs(name, { fallback: id });
 }
 
 /**
