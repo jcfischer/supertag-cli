@@ -445,6 +445,9 @@ configure_node_path() {
     # Determine NODE_PATH value
     local bun_global_dir="$HOME/.bun/install/global/node_modules"
 
+    # Export immediately for current session (critical for supertag-export to work)
+    export NODE_PATH="$bun_global_dir:$NODE_PATH"
+
     case "$shell_name" in
         zsh)
             shell_config="$HOME/.zshrc"
@@ -467,12 +470,12 @@ configure_node_path() {
             ;;
     esac
 
-    # Check if already configured
+    # Check if already configured in shell config
     if grep -q "NODE_PATH.*bun" "$shell_config" 2>/dev/null; then
         return
     fi
 
-    # Add to shell config
+    # Add to shell config for future sessions
     {
         echo ""
         echo "# NODE_PATH for Playwright (added by supertag-cli installer)"
@@ -670,10 +673,11 @@ print_success() {
     echo "    supertag-export - Export Tana data"
     echo "    supertag-mcp    - MCP server for AI tools"
     echo ""
-    echo "  Next steps:"
-    echo "    1. Open a new terminal (or source your shell config)"
-    echo "    2. Run: supertag-export login"
-    echo "    3. Run: supertag-export discover"
+    echo -e "  ${YELLOW}${BOLD}IMPORTANT: Open a new terminal window before continuing!${NC}"
+    echo ""
+    echo "  Next steps (in the NEW terminal):"
+    echo "    1. Run: supertag-export login"
+    echo "    2. Run: supertag-export discover"
     echo ""
     echo -e "  Documentation: ${BLUE}https://github.com/$GITHUB_REPO${NC}"
     echo ""
