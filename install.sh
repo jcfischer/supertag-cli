@@ -281,7 +281,21 @@ download_supertag() {
     cp -f "$extracted_dir/supertag-mcp" "$INSTALL_DIR/" 2>/dev/null || \
     cp -f "$temp_dir/supertag-mcp" "$INSTALL_DIR/" 2>/dev/null || true
 
-    # Make executable
+    # Copy scripts, launchd templates, and docs
+    if [[ -d "$extracted_dir/scripts" ]]; then
+        cp -rf "$extracted_dir/scripts" "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+    fi
+
+    if [[ -d "$extracted_dir/launchd" ]]; then
+        cp -rf "$extracted_dir/launchd" "$INSTALL_DIR/"
+    fi
+
+    if [[ -d "$extracted_dir/docs" ]]; then
+        cp -rf "$extracted_dir/docs" "$INSTALL_DIR/"
+    fi
+
+    # Make binaries executable
     chmod +x "$INSTALL_DIR/supertag"*
 
     # Remove quarantine on macOS
@@ -679,6 +693,9 @@ print_success() {
     echo "  Next steps (in the NEW terminal):"
     echo "    1. Run: supertag-export login"
     echo "    2. Run: supertag-export discover"
+    echo ""
+    echo "  Optional - Set up daily auto-sync (macOS):"
+    echo "    $INSTALL_DIR/scripts/install-launchd.sh"
     echo ""
     echo -e "  Documentation: ${BLUE}https://github.com/$GITHUB_REPO${NC}"
     echo ""
