@@ -20,6 +20,7 @@ set -euo pipefail
 VERSION="${SUPERTAG_VERSION:-latest}"
 INSTALL_DIR="${SUPERTAG_INSTALL_DIR:-$HOME/Tools/supertag-cli}"
 SKIP_MCP="${SKIP_MCP:-false}"
+SKIP_LAUNCHD="${SKIP_LAUNCHD:-false}"
 GITHUB_REPO="jcfischer/supertag-cli"
 
 # =============================================================================
@@ -683,6 +684,102 @@ print_banner() {
     echo ""
 }
 
+# =============================================================================
+# Launchd Configuration (macOS only)
+# =============================================================================
+
+configure_launchd() {
+    # Only available on macOS
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        info "Launchd services are only available on macOS"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BOLD}Background Services (Optional)${NC}"
+    echo ""
+    echo "  supertag can run background services on macOS:"
+    echo "    • Webhook Server - Receives notifications from Tana"
+    echo "    • Scheduled Sync - Automatically syncs your Tana data"
+    echo ""
+
+    local install_server=false
+    local install_sync=false
+    local sync_schedule=""
+
+    # Ask about webhook server
+    if confirm "Install the webhook server? (starts on login)"; then
+        install_server=true
+    fi
+
+    # Ask about scheduled sync
+    if confirm "Install scheduled auto-sync?"; then
+        install_sync=true
+
+        echo ""
+        echo "  When should the sync run?"
+        echo ""
+        echo "    1) Every 6 hours (midnight, 6 AM, noon, 6 PM) (Recommended)"
+        echo "    2) Every 4 hours"
+        echo "    3) Twice daily (6 AM and 6 PM)"
+        echo "    4) Once daily (6 AM)"
+        echo "    5) Custom times"
+        echo ""
+        read -p "      Choice [1]: " schedule_choice </dev/tty
+        schedule_choice="${schedule_choice:-1}"
+
+        case "$schedule_choice" in
+            1) sync_schedule="0,6,12,18" ;;
+            2) sync_schedule="0,4,8,12,16,20" ;;
+            3) sync_schedule="6,18" ;;
+            4) sync_schedule="6" ;;
+            5)
+                echo ""
+                echo "  Enter hours (0-23) separated by commas."
+                echo "  Example: 6,12,18 for 6 AM, noon, and 6 PM"
+                echo ""
+                read -p "      Hours: " custom_hours </dev/tty
+                if [[ -n "$custom_hours" ]]; then
+                    sync_schedule="$custom_hours"
+                else
+                    sync_schedule="6"  # Default to 6 AM if empty
+                fi
+                ;;
+            *)
+                sync_schedule="0,6,12,18"  # Default to every 6 hours
+                ;;
+        esac
+    fi
+
+    # Install selected services
+    local scripts_dir="$INSTALL_DIR/scripts"
+
+    if [[ "$install_server" == "true" ]]; then
+        echo ""
+        info "Installing webhook server..."
+        if [[ -f "$scripts_dir/install-launchd.sh" ]]; then
+            bash "$scripts_dir/install-launchd.sh" server 2>/dev/null || warn "Server installation had issues - check logs"
+        else
+            warn "install-launchd.sh not found. Run manually after installation."
+        fi
+    fi
+
+    if [[ "$install_sync" == "true" ]]; then
+        echo ""
+        info "Installing scheduled sync (schedule: $sync_schedule)..."
+        if [[ -f "$scripts_dir/install-launchd.sh" ]]; then
+            SYNC_HOURS="$sync_schedule" bash "$scripts_dir/install-launchd.sh" daily 2>/dev/null || warn "Sync installation had issues - check logs"
+        else
+            warn "install-launchd.sh not found. Run manually after installation."
+        fi
+    fi
+
+    if [[ "$install_server" == "false" && "$install_sync" == "false" ]]; then
+        info "Skipping background services. You can set them up later with:"
+        echo "      $scripts_dir/install-launchd.sh"
+    fi
+}
+
 print_success() {
     echo ""
     echo -e "${GREEN}${BOLD}Installation complete!${NC}"
@@ -698,7 +795,7 @@ print_success() {
     echo "    1. Run: supertag-export login"
     echo "    2. Run: supertag-export discover"
     echo ""
-    echo "  Optional - Set up daily auto-sync (macOS):"
+    echo "  Manage background services (macOS):"
     echo "    $INSTALL_DIR/scripts/install-launchd.sh"
     echo ""
     echo -e "  Documentation: ${BLUE}https://github.com/$GITHUB_REPO${NC}"
@@ -713,12 +810,14 @@ print_help() {
     echo "Options:"
     echo "  --version VERSION  Install specific version (default: latest)"
     echo "  --no-mcp           Skip MCP auto-configuration"
+    echo "  --no-launchd       Skip launchd service setup (macOS)"
     echo "  --help             Show this help message"
     echo ""
     echo "Environment variables:"
     echo "  SUPERTAG_VERSION      Override version to install"
     echo "  SUPERTAG_INSTALL_DIR  Override installation directory"
     echo "  SKIP_MCP              Set to 'true' to skip MCP configuration"
+    echo "  SKIP_LAUNCHD          Set to 'true' to skip launchd setup"
     echo ""
     echo "Examples:"
     echo "  curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash"
@@ -740,6 +839,10 @@ parse_args() {
                 ;;
             --no-mcp)
                 SKIP_MCP="true"
+                shift
+                ;;
+            --no-launchd)
+                SKIP_LAUNCHD="true"
                 shift
                 ;;
             --help|-h)
@@ -770,24 +873,29 @@ main() {
     version=$(resolve_version "$VERSION")
     info "Target version: v$version"
 
-    step "1/6" "Installing Bun"
+    step "1/7" "Installing Bun"
     install_bun
 
-    step "2/6" "Installing Playwright"
+    step "2/7" "Installing Playwright"
     install_playwright
 
-    step "3/6" "Installing Chromium"
+    step "3/7" "Installing Chromium"
     install_chromium
 
-    step "4/6" "Downloading supertag-cli"
+    step "4/7" "Downloading supertag-cli"
     download_supertag "$version" "$platform"
 
-    step "5/6" "Configuring PATH"
+    step "5/7" "Configuring PATH"
     configure_path
 
     if [[ "$SKIP_MCP" != "true" ]]; then
-        step "6/6" "Configuring MCP"
+        step "6/7" "Configuring MCP"
         configure_mcp
+    fi
+
+    if [[ "$SKIP_LAUNCHD" != "true" ]]; then
+        step "7/7" "Background Services"
+        configure_launchd
     fi
 
     verify_installation

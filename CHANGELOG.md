@@ -5,6 +5,25 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.8] - 2026-01-17
+
+### Added
+
+- **Interactive Launchd Setup in Installer** - Installer now prompts to set up background services during installation
+  - Option to install webhook server (starts on login)
+  - Option to install scheduled sync with customizable schedule (every 4/6 hours, twice daily, once daily, or custom)
+  - New `--no-launchd` flag to skip this step
+  - `SKIP_LAUNCHD=true` environment variable also supported
+
+- **Interactive Menu for install-launchd.sh** - Running without parameters now shows a menu instead of defaulting to server
+  - Choose between server, scheduled sync, or both
+  - Schedule selection when installing sync service
+  - Custom hours input (e.g., "6,12,18" for 6 AM, noon, 6 PM)
+
+- **Custom Sync Schedule Support** - Scheduled sync now supports custom hours via `SYNC_HOURS` environment variable
+  - Example: `SYNC_HOURS="6,18" ./install-launchd.sh daily` for twice-daily sync
+  - Generates proper launchd StartCalendarInterval entries
+
 ## [1.9.7] - 2026-01-17
 
 ### Fixed
