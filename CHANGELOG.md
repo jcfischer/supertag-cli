@@ -5,6 +5,23 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.7] - 2026-01-17
+
+### Fixed
+
+- **Scripts Not Included in Install** - Fixed `install-launchd.sh` and other scripts not being available after installation
+  - Root cause: Installer only copied binaries, not the `scripts/`, `launchd/`, and `docs/` directories
+  - Added copying of these directories during installation
+  - Fixed early skip logic that prevented re-downloading when version matched (users couldn't get scripts even after re-running installer)
+  - Scripts now available at `~/.supertag-cli/scripts/` for launchd setup and maintenance
+
+- **Interactive Prompts in curl|bash Install** - Fixed install prompts not working when running via `curl | bash`
+  - Root cause: stdin consumed by pipe, breaking `read` commands
+  - Added `</dev/tty` to all interactive prompts
+
+- **NODE_PATH Unbound Variable** - Fixed "NODE_PATH: unbound variable" error when NODE_PATH not previously set
+  - Used `${NODE_PATH:+:$NODE_PATH}` for set -u safety
+
 ## [1.9.6] - 2026-01-17
 
 ### Fixed

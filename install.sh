@@ -233,12 +233,16 @@ download_supertag() {
     local installed_version
     installed_version=$(get_installed_version)
 
-    if [[ "$installed_version" == "$version" ]]; then
+    # Only skip download if version matches AND scripts directory already exists
+    # (scripts were added in v1.9.7, older installs need to re-download to get them)
+    if [[ "$installed_version" == "$version" ]] && [[ -d "$INSTALL_DIR/scripts" ]]; then
         success "supertag-cli v$version already installed (skipping)"
         return 0
     fi
 
-    if [[ -n "$installed_version" ]]; then
+    if [[ "$installed_version" == "$version" ]]; then
+        info "Re-downloading v$version to get scripts and launchd templates..."
+    elif [[ -n "$installed_version" ]]; then
         info "Updating from v$installed_version to v$version"
     fi
 
