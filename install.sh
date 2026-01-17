@@ -446,7 +446,8 @@ configure_node_path() {
     local bun_global_dir="$HOME/.bun/install/global/node_modules"
 
     # Export immediately for current session (critical for supertag-export to work)
-    export NODE_PATH="$bun_global_dir:$NODE_PATH"
+    # Use ${NODE_PATH:-} to handle case where NODE_PATH is not set (set -u safe)
+    export NODE_PATH="$bun_global_dir${NODE_PATH:+:$NODE_PATH}"
 
     case "$shell_name" in
         zsh)
