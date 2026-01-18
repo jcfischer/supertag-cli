@@ -140,6 +140,7 @@ export const fieldExclusions = sqliteTable("field_exclusions", {
  * Supertag Fields table - Field definitions for each supertag
  * Extracted from tagDef tuple children during indexing
  * Enhanced with normalized_name, description, inferred_data_type (Spec 020)
+ * Enhanced with default_value_id, default_value_text (Spec 092)
  */
 export const supertagFields = sqliteTable(
   "supertag_fields",
@@ -157,6 +158,9 @@ export const supertagFields = sqliteTable(
     // Target supertag for reference fields (Options from Supertag)
     targetSupertagId: text("target_supertag_id"), // tagDef ID of target supertag (for SYS_D05 fields)
     targetSupertagName: text("target_supertag_name"), // Name of target supertag
+    // Default value for field (Spec 092: Field Default Values)
+    defaultValueId: text("default_value_id"), // Node ID of the default value (tuple's second child)
+    defaultValueText: text("default_value_text"), // Name/text of the default value node
   },
   (table) => ({
     tagIdx: index("idx_supertag_fields_tag").on(table.tagId),

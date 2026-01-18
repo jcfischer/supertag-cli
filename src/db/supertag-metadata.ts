@@ -86,6 +86,7 @@ export function isNodeInTrash(
  *
  * Examines the tagDef's children looking for tuples where:
  * - children[0] has a name property (the field label)
+ * - children[1] is the default value node (optional, Spec 092)
  *
  * @param tagDef - The tagDef node to extract fields from
  * @param nodes - Map of all nodes for child lookup
@@ -123,10 +124,24 @@ export function extractFieldsFromTagDef(
 
     // Check if this is a system field marker (raw string, not a node)
     if (!labelNode && labelId in SYSTEM_FIELD_MARKERS) {
+      // Spec 092: Extract default value from second child if present
+      let defaultValueId: string | undefined;
+      let defaultValueText: string | undefined;
+      if (child.children.length >= 2) {
+        const defaultId = child.children[1];
+        const defaultNode = nodes.get(defaultId);
+        if (defaultNode?.props.name) {
+          defaultValueId = defaultId;
+          defaultValueText = defaultNode.props.name;
+        }
+      }
+
       fields.push({
         fieldName: SYSTEM_FIELD_MARKERS[labelId],
         fieldLabelId: labelId, // Keep the marker as the label ID
         fieldOrder: fields.length,
+        defaultValueId,
+        defaultValueText,
       });
       continue;
     }
@@ -136,10 +151,24 @@ export function extractFieldsFromTagDef(
       continue;
     }
 
+    // Spec 092: Extract default value from second child if present
+    let defaultValueId: string | undefined;
+    let defaultValueText: string | undefined;
+    if (child.children.length >= 2) {
+      const defaultId = child.children[1];
+      const defaultNode = nodes.get(defaultId);
+      if (defaultNode?.props.name) {
+        defaultValueId = defaultId;
+        defaultValueText = defaultNode.props.name;
+      }
+    }
+
     fields.push({
       fieldName: labelNode.props.name,
       fieldLabelId: labelId,
       fieldOrder: fields.length, // Order based on position in parent
+      defaultValueId,
+      defaultValueText,
     });
   }
 
@@ -249,16 +278,18 @@ export function extractSupertagMetadata(
   let parentsExtracted = 0;
 
   // Prepare statements for batch insertion with upsert
-  // Enhanced field insert includes normalized_name and inferred_data_type (T-2.3)
+  // Enhanced field insert includes normalized_name, inferred_data_type (T-2.3), and default values (Spec 092)
   const insertField = db.prepare(`
-    INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, default_value_id, default_value_text)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tag_id, field_name) DO UPDATE SET
       tag_name = excluded.tag_name,
       field_label_id = excluded.field_label_id,
       field_order = excluded.field_order,
       normalized_name = excluded.normalized_name,
-      inferred_data_type = excluded.inferred_data_type
+      inferred_data_type = excluded.inferred_data_type,
+      default_value_id = excluded.default_value_id,
+      default_value_text = excluded.default_value_text
   `);
 
   const insertParent = db.prepare(`
@@ -302,7 +333,7 @@ export function extractSupertagMetadata(
       metadata.color
     );
 
-    // Extract and store enhanced fields with normalized_name and inferred_data_type (T-2.3)
+    // Extract and store enhanced fields with normalized_name, inferred_data_type (T-2.3), and default values (Spec 092)
     const fields = extractEnhancedFieldsFromTagDef(node, nodes);
     for (const field of fields) {
       insertField.run(
@@ -312,7 +343,9 @@ export function extractSupertagMetadata(
         field.fieldLabelId,
         field.fieldOrder,
         field.normalizedName,
-        field.inferredDataType
+        field.inferredDataType,
+        field.defaultValueId ?? null,
+        field.defaultValueText ?? null
       );
       fieldsExtracted++;
     }
