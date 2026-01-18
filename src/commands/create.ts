@@ -12,6 +12,7 @@ import { getConfig } from '../config/manager';
 import { getSchemaRegistry } from './schema';
 import { exitWithError, ParseError, ConfigError } from '../utils/errors';
 import { createNode, parseChildObject } from '../services/node-builder';
+import { normalizeFieldInput } from '../services/field-normalizer';
 import type { ChildNodeInput } from '../types';
 
 /**
@@ -211,7 +212,12 @@ export async function createCommand(
       const jsonObj = readJsonFile(options.file);
       const obj = Array.isArray(jsonObj) ? jsonObj[0] : jsonObj;
       nodeName = extractName(obj as Record<string, unknown>);
-      fieldValues = extractFieldsFromJson(obj as Record<string, unknown>);
+      // Use shared normalizer for unified field format (F-091)
+      const normalized = normalizeFieldInput(obj as Record<string, unknown>);
+      fieldValues = normalized.fields;
+      if (options.verbose && normalized.inputFormat !== 'flat') {
+        console.error(`   Field format detected: ${normalized.inputFormat}`);
+      }
       inputSource = 'file';
     }
     // Priority 2: Direct JSON string
@@ -222,7 +228,12 @@ export async function createCommand(
       const json = parseJsonSmart(options.json);
       const jsonObj = Array.isArray(json) ? json[0] : json;
       nodeName = extractName(jsonObj as Record<string, unknown>);
-      fieldValues = extractFieldsFromJson(jsonObj as Record<string, unknown>);
+      // Use shared normalizer for unified field format (F-091)
+      const normalized = normalizeFieldInput(jsonObj as Record<string, unknown>);
+      fieldValues = normalized.fields;
+      if (options.verbose && normalized.inputFormat !== 'flat') {
+        console.error(`   Field format detected: ${normalized.inputFormat}`);
+      }
       inputSource = 'json-arg';
     }
     // Priority 3: Stdin
@@ -241,7 +252,12 @@ export async function createCommand(
           const json = parseJsonSmart(input);
           const jsonObj = Array.isArray(json) ? json[0] : json;
           nodeName = extractName(jsonObj as Record<string, unknown>);
-          fieldValues = extractFieldsFromJson(jsonObj as Record<string, unknown>);
+          // Use shared normalizer for unified field format (F-091)
+          const normalized = normalizeFieldInput(jsonObj as Record<string, unknown>);
+          fieldValues = normalized.fields;
+          if (options.verbose && normalized.inputFormat !== 'flat') {
+            console.error(`   Field format detected: ${normalized.inputFormat}`);
+          }
           inputSource = 'stdin';
         }
       } catch {
@@ -441,21 +457,7 @@ function extractName(json: Record<string, unknown>): string {
 
 /**
  * Extract field values from JSON object
+ * @deprecated Use normalizeFieldInput() from field-normalizer.ts instead
+ * Kept for backwards compatibility reference only
  */
-function extractFieldsFromJson(json: Record<string, unknown>): Record<string, string | string[]> {
-  const fields: Record<string, string | string[]> = {};
-  const skipFields = ['name', 'title', 'label', 'heading', 'subject', 'summary', 'description'];
-
-  for (const [key, value] of Object.entries(json)) {
-    if (skipFields.includes(key)) continue;
-    if (value === undefined || value === null) continue;
-
-    if (Array.isArray(value)) {
-      fields[key] = value.map(v => String(v));
-    } else {
-      fields[key] = String(value);
-    }
-  }
-
-  return fields;
-}
+// Removed in F-091 - replaced by normalizeFieldInput() for unified field format

@@ -14,6 +14,7 @@ import { Database } from "bun:sqlite";
 import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from "../../src/db/migrate";
 import { create } from "../../src/mcp/tools/create";
 import { parseChildObject, parseChildArray } from "../../src/services/node-builder";
+import { normalizeFieldInput } from "../../src/services/field-normalizer";
 
 describe("tana_create MCP Tool", () => {
   const testDir = join(process.cwd(), "tmp-test-mcp-create");
@@ -461,6 +462,208 @@ describe("tana_create MCP Tool", () => {
       expect(result).toEqual({
         name: "Node",
         children: [{ name: "Child" }],
+      });
+    });
+  });
+
+  // ============================================================================
+  // F-091: MCP Unified Field Format Tests
+  // ============================================================================
+
+  describe("MCP unified field format (F-091)", () => {
+    /**
+     * These tests verify that MCP correctly handles the nested field format
+     * that is the canonical MCP pattern, as well as flat format for compatibility.
+     */
+
+    describe("nested field format (canonical MCP)", () => {
+      it("should extract fields from nested format", () => {
+        // Standard MCP input format
+        const mcpInput = {
+          supertag: "todo",
+          name: "Complete quarterly report",
+          fields: {
+            Status: "In Progress",
+            "⚙️ Vault": "Work",
+            "Due Date": "2024-03-15",
+          },
+          dryRun: true,
+        };
+
+        const result = normalizeFieldInput(mcpInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields).toEqual({
+          Status: "In Progress",
+          "⚙️ Vault": "Work",
+          "Due Date": "2024-03-15",
+        });
+      });
+
+      it("should handle empty nested fields object", () => {
+        const mcpInput = {
+          supertag: "todo",
+          name: "Simple task",
+          fields: {},
+        };
+
+        const result = normalizeFieldInput(mcpInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields).toEqual({});
+      });
+
+      it("should handle nested fields with array values", () => {
+        const mcpInput = {
+          supertag: "todo",
+          name: "Tagged task",
+          fields: {
+            Tags: ["urgent", "customer-facing"],
+            Status: "Active",
+          },
+        };
+
+        const result = normalizeFieldInput(mcpInput);
+
+        expect(result.fields.Tags).toEqual(["urgent", "customer-facing"]);
+        expect(result.fields.Status).toBe("Active");
+      });
+    });
+
+    describe("flat field format (backwards compatibility)", () => {
+      it("should accept flat fields for MCP compatibility", () => {
+        // Some MCP clients might send flat format
+        const flatInput = {
+          supertag: "todo",
+          name: "Quick task",
+          Status: "Done",
+          Priority: "High",
+        };
+
+        const result = normalizeFieldInput(flatInput);
+
+        expect(result.inputFormat).toBe("flat");
+        expect(result.fields).toEqual({
+          Status: "Done",
+          Priority: "High",
+        });
+      });
+    });
+
+    describe("MCP with children and fields combined", () => {
+      it("should handle nested fields with children", () => {
+        const mcpInput = {
+          supertag: "meeting",
+          name: "Team Standup",
+          fields: {
+            Status: "Scheduled",
+            "Meeting Type": "Recurring",
+          },
+          children: [
+            { name: "Agenda item 1" },
+            { name: "Agenda item 2" },
+          ],
+        };
+
+        const result = normalizeFieldInput(mcpInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields).toEqual({
+          Status: "Scheduled",
+          "Meeting Type": "Recurring",
+        });
+        // Children are not processed by normalizeFieldInput (separate handling)
+      });
+
+      it("should handle flat fields with children", () => {
+        const mcpInput = {
+          supertag: "meeting",
+          name: "Team Standup",
+          Status: "Scheduled",
+          children: [
+            { name: "Agenda item 1" },
+          ],
+        };
+
+        const result = normalizeFieldInput(mcpInput);
+
+        expect(result.inputFormat).toBe("flat");
+        expect(result.fields).toEqual({ Status: "Scheduled" });
+      });
+    });
+
+    describe("MCP real-world scenarios", () => {
+      it("should handle workshop creation with nested fields", () => {
+        const workshopInput = {
+          supertag: "workshop",
+          name: "Reimen auf der Improbühne",
+          fields: {
+            Topic: "Improtheater",
+            "⚙️ Vault": "Impro",
+            Status: "Planned",
+          },
+          children: [
+            {
+              name: "Grundlagen",
+              children: [
+                { name: "Reimtypen" },
+                { name: "Rhythmus und Metrik" },
+              ],
+            },
+          ],
+          dryRun: true,
+        };
+
+        const result = normalizeFieldInput(workshopInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields).toEqual({
+          Topic: "Improtheater",
+          "⚙️ Vault": "Impro",
+          Status: "Planned",
+        });
+      });
+
+      it("should handle contact creation via MCP", () => {
+        const contactInput = {
+          supertag: "person",
+          name: "John Doe",
+          fields: {
+            Email: "john@example.com",
+            Company: "ACME Corp",
+            Role: "Engineer",
+          },
+        };
+
+        const result = normalizeFieldInput(contactInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields.Email).toBe("john@example.com");
+        expect(result.fields.Company).toBe("ACME Corp");
+        expect(result.fields.Role).toBe("Engineer");
+      });
+
+      it("should handle dry run with all MCP options", () => {
+        const fullInput = {
+          supertag: "todo,project",
+          name: "Multi-tag task",
+          fields: {
+            Status: "Active",
+            Priority: "P1",
+          },
+          target: "INBOX",
+          workspace: "main",
+          dryRun: true,
+        };
+
+        const result = normalizeFieldInput(fullInput);
+
+        expect(result.inputFormat).toBe("nested");
+        expect(result.fields).toEqual({
+          Status: "Active",
+          Priority: "P1",
+        });
+        // Other keys are reserved and not treated as fields
       });
     });
   });

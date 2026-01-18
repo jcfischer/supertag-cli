@@ -5,6 +5,17 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Unified Field Format (F-091)** - Both MCP and CLI now accept fields in two formats:
+  - Nested format (recommended): `{ "fields": { "Status": "Done" } }`
+  - Flat format (legacy): `{ "Status": "Done" }`
+  - Mixed format merges both, with nested taking precedence
+  - New `normalizeFieldInput()` utility in `src/services/field-normalizer.ts`
+  - 35 unit tests + 30 integration tests for field normalization
+
 ## [1.9.8] - 2026-01-17
 
 ### Added

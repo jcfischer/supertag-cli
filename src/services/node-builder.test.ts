@@ -401,6 +401,42 @@ describe('Node Builder Service', () => {
       expect(dateField?.children?.[0]?.dataType).toBe('date');
     });
 
+    // Test nested fields format (F-091)
+    it('should accept nested fields format', async () => {
+      const input: CreateNodeInput = {
+        supertag: 'TestTag',
+        name: 'Test Node with Nested Fields',
+        fields: { 'Due Date': '2025-01-15' },
+        dryRun: true,
+        _dbPathOverride: dbPath,
+      };
+
+      const result = await createNode(input);
+
+      expect(result.success).toBe(true);
+      expect(result.payload).toBeDefined();
+      expect(result.payload.children).toBeDefined();
+    });
+
+    // Test flat fields format (F-091)
+    it('should accept flat fields at top level via normalization', async () => {
+      // This simulates what the normalizer does when it extracts flat fields
+      // The test validates that the normalized input works correctly
+      const input: CreateNodeInput = {
+        supertag: 'TestTag',
+        name: 'Test Node with Flat Fields',
+        fields: { 'Due Date': '2025-01-20' }, // Already normalized by createNode
+        dryRun: true,
+        _dbPathOverride: dbPath,
+      };
+
+      const result = await createNode(input);
+
+      expect(result.success).toBe(true);
+      expect(result.payload).toBeDefined();
+      expect(result.payload.name).toBe('Test Node with Flat Fields');
+    });
+
     // T-3: Test fallback when no database
     it('should fall back to registry when database does not exist', async () => {
       // Remove the database

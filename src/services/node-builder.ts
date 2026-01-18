@@ -30,6 +30,7 @@ import type { SchemaRegistry, SupertagSchema } from '../schema/registry';
 import type { TanaApiNode, ChildNodeInput, CreateNodeInput, CreateNodeResult } from '../types';
 import { UnifiedSchemaService } from './unified-schema-service';
 import { withDatabase } from '../db/with-database';
+import { normalizeFieldInput } from './field-normalizer';
 
 /**
  * Recursively parse a child node object from unknown input
@@ -276,6 +277,19 @@ export async function buildNodePayloadFromDatabase(
 export async function createNode(
   input: CreateNodeInput
 ): Promise<CreateNodeResult> {
+  // Normalize field input: handles both nested {fields: {...}} and flat {...} formats
+  // This is the single integration point for MCP and CLI field normalization
+  const normalizedInput = normalizeFieldInput(input as unknown as Record<string, unknown>);
+
+  // Create a new input object with normalized fields
+  const processedInput: CreateNodeInput = {
+    ...input,
+    fields: Object.keys(normalizedInput.fields).length > 0 ? normalizedInput.fields : input.fields,
+  };
+
+  // Use processedInput for all downstream operations
+  const inputToUse = processedInput;
+
   // Lazy imports to avoid circular dependencies
   const { getSchemaRegistry } = await import('../commands/schema');
   const { ConfigManager } = await import('../config/manager');
@@ -290,7 +304,7 @@ export async function createNode(
   let payload: TanaApiNode | undefined;
 
   // Determine database path (test override or resolved workspace)
-  let dbPath: string | undefined = input._dbPathOverride;
+  let dbPath: string | undefined = inputToUse._dbPathOverride;
 
   if (!dbPath) {
     try {
@@ -303,7 +317,7 @@ export async function createNode(
 
   if (dbPath && existsSync(dbPath)) {
     // Use database for explicit field types
-    payload = await buildNodePayloadFromDatabase(dbPath, input);
+    payload = await buildNodePayloadFromDatabase(dbPath, inputToUse);
   }
 
   // Fall back to schema registry if database not available
@@ -318,14 +332,14 @@ export async function createNode(
     }
 
     // Build the node payload (validates supertag and builds structure)
-    payload = buildNodePayload(registry, input);
+    payload = buildNodePayload(registry, inputToUse);
   }
 
   // Determine target
-  const target = input.target || config.defaultTargetNode || 'INBOX';
+  const target = inputToUse.target || config.defaultTargetNode || 'INBOX';
 
   // If dry run, return without posting
-  if (input.dryRun) {
+  if (inputToUse.dryRun) {
     return {
       success: true,
       payload,
