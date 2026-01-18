@@ -45,6 +45,9 @@ export interface UnifiedField {
   order: number;
   targetSupertagId?: string | null;
   targetSupertagName?: string | null;
+  // Default value (Spec 092)
+  defaultValueId?: string | null;
+  defaultValueText?: string | null;
 }
 
 /**
@@ -512,7 +515,7 @@ export class UnifiedSchemaService {
     // Use prepared statement for performance
     if (!this.fieldsStatement) {
       this.fieldsStatement = this.db.query(`
-        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type, target_supertag_id, target_supertag_name
+        SELECT tag_id, field_name, field_label_id, field_order, normalized_name, description, inferred_data_type, target_supertag_id, target_supertag_name, default_value_id, default_value_text
         FROM supertag_fields
         WHERE tag_id = ?
         ORDER BY field_order
@@ -530,6 +533,8 @@ export class UnifiedSchemaService {
       inferred_data_type: string | null;
       target_supertag_id: string | null;
       target_supertag_name: string | null;
+      default_value_id: string | null;
+      default_value_text: string | null;
     }>;
 
     return rows.map((row) => ({
@@ -542,6 +547,8 @@ export class UnifiedSchemaService {
       order: row.field_order,
       targetSupertagId: row.target_supertag_id,
       targetSupertagName: row.target_supertag_name,
+      defaultValueId: row.default_value_id,
+      defaultValueText: row.default_value_text,
     }));
   }
 
@@ -714,10 +721,11 @@ export class UnifiedSchemaService {
    * Build a Tana API node payload for one or more supertags.
    *
    * Replicates SchemaRegistry.buildNodePayload using database data.
+   * Auto-populates default field values when user doesn't provide a value (Spec 092).
    *
    * @param supertagInput Single supertag name, comma-separated names, or array of names
    * @param nodeName Node name
-   * @param fieldValues Field values
+   * @param fieldValues Field values (explicit empty string overrides default)
    * @returns TanaApiNode payload ready for Input API
    */
   buildNodePayload(
@@ -743,6 +751,11 @@ export class UnifiedSchemaService {
     // Get combined fields from all supertags
     const allFields = this.getFieldsForMultipleSupertags(supertags);
 
+    // Normalize field names provided by user for comparison
+    const userFieldNames = new Set(
+      Object.keys(fieldValues).map((name) => normalizeName(name))
+    );
+
     const children: (TanaApiNode | TanaApiFieldNode)[] = [];
 
     // Process each provided field value
@@ -761,6 +774,26 @@ export class UnifiedSchemaService {
       }
     }
 
+    // Spec 092: Apply default values for fields not provided by user
+    for (const field of allFields) {
+      // Skip if user provided a value (including explicit empty)
+      if (userFieldNames.has(field.normalizedName)) {
+        continue;
+      }
+
+      // Skip if no default value defined
+      if (!field.defaultValueId) {
+        continue;
+      }
+
+      // Build field node using default value
+      // Use reference type if we have a node ID (for options/reference fields)
+      const fieldNode = this.buildDefaultFieldNode(field);
+      if (fieldNode) {
+        children.push(fieldNode);
+      }
+    }
+
     // Deduplicate supertag IDs (in case same tag resolved via different names)
     const uniqueTagIds = [...new Set(supertags.map((s) => s.id))];
 
@@ -768,6 +801,37 @@ export class UnifiedSchemaService {
       name: nodeName,
       supertags: uniqueTagIds.map((id) => ({ id })),
       children: children.length > 0 ? children : undefined,
+    };
+  }
+
+  /**
+   * Build a field node using the field's default value.
+   * Used for auto-populating defaults (Spec 092).
+   */
+  private buildDefaultFieldNode(field: UnifiedField): TanaApiFieldNode | null {
+    if (!field.defaultValueId) {
+      return null;
+    }
+
+    const fieldChildren: TanaApiNode[] = [];
+
+    // For reference/options fields, use the node ID as a reference
+    if (field.dataType === "reference" || field.dataType === "options") {
+      fieldChildren.push({
+        dataType: "reference",
+        id: field.defaultValueId,
+      } as TanaApiNode);
+    } else if (field.defaultValueText) {
+      // For other field types, use the text value
+      fieldChildren.push({ name: field.defaultValueText });
+    } else {
+      return null;
+    }
+
+    return {
+      type: "field",
+      attributeId: field.attributeId,
+      children: fieldChildren,
     };
   }
 
