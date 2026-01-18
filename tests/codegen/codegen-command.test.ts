@@ -43,7 +43,9 @@ function createTestDb(): Database {
       description TEXT,
       inferred_data_type TEXT,
         target_supertag_id TEXT,
-        target_supertag_name TEXT
+        target_supertag_name TEXT,
+        default_value_id TEXT,
+        default_value_text TEXT
     )
   `);
 

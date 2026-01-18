@@ -50,7 +50,11 @@ describe("extractFieldTypesFromExport", () => {
         field_order INTEGER DEFAULT 0,
         normalized_name TEXT,
         description TEXT,
-        inferred_data_type TEXT NOT NULL DEFAULT 'text'
+        inferred_data_type TEXT NOT NULL DEFAULT 'text',
+        target_supertag_id TEXT,
+        target_supertag_name TEXT,
+        default_value_id TEXT,
+        default_value_text TEXT
       );
     `);
   });

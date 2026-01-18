@@ -903,3 +903,178 @@ describe("UnifiedSchemaService toSchemaRegistryJSON (T-4.1)", () => {
     expect(emailField.targetSupertag).toBeUndefined();
   });
 });
+
+// ============================================================================
+// Spec 092: Field Default Values
+// ============================================================================
+
+describe("UnifiedSchemaService default field values (Spec 092)", () => {
+  let db: Database;
+  let service: UnifiedSchemaService;
+
+  beforeAll(() => {
+    db = new Database(":memory:");
+    migrateSupertagMetadataSchema(db);
+    migrateSchemaConsolidation(db);
+  });
+
+  afterAll(() => {
+    db.close();
+  });
+
+  beforeEach(() => {
+    db.run("DELETE FROM supertag_metadata");
+    db.run("DELETE FROM supertag_fields");
+    db.run("DELETE FROM supertag_parents");
+    service = new UnifiedSchemaService(db);
+
+    // Set up test data: todo supertag with fields, one having a default value
+    db.run(`
+      INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+      VALUES ('todo-id', 'todo', 'todo')
+    `);
+    db.run(`
+      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, default_value_id, default_value_text)
+      VALUES ('todo-id', 'todo', 'Status', 'status-field-id', 0, 'status', 'reference', 'later-id', 'Later'),
+             ('todo-id', 'todo', 'Priority', 'priority-field-id', 1, 'priority', 'text', NULL, NULL),
+             ('todo-id', 'todo', 'Notes', 'notes-field-id', 2, 'notes', 'text', 'default-notes-id', 'Default notes text')
+    `);
+  });
+
+  describe("loadFieldsForTag includes default values", () => {
+    it("should include default value properties in UnifiedField", () => {
+      const fields = service.getFields("todo-id");
+      const statusField = fields.find(f => f.name === "Status");
+
+      expect(statusField).toBeDefined();
+      expect(statusField!.defaultValueId).toBe("later-id");
+      expect(statusField!.defaultValueText).toBe("Later");
+    });
+
+    it("should return null for fields without defaults", () => {
+      const fields = service.getFields("todo-id");
+      const priorityField = fields.find(f => f.name === "Priority");
+
+      expect(priorityField).toBeDefined();
+      expect(priorityField!.defaultValueId).toBeNull();
+      expect(priorityField!.defaultValueText).toBeNull();
+    });
+  });
+
+  describe("buildNodePayload auto-populates defaults", () => {
+    it("should use default value when user provides no value", () => {
+      const payload = service.buildNodePayload("todo", "Buy groceries", {});
+
+      // Should have 2 field children: Status (default) and Notes (default)
+      expect(payload.children).toHaveLength(2);
+
+      // Find Status field - should be reference to default value
+      const statusField = payload.children!.find(
+        (c: any) => c.attributeId === "status-field-id"
+      ) as any;
+      expect(statusField).toBeDefined();
+      expect(statusField.children[0].dataType).toBe("reference");
+      expect(statusField.children[0].id).toBe("later-id");
+    });
+
+    it("should use user-provided value over default", () => {
+      const payload = service.buildNodePayload("todo", "Buy groceries", {
+        Status: "done-id-123", // 11 chars, recognized as node ID
+      });
+
+      // Find Status field
+      const statusField = payload.children!.find(
+        (c: any) => c.attributeId === "status-field-id"
+      ) as any;
+      expect(statusField).toBeDefined();
+      expect(statusField.children[0].id).toBe("done-id-123");
+    });
+
+    it("should use explicit empty string over default", () => {
+      const payload = service.buildNodePayload("todo", "Buy groceries", {
+        Notes: "", // Explicit empty overrides default
+      });
+
+      // Notes field should not appear (empty string is skipped)
+      // But Status should have default since not provided
+      const notesField = payload.children!.find(
+        (c: any) => c.attributeId === "notes-field-id"
+      );
+      expect(notesField).toBeUndefined();
+
+      // Status should have default
+      const statusField = payload.children!.find(
+        (c: any) => c.attributeId === "status-field-id"
+      );
+      expect(statusField).toBeDefined();
+    });
+
+    it("should handle text field defaults", () => {
+      const payload = service.buildNodePayload("todo", "Buy groceries", {
+        Status: "custom-status-id", // Override default
+      });
+
+      // Notes should have text default
+      const notesField = payload.children!.find(
+        (c: any) => c.attributeId === "notes-field-id"
+      ) as any;
+      expect(notesField).toBeDefined();
+      expect(notesField.children[0].name).toBe("Default notes text");
+    });
+
+    it("should not create field for missing default when field has no default", () => {
+      const payload = service.buildNodePayload("todo", "Buy groceries", {
+        Status: "done-id-123",
+        Notes: "My notes",
+      });
+
+      // Priority has no default and wasn't provided, so shouldn't appear
+      const priorityField = payload.children!.find(
+        (c: any) => c.attributeId === "priority-field-id"
+      );
+      expect(priorityField).toBeUndefined();
+    });
+  });
+
+  describe("inheritance and defaults", () => {
+    beforeEach(() => {
+      // Add project supertag that extends todo
+      db.run(`
+        INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+        VALUES ('project-id', 'project', 'project')
+      `);
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, default_value_id, default_value_text)
+        VALUES ('project-id', 'project', 'Team', 'team-field-id', 0, 'team', 'text', 'default-team-id', 'Engineering')
+      `);
+      db.run(`
+        INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
+        VALUES ('project-id', 'todo-id')
+      `);
+    });
+
+    it("should apply defaults from inherited fields", () => {
+      const payload = service.buildNodePayload("project", "New project", {});
+
+      // Should have defaults from both project and todo:
+      // - Status (from todo, reference default)
+      // - Notes (from todo, text default)
+      // - Team (from project, text default)
+      expect(payload.children).toHaveLength(3);
+
+      // Check inherited Status default
+      const statusField = payload.children!.find(
+        (c: any) => c.attributeId === "status-field-id"
+      ) as any;
+      expect(statusField).toBeDefined();
+      expect(statusField.children[0].id).toBe("later-id");
+
+      // Check own Team default
+      const teamField = payload.children!.find(
+        (c: any) => c.attributeId === "team-field-id"
+      ) as any;
+      expect(teamField).toBeDefined();
+      expect(teamField.children[0].name).toBe("Engineering");
+    });
+  });
+});

@@ -329,6 +329,8 @@ export function migrateSchemaConsolidation(db: Database): void {
         inferred_data_type TEXT,
         target_supertag_id TEXT,
         target_supertag_name TEXT,
+        default_value_id TEXT,
+        default_value_text TEXT,
         UNIQUE(tag_id, field_name)
       )
     `);
@@ -349,6 +351,13 @@ export function migrateSchemaConsolidation(db: Database): void {
     }
     if (!columnExists(db, "supertag_fields", "target_supertag_name")) {
       db.run("ALTER TABLE supertag_fields ADD COLUMN target_supertag_name TEXT");
+    }
+    // Default value columns (Spec 092)
+    if (!columnExists(db, "supertag_fields", "default_value_id")) {
+      db.run("ALTER TABLE supertag_fields ADD COLUMN default_value_id TEXT");
+    }
+    if (!columnExists(db, "supertag_fields", "default_value_text")) {
+      db.run("ALTER TABLE supertag_fields ADD COLUMN default_value_text TEXT");
     }
   }
 
@@ -376,6 +385,9 @@ export function needsSchemaConsolidationMigration(db: Database): boolean {
     if (!columnExists(db, "supertag_fields", "inferred_data_type")) return true;
     if (!columnExists(db, "supertag_fields", "target_supertag_id")) return true;
     if (!columnExists(db, "supertag_fields", "target_supertag_name")) return true;
+    // Default value columns (Spec 092)
+    if (!columnExists(db, "supertag_fields", "default_value_id")) return true;
+    if (!columnExists(db, "supertag_fields", "default_value_text")) return true;
   }
 
   return false;

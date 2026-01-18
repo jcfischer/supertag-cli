@@ -33,6 +33,9 @@ export interface SupertagField {
   inferredDataType?: string; // Inferred data type (text, date, email, etc.) - Spec 020
   targetSupertagId?: string; // Target supertag ID for reference fields (Options from Supertag)
   targetSupertagName?: string; // Target supertag name for reference fields
+  // Default value (Spec 092)
+  defaultValueId?: string; // Node ID of the default value (tuple's second child)
+  defaultValueText?: string; // Name/text of the default value node
 }
 
 /**
@@ -59,6 +62,9 @@ export interface InheritedField {
   targetSupertagId?: string; // Target supertag ID for reference fields (Options from Supertag)
   targetSupertagName?: string; // Target supertag name for reference fields
   system?: boolean; // True if this is a system field (SYS_A*) - Spec 074
+  // Default value (Spec 092)
+  defaultValueId?: string; // Node ID of the default value
+  defaultValueText?: string; // Name/text of the default value node
 }
 
 /**
@@ -128,6 +134,9 @@ export interface ExtractedField {
   fieldName: string;
   fieldLabelId: string;
   fieldOrder: number;
+  // Default value (Spec 092)
+  defaultValueId?: string; // Node ID of the default value (tuple's second child)
+  defaultValueText?: string; // Name/text of the default value node
 }
 
 /**
