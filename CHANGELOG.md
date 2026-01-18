@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-01-18
+
 ### Added
+
+- **Field Default Values (F-092)** - Auto-populate field default values when creating nodes
+  - Extracts default values from Tana supertag definitions during sync
+  - Automatically applies defaults for fields not provided by user
+  - Explicit empty values override defaults
+  - Shared implementation between CLI and MCP (no code duplication)
+  - New database columns: `default_value_id` and `default_value_text` in `supertag_fields`
 
 - **Unified Field Format (F-091)** - Both MCP and CLI now accept fields in two formats:
   - Nested format (recommended): `{ "fields": { "Status": "Done" } }`
