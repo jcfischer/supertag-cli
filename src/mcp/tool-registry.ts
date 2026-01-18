@@ -163,7 +163,7 @@ export const TOOL_METADATA: ToolMetadata[] = [
   // Mutate tools
   {
     name: 'tana_create',
-    description: 'Create new node with supertag',
+    description: 'Create new node with supertag. Returns nodeId of created node for chaining.',
     category: 'mutate',
     example: 'Create a new #todo item',
   },

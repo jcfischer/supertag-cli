@@ -1,0 +1,147 @@
+# Supertag CLI - Deploy Configuration
+#
+# This project uses release.sh which:
+# 1. Runs tests
+# 2. Updates website guide at ~/work/web/invisible-store/supertag/
+# 3. Builds website with Vite
+# 4. Creates git tag and pushes (triggers GitHub Actions for multi-platform builds)
+# 5. Pushes website changes
+#
+# Usage:
+#   /deploy.validate     - Run pre-checks only
+#   /deploy              - Full release (prompts for --push)
+#
+# The actual binary builds happen in GitHub Actions after tag push.
+# See: .github/workflows/release.yml
+
+validation:
+  pre:
+    # ─────────────────────────────────────────────────────────────
+    # PRE-DEPLOYMENT CHECKS
+    # These verify the project is ready for release
+    # ─────────────────────────────────────────────────────────────
+
+    - name: tests
+      # Full test suite (same as release.sh runs)
+      command: bun run test:full
+      required: true
+      timeout: 120000  # 2 minutes
+
+    - name: typecheck
+      # TypeScript type checking
+      command: bun run typecheck
+      required: true
+      timeout: 60000
+
+    - name: build-main
+      # Verify main CLI builds
+      command: bun build src/index.ts --compile --outfile=/tmp/supertag-test
+      required: true
+      timeout: 60000
+
+    - name: build-mcp
+      # Verify MCP server builds
+      command: bun build src/mcp/index.ts --compile --outfile=/tmp/supertag-mcp-test
+      required: true
+      timeout: 60000
+
+    - name: git-clean
+      # No uncommitted changes (except version bump files)
+      command: |
+        # Allow package.json and CHANGELOG.md to be modified (version bump)
+        modified=$(git status --porcelain | grep -v 'package.json' | grep -v 'CHANGELOG.md' | grep -v 'export/package.json' || true)
+        if [ -n "$modified" ]; then
+          echo "Uncommitted changes found:"
+          echo "$modified"
+          exit 1
+        fi
+      required: true
+      timeout: 5000
+
+    - name: on-main-branch
+      # Should be on main branch for release
+      command: |
+        branch=$(git branch --show-current)
+        if [ "$branch" != "main" ]; then
+          echo "Not on main branch (on: $branch)"
+          exit 1
+        fi
+      required: true
+      timeout: 5000
+
+    - name: website-exists
+      # Website directory must exist for guide update
+      command: test -d ~/work/web/invisible-store/supertag
+      required: true
+      timeout: 5000
+
+    - name: changelog-updated
+      # Reminder to update CHANGELOG (warning only)
+      command: |
+        version=$(grep '"version"' package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
+        if ! grep -q "## \[$version\]" CHANGELOG.md 2>/dev/null; then
+          echo "Warning: CHANGELOG.md may not have entry for v$version"
+          exit 1
+        fi
+      required: false  # Warning only
+      timeout: 5000
+
+  post:
+    # ─────────────────────────────────────────────────────────────
+    # POST-DEPLOYMENT CHECKS
+    # These verify the release was successful
+    # ─────────────────────────────────────────────────────────────
+
+    - name: tag-exists
+      # Verify git tag was created
+      command: |
+        version=$(grep '"version"' package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
+        if git tag -l "v$version" | grep -q "v$version"; then
+          echo "Tag v$version exists"
+        else
+          echo "Tag v$version not found"
+          exit 1
+        fi
+      required: false
+      timeout: 5000
+
+    - name: tag-pushed
+      # Verify tag was pushed to origin
+      command: |
+        version=$(grep '"version"' package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
+        if git ls-remote --tags origin | grep -q "v$version"; then
+          echo "Tag v$version pushed to origin"
+        else
+          echo "Tag v$version not found on origin"
+          exit 1
+        fi
+      required: false
+      timeout: 10000
+
+    - name: github-actions-url
+      # Show GitHub Actions URL for monitoring
+      command: |
+        echo "Monitor build progress at:"
+        echo "https://github.com/jcfischer/supertag-cli/actions"
+      required: false
+      timeout: 1000
+
+deploy:
+  # ─────────────────────────────────────────────────────────────
+  # DEPLOYMENT
+  # Uses release.sh which handles everything
+  # ─────────────────────────────────────────────────────────────
+
+  type: custom
+
+  # Full automated release with push
+  # This will:
+  # 1. Run tests (again, as safety)
+  # 2. Update website guide
+  # 3. Build website
+  # 4. Commit, tag, and push
+  # 5. Push website changes
+  command: ./release.sh --push
+
+  # Alternative: dry-run mode (shows manual steps)
+  # command: ./release.sh

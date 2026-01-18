@@ -110,7 +110,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'tana_create',
         description:
-          'Create a new node in Tana with a supertag. For INLINE REFERENCES in text, use: <span data-inlineref-node="NODE_ID">Display Text</span>. IMPORTANT: Never end text with an inline ref - always add text after </span>. For CHILD REFERENCES, use children parameter with {name, id}. Requires schema registry to be synced first. Use dryRun=true to validate without posting.',
+          'Create a new node in Tana with a supertag. Returns nodeId of created node for immediate chaining. For INLINE REFERENCES in text, use: <span data-inlineref-node="NODE_ID">Display Text</span>. IMPORTANT: Never end text with an inline ref - always add text after </span>. For CHILD REFERENCES, use children parameter with {name, id}. Requires schema registry to be synced first. Use dryRun=true to validate without posting.',
         inputSchema: {
           ...schemas.zodToJsonSchema(schemas.createSchema),
           // Override name and children description to document inline references
@@ -206,7 +206,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'tana_batch_create',
         description:
-          'Create multiple nodes in a single request. Each node requires a supertag and name. Use dryRun=true to validate without creating. Returns per-node results with success/error status.',
+          'Create multiple nodes in a single request. Each node requires a supertag and name. Use dryRun=true to validate without creating. Returns per-node results with nodeIds for chaining.',
         inputSchema: schemas.zodToJsonSchema(schemas.batchCreateSchema),
       },
       {

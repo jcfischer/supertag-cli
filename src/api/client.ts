@@ -101,15 +101,26 @@ export class TanaApiClient {
         );
       }
 
-      const data = await response.json() as { nodeIds?: string[] };
+      // Tana API returns { children: [{ nodeId, name, type }] } format
+      const data = await response.json() as {
+        children?: Array<{ nodeId?: string; name?: string; type?: string }>;
+        nodeIds?: string[];  // Legacy format, kept for compatibility
+      };
 
       if (verbose) {
         getLogger().debug('API request successful');
       }
 
+      // Extract nodeIds from children array (primary) or nodeIds array (legacy)
+      const nodeIds = data.children
+        ?.map(child => child.nodeId)
+        .filter((id): id is string => id !== undefined)
+        ?? data.nodeIds
+        ?? [];
+
       return {
         success: true,
-        nodeIds: data.nodeIds || [],
+        nodeIds,
       };
 
     } catch (error) {

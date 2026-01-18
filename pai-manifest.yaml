@@ -1,64 +1,75 @@
 # PAI Dependency Manifest (auto-generated)
 # Review and adjust as needed
 name: supertag-cli
-version: 1.8.0
+version: 1.9.0
 type: cli
 description: CLI for Tana integration - query, create, sync, and manage Tana workspaces with semantic search
 
 provides:
   cli:
-    - command: supertag-cli format
-    - command: supertag-cli post
-    - command: supertag-cli config
-    - command: supertag-cli create <supertag> [name]
-    - command: supertag-cli paths
-    - command: supertag-cli migrate
-    - command: supertag-cli sync
-    - command: supertag-cli list
-    - command: supertag-cli show
-    - command: supertag-cli search
-    - command: supertag-cli generate
-    - command: supertag-cli show <node-id>
-    - command: supertag-cli refs <node-id>
-    - command: supertag-cli recent
-    - command: supertag-cli add <rootFileId>
-    - command: supertag-cli update <alias>
-    - command: supertag-cli remove <alias>
-    - command: supertag-cli set-default <alias>
-    - command: supertag-cli show [alias]
-    - command: supertag-cli enable <alias>
-    - command: supertag-cli disable <alias>
-    - command: supertag-cli get [ids...]
-    - command: supertag-cli create
-    - command: supertag-cli values <name>
-    - command: supertag-cli search <query>
-    - command: supertag-cli stats
-    - command: supertag-cli filter-stats
-    - command: supertag-cli maintain
-    - command: supertag-cli server
-    - command: supertag-cli start
-    - command: supertag-cli stop
-    - command: supertag-cli status
-    - command: supertag-cli top
-    - command: supertag-cli show <tagname>
-    - command: supertag-cli inheritance <tagname>
-    - command: supertag-cli fields <tagname>
-    - command: supertag-cli visualize
-    - command: supertag-cli check
-    - command: supertag-cli download
-    - command: supertag-cli install
-    - command: supertag-cli monitor
-    - command: supertag-cli index
-    - command: supertag-cli cleanup
-    - command: supertag-cli nodes
-    - command: supertag-cli tags
-    - command: supertag-cli tagged <tagname>
-    - command: supertag-cli top-tags
-    - command: supertag-cli node <node-id>
+    - command: supertag format [options]
+    - command: supertag post [options]
+    - command: supertag config [options]
+    - command: supertag schema sync [options] [path]
+    - command: supertag schema list [options]
+    - command: supertag schema show [options] <name>
+    - command: supertag schema search [options] <query>
+    - command: supertag create [options] <supertag> [name]
+    - command: supertag sync monitor [options]
+    - command: supertag sync index [options]
+    - command: supertag sync status [options]
+    - command: supertag sync cleanup [options]
+    - command: supertag server start [options]
+    - command: supertag server stop
+    - command: supertag server status [options]
+    - command: supertag workspace list [options]
+    - command: supertag workspace add [options] <rootFileId>
+    - command: supertag workspace update [options] <alias>
+    - command: supertag workspace remove [options] <alias>
+    - command: supertag workspace set-default <alias>
+    - command: supertag workspace show [alias]
+    - command: supertag workspace enable <alias>
+    - command: supertag workspace disable <alias>
+    - command: supertag embed config [options]
+    - command: supertag embed generate [options]
+    - command: supertag embed stats [options]
+    - command: supertag embed filter-stats [options]
+    - command: supertag embed maintain [options]
+    - command: supertag search [options] [query]
+    - command: supertag nodes show [options] <node-id>
+    - command: supertag nodes refs [options] <node-id>
+    - command: supertag nodes recent [options]
+    - command: supertag tags list [options]
+    - command: supertag tags top [options]
+    - command: supertag tags show [options] <tagname>
+    - command: supertag tags inheritance [options] <tagname>
+    - command: supertag tags fields [options] <tagname>
+    - command: supertag tags visualize [options]
+    - command: supertag stats [options]
+    - command: supertag fields list [options]
+    - command: supertag fields values [options] <name>
+    - command: supertag fields search [options] <query>
+    - command: supertag transcript list [options]
+    - command: supertag transcript show [options] <id>
+    - command: supertag transcript search [options] <query>
+    - command: supertag batch get [options] [ids...]
+    - command: supertag batch create [options]
+    - command: supertag query [options] <query>
+    - command: supertag aggregate [options]
+    - command: supertag related [options] <nodeId>
+    - command: supertag codegen generate [options]
+    - command: supertag update check [options]
+    - command: supertag update download [options]
+    - command: supertag update install [options]
+    - command: supertag errors [options]
+    - command: supertag attachments list [options]
+    - command: supertag attachments extract [options]
+    - command: supertag attachments get [options] [nodeId]
+    - command: supertag attachments stats [options]
+    - command: supertag paths [options]
+    - command: supertag migrate [options]
 
 depends_on:
-  - name: supertag
-    type: library
   - name: resona
     type: library
 
