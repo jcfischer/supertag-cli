@@ -252,6 +252,19 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f -name "*.zip"
 
+      - name: Create version-less copies for latest URLs
+        run: |
+          # Create copies without version numbers for /releases/latest/download/ URLs
+          for platform in macos-arm64 macos-x64 linux-x64 windows-x64; do
+            versioned=$(find artifacts -name "supertag-cli-v*-${platform}.zip" | head -1)
+            if [ -n "$versioned" ]; then
+              cp "$versioned" "artifacts/supertag-cli-${platform}.zip"
+              echo "Created: artifacts/supertag-cli-${platform}.zip"
+            fi
+          done
+          echo "Version-less copies created:"
+          ls -la artifacts/*.zip 2>/dev/null || true
+
       - name: Extract changelog for this version
         id: changelog
         run: |
@@ -276,5 +289,9 @@ jobs:
             artifacts/supertag-cli-macos-x64/*.zip
             artifacts/supertag-cli-linux-x64/*.zip
             artifacts/supertag-cli-windows-x64/*.zip
+            artifacts/supertag-cli-macos-arm64.zip
+            artifacts/supertag-cli-macos-x64.zip
+            artifacts/supertag-cli-linux-x64.zip
+            artifacts/supertag-cli-windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
