@@ -480,7 +480,35 @@ export class AggregationService {
   }
 
   /**
-   * Build SQL for a single WHERE condition on a field value
+   * Core node fields that map directly to the nodes table
+   */
+  private static readonly NODE_FIELDS = ["id", "name", "created", "updated", "parentId", "nodeType", "doneAt"];
+
+  /**
+   * Map field name to SQL column for core node fields
+   */
+  private mapNodeField(field: string): string {
+    const mapping: Record<string, string> = {
+      id: "n.id",
+      name: "n.name",
+      created: "n.created",
+      updated: "n.updated",
+      parentId: "n.parent_id",
+      nodeType: "n.node_type",
+      doneAt: "n.done_at",
+    };
+    return mapping[field] ?? `n.${field}`;
+  }
+
+  /**
+   * Check if field is a core node field (vs custom field)
+   */
+  private isNodeField(field: string): boolean {
+    return AggregationService.NODE_FIELDS.includes(field);
+  }
+
+  /**
+   * Build SQL for a single WHERE condition
    */
   private buildSingleWhereCondition(
     clause: WhereClause,
@@ -489,13 +517,18 @@ export class AggregationService {
     const { field, operator, value } = clause;
     const params: SQLQueryBindings[] = [];
 
+    // Handle core node fields (name, created, etc.) directly on nodes table
+    if (this.isNodeField(field)) {
+      return this.buildNodeFieldCondition(clause);
+    }
+
     // Handle is_empty specially - use NOT EXISTS subquery
     if (operator === "is_empty") {
       const sql = `NOT EXISTS (SELECT 1 FROM field_values wfv${index} WHERE wfv${index}.parent_id = n.id AND wfv${index}.field_name = ? AND wfv${index}.value_text IS NOT NULL AND wfv${index}.value_text != '')`;
       return { sql, params: [field] };
     }
 
-    // For other operators, use a correlated subquery with EXISTS
+    // For custom fields, use a correlated subquery with EXISTS
     // This avoids JOIN conflicts with GROUP BY
     const alias = `wfv${index}`;
     let condition: string;
@@ -530,6 +563,58 @@ export class AggregationService {
     // Use EXISTS subquery to filter
     const sql = `EXISTS (SELECT 1 FROM field_values ${alias} WHERE ${alias}.parent_id = n.id AND ${alias}.field_name = ? AND ${condition})`;
     params.unshift(field); // Add field name as first param
+
+    return { sql, params };
+  }
+
+  /**
+   * Build SQL condition for core node fields (name, created, etc.)
+   */
+  private buildNodeFieldCondition(
+    clause: WhereClause
+  ): { sql: string; params: SQLQueryBindings[]; join?: string } {
+    const { field, operator, value } = clause;
+    const column = this.mapNodeField(field);
+    const params: SQLQueryBindings[] = [];
+    let sql: string;
+
+    switch (operator) {
+      case "=":
+        sql = `${column} = ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case "!=":
+        sql = `${column} != ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case ">":
+        sql = `${column} > ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case "<":
+        sql = `${column} < ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case ">=":
+        sql = `${column} >= ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case "<=":
+        sql = `${column} <= ?`;
+        params.push(value as SQLQueryBindings);
+        break;
+      case "~":
+      case "contains":
+        sql = `${column} LIKE ?`;
+        params.push(`%${value}%`);
+        break;
+      case "is_empty":
+        sql = `(${column} IS NULL OR ${column} = '')`;
+        break;
+      default:
+        sql = `${column} = ?`;
+        params.push(value as SQLQueryBindings);
+    }
 
     return { sql, params };
   }

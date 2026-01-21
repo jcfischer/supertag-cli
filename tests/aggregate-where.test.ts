@@ -215,4 +215,45 @@ describe("Aggregate --where clause (F-095)", () => {
       expect(result.total).toBe(1);
     });
   });
+
+  describe("core node field filtering", () => {
+    test("filter by name contains", () => {
+      const result = service.aggregate({
+        find: "todo",
+        groupBy: [{ field: "Status" }],
+        aggregate: [{ fn: "count" }],
+        where: [{ field: "name", operator: "contains", value: "Active" }],
+      });
+
+      // Should match todos with "Active" in name: Active Todo 1, Active Todo 2, Active Todo 3
+      expect(result.total).toBe(3);
+    });
+
+    test("filter by name equals", () => {
+      const result = service.aggregate({
+        find: "todo",
+        groupBy: [{ field: "Status" }],
+        aggregate: [{ fn: "count" }],
+        where: [{ field: "name", operator: "=", value: "Active Todo 1" }],
+      });
+
+      expect(result.total).toBe(1);
+    });
+
+    test("combine name filter with field filter", () => {
+      const result = service.aggregate({
+        find: "todo",
+        groupBy: [{ field: "Priority" }],
+        aggregate: [{ fn: "count" }],
+        where: [
+          { field: "name", operator: "contains", value: "Active" },
+          { field: "Priority", operator: "=", value: "High" },
+        ],
+      });
+
+      // Active todos with High priority: Active Todo 1, Active Todo 2
+      expect(result.total).toBe(2);
+      expect(result.groups["High"]).toBe(2);
+    });
+  });
 });
