@@ -45,6 +45,40 @@ interface AggregateOptions extends StandardOptions {
 }
 
 /**
+ * Get display width of string (accounts for emojis taking 2 columns)
+ */
+function getDisplayWidth(str: string): number {
+  // Simple heuristic: count emoji characters as 2 width
+  // This handles most common cases
+  let width = 0;
+  for (const char of str) {
+    const code = char.codePointAt(0) ?? 0;
+    // Emoji ranges (simplified - covers most common emojis)
+    if (
+      (code >= 0x1F300 && code <= 0x1F9FF) || // Misc Symbols, Emoticons, etc.
+      (code >= 0x2600 && code <= 0x26FF) ||   // Misc Symbols
+      (code >= 0x2700 && code <= 0x27BF) ||   // Dingbats
+      (code >= 0xFE00 && code <= 0xFE0F) ||   // Variation Selectors
+      (code >= 0x1F000 && code <= 0x1FFFF)    // Extended emoji
+    ) {
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
+
+/**
+ * Pad string to target width (accounts for display width)
+ */
+function padToWidth(str: string, targetWidth: number): string {
+  const displayWidth = getDisplayWidth(str);
+  const padding = Math.max(0, targetWidth - displayWidth);
+  return str + " ".repeat(padding);
+}
+
+/**
  * Format a single-level aggregation result for table output
  */
 function formatFlatResult(
@@ -54,26 +88,38 @@ function formatFlatResult(
 ): void {
   const groupLabel = groupBySpec[0].field ?? groupBySpec[0].period ?? "group";
 
+  // Calculate column widths
+  const entries = Object.entries(result.groups);
+  const groupColWidth = Math.max(
+    getDisplayWidth(groupLabel),
+    ...entries.map(([key]) => getDisplayWidth(key))
+  ) + 2; // Add padding
+
+  const countColWidth = Math.max(
+    getDisplayWidth("Count"),
+    ...entries.map(([, count]) => getDisplayWidth(formatNumber(count as number, true)))
+  ) + 2;
+
   // Header
-  const headerCols = [groupLabel, "Count"];
-  if (showPercent && result.percentages) {
-    headerCols.push("Percent");
-  }
   console.log(`\n${header(EMOJI.aggregate, `Aggregation Results`)}\n`);
-  console.log(`   ${headerCols.join("\t")}`);
-  console.log(`   ${"─".repeat(40)}`);
+  let headerLine = `   ${padToWidth(groupLabel, groupColWidth)}${padToWidth("Count", countColWidth)}`;
+  if (showPercent && result.percentages) {
+    headerLine += "Percent";
+  }
+  console.log(headerLine);
+  console.log(`   ${"─".repeat(groupColWidth + countColWidth + (showPercent ? 10 : 0))}`);
 
   // Rows
-  for (const [key, count] of Object.entries(result.groups)) {
-    const cols = [key, formatNumber(count as number, true)];
+  for (const [key, count] of entries) {
+    let row = `   ${padToWidth(key, groupColWidth)}${padToWidth(formatNumber(count as number, true), countColWidth)}`;
     if (showPercent && result.percentages) {
-      cols.push(`${result.percentages[key]}%`);
+      row += `${result.percentages[key]}%`;
     }
-    console.log(`   ${cols.join("\t")}`);
+    console.log(row);
   }
 
   // Footer
-  console.log(`   ${"─".repeat(40)}`);
+  console.log(`   ${"─".repeat(groupColWidth + countColWidth + (showPercent ? 10 : 0))}`);
   console.log(`   Total: ${formatNumber(result.total, true)} nodes in ${result.groupCount} groups`);
 
   if (result.warning) {
