@@ -5,6 +5,28 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.1] - 2026-01-21
+
+### Fixed
+
+- **Core Node Fields in Aggregate --where** - WHERE clause now supports filtering by core node fields like `name`
+  - Previously: `--where "name~keyword"` returned 0 results
+  - Now: Core fields (name, created, updated) filter directly on nodes table
+  - Example: `supertag aggregate --tag todo --group-by Priority --where "name~urgent"`
+
+- **Default Output Format** - Changed default output from JSON to table (TSV)
+  - All query commands now default to human-readable table format
+  - Fixes inconsistency where piped output was JSON but terminal was table
+  - Use `--format json` or `--json` for JSON output
+
+- **Aggregate Table Alignment** - Fixed column alignment for entries containing emojis
+  - Emoji characters now correctly counted as 2-column width
+  - Tables align properly regardless of emoji content
+
+- **CI Test Compatibility** - Fixed test database schemas for CI environment
+  - Corrected field_values column names (parent_id, value_text)
+  - Corrected tag_applications column names (data_node_id)
+
 ## [1.12.0] - 2026-01-21
 
 ### Added
