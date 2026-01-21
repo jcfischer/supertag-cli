@@ -199,6 +199,30 @@ describe("Query Tokenizer", () => {
     });
   });
 
+  describe("Comma", () => {
+    it("should tokenize comma for select field lists", () => {
+      const tokens = tokenize("select name,email");
+      expect(tokens).toEqual([
+        { type: TokenType.KEYWORD, value: "select" },
+        { type: TokenType.IDENTIFIER, value: "name" },
+        { type: TokenType.COMMA, value: "," },
+        { type: TokenType.IDENTIFIER, value: "email" },
+      ]);
+    });
+
+    it("should tokenize comma with spaces", () => {
+      const tokens = tokenize("select name, email, phone");
+      expect(tokens).toEqual([
+        { type: TokenType.KEYWORD, value: "select" },
+        { type: TokenType.IDENTIFIER, value: "name" },
+        { type: TokenType.COMMA, value: "," },
+        { type: TokenType.IDENTIFIER, value: "email" },
+        { type: TokenType.COMMA, value: "," },
+        { type: TokenType.IDENTIFIER, value: "phone" },
+      ]);
+    });
+  });
+
   describe("Full Query Tokenization", () => {
     it("should tokenize basic find query", () => {
       const tokens = tokenize("find task");

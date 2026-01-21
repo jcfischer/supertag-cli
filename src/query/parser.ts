@@ -353,9 +353,21 @@ class Parser {
       this.advance();
       fields.push(...value.split(",").map((f) => f.trim()).filter(Boolean));
     } else if (token.type === TokenType.IDENTIFIER) {
-      // Single field
+      // Unquoted field(s) - may be comma-separated
       fields.push(String(token.value));
       this.advance();
+
+      // Check for comma-separated additional fields
+      while (this.match(TokenType.COMMA)) {
+        this.advance(); // consume comma
+        const nextToken = this.current();
+        if (nextToken?.type === TokenType.IDENTIFIER) {
+          fields.push(String(nextToken.value));
+          this.advance();
+        } else {
+          break;
+        }
+      }
     } else {
       throw new ParseError(`Unexpected token type ${token.type} for select`);
     }

@@ -177,6 +177,16 @@ describe("Query Parser", () => {
       expect(ast.select).toContain("name");
     });
 
+    it("should parse select with unquoted comma-separated fields", () => {
+      const ast = parseQuery("find person select name,email");
+      expect(ast.select).toEqual(["name", "email"]);
+    });
+
+    it("should parse select with unquoted comma-separated fields and spaces", () => {
+      const ast = parseQuery("find person select name, email, phone");
+      expect(ast.select).toEqual(["name", "email", "phone"]);
+    });
+
     it("should parse 'select *' as wildcard for all fields", () => {
       const ast = parseQuery("find person select *");
       expect(ast.select).toEqual(["*"]);

@@ -16,6 +16,7 @@ export enum TokenType {
   NUMBER = "NUMBER",         // numeric values
   LPAREN = "LPAREN",         // (
   RPAREN = "RPAREN",         // )
+  COMMA = "COMMA",           // , (for select field lists)
 }
 
 /**
@@ -186,6 +187,13 @@ export function tokenize(input: string): Token[] {
     if (char === ")") {
       advance();
       tokens.push({ type: TokenType.RPAREN, value: ")" });
+      continue;
+    }
+
+    // Comma (for select field lists)
+    if (char === ",") {
+      advance();
+      tokens.push({ type: TokenType.COMMA, value: "," });
       continue;
     }
 
