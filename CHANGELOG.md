@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Query Field Output with Select Clause (F-093)** - Include custom field values in query output
+  - `select *` returns all supertag fields including inherited fields
+  - `select "Email,Phone"` returns specific fields by name
+  - No select clause = core fields only (backward compatible)
+  - Multi-value fields are comma-joined
+  - Works with all output formats (table, json, csv, jsonl)
+  - New `is empty` operator for querying empty/missing field values
+  - Example: `supertag query "find contact select *"`
+  - Example: `supertag query "find contact select 'Email,Phone,Company'"`
+  - Example: `supertag query "find task where Status is empty"`
+
 - **Semantic Search --min-score Option** - Filter results by minimum similarity threshold
   - `supertag search "query" --semantic --min-score 0.5` - Only results with >= 50% similarity
   - Accepts decimal (0-1) or percentage (0-100) values

@@ -301,8 +301,14 @@ Unified query that combines tag filtering, field filtering, date ranges, and ful
 | `orderBy` | string | No | Sort field, prefix with "-" for descending (e.g., "-created") |
 | `limit` | number | No | Max results (default: 100) |
 | `offset` | number | No | Skip N results for pagination |
-| `select` | array | No | Fields to include in response |
+| `select` | string/array | No | Field output: `"*"` for all fields, `["Email","Phone"]` for specific |
 | `workspace` | string | No | Workspace alias |
+
+**Select clause (field output):**
+- Default (no select): Core fields only (id, name, created, updated)
+- `"*"`: All supertag fields including inherited fields
+- `["Email", "Phone", "Company"]`: Specific fields by name
+- Multi-value fields are comma-joined in output
 
 **Where conditions (object keys are field names):**
 - Shorthand: `{"Status": "Done"}` (equality)
@@ -311,6 +317,7 @@ Unified query that combines tag filtering, field filtering, date ranges, and ful
 - Dates: `{"created": {"after": "7d"}}`, `{"created": {"before": "2025-01-01"}}`
 - Comparison: `{"priority": {"gt": 5}}`, `{"count": {"lte": 10}}`
 - Exists: `{"Summary": {"exists": true}}`
+- Empty: `{"Status": {"isEmpty": true}}` - Find nodes with empty/missing field values
 
 **Relative dates:** `today`, `7d` (7 days ago), `1w` (1 week), `1m` (1 month), `1y` (1 year)
 
@@ -340,6 +347,28 @@ Find any nodes matching "project" in name
   "find": "*",
   "where": {
     "name": {"contains": "project"}
+  }
+}
+
+Find contacts with all their fields
+{
+  "find": "contact",
+  "select": "*",
+  "limit": 10
+}
+
+Find contacts with specific fields (Email, Phone, Company)
+{
+  "find": "contact",
+  "select": ["Email", "Phone", "Company"],
+  "limit": 20
+}
+
+Find tasks with empty status field
+{
+  "find": "task",
+  "where": {
+    "Status": {"isEmpty": true}
   }
 }
 ```
@@ -519,8 +548,14 @@ supertag query "find task where Status = Active order by -created"
 supertag query "find task limit 20"
 supertag query "find task limit 20 offset 40"
 
-# Field projection
-supertag query "find task select id,name,Status"
+# Field output - include all supertag fields
+supertag query "find contact select *"
+
+# Field output - specific fields only
+supertag query "find contact select 'Email,Phone,Company'"
+
+# Find nodes with empty/missing field values
+supertag query "find task where Status is empty"
 
 # Complete example
 supertag query "find task where Status = Active and created > 7d order by -created limit 20"
@@ -542,6 +577,12 @@ find <tag> [where <conditions>] [order by [-]<field>] [limit N] [offset N] [sele
 - `~` - Contains
 - `>`, `<`, `>=`, `<=` - Comparison
 - `exists` - Field exists check
+- `is empty` - Field is empty or missing
+
+**Select clause (inline in query):**
+- No select = Core fields only (id, name, created)
+- `select *` = All supertag fields including inherited
+- `select "Email,Phone"` = Specific fields by name
 
 **Relative dates:** `today`, `7d`, `1w`, `1m`, `1y`
 

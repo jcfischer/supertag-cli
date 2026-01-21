@@ -103,6 +103,7 @@ supertag sync index        # Index the export
 ```bash
 supertag search "project"                    # Full-text search
 supertag search "project" --semantic         # Semantic search
+supertag search "ideas" --semantic --min-score 0.5  # Filter by similarity
 supertag search --tag todo                   # All nodes with #todo tag
 supertag search "groceries" --tag todo       # #todo nodes containing "groceries"
 supertag search --tag meeting --field "Location=Zurich"  # Filter by field
@@ -150,8 +151,14 @@ supertag query "find task where parent.tags ~ project"
 # Sort and limit results
 supertag query "find meeting order by -created limit 10"
 
-# Field projection
-supertag query "find todo" --select id,name,fields.Status
+# Include all supertag fields in output
+supertag query "find contact select *"
+
+# Include specific supertag fields
+supertag query "find contact select 'Email,Phone,Company'"
+
+# Find nodes with empty/missing field values
+supertag query "find task where Status is empty"
 ```
 
 **Operators:**
@@ -162,10 +169,16 @@ supertag query "find todo" --select id,name,fields.Status
 | `~` | Contains | `Name ~ John` |
 | `>`, `<`, `>=`, `<=` | Comparison | `Priority >= 2` |
 | `exists` | Field has value | `Due exists` |
+| `is empty` | Field is empty or missing | `Status is empty` |
 | `not` | Negation | `not Status = Done` |
 | `and`, `or` | Logical | `A and (B or C)` |
 
 **Relative Dates:** `today`, `yesterday`, `7d`, `30d`, `1w`, `1m`, `1y`
+
+**Select Clause** (inline in query):
+- No select = Core fields only (id, name, created)
+- `select *` = All supertag fields including inherited
+- `select "Email,Phone"` = Specific fields by name
 
 ### BATCH - Multi-Node Operations
 
