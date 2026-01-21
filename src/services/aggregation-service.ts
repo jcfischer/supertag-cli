@@ -43,6 +43,30 @@ export class AggregationService {
   }
 
   /**
+   * Count total nodes with a given tag (no grouping)
+   *
+   * @param tag - Tag name to count
+   * @returns AggregateResult with total count and empty groups
+   */
+  countOnly(tag: string): AggregateResult {
+    const sql = `
+      SELECT COUNT(DISTINCT n.id) as total
+      FROM nodes n
+      INNER JOIN tag_applications ta ON ta.data_node_id = n.id
+      WHERE ta.tag_name = ?
+    `;
+
+    const row = this.db.query(sql).get(tag) as { total: number } | null;
+    const total = row?.total ?? 0;
+
+    return {
+      total,
+      groupCount: 0,
+      groups: {},
+    };
+  }
+
+  /**
    * Parse group-by specification from CLI string
    *
    * @param groupBy - Comma-separated string (e.g., "Status,month")

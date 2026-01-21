@@ -13,7 +13,6 @@
 
 import { Command } from "commander";
 import { AggregationService } from "../services/aggregation-service";
-import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import {
   resolveDbPath,
   checkDb,
@@ -38,7 +37,7 @@ import type {
 
 interface AggregateOptions extends StandardOptions {
   tag: string;
-  groupBy: string;
+  groupBy?: string;
   showPercent?: boolean;
   top?: number;
   format?: OutputFormat;
@@ -126,7 +125,7 @@ export function createAggregateCommand(): Command {
   aggregate
     .description("Group and count nodes by field values or time periods")
     .requiredOption("--tag <tagname>", "Supertag to aggregate (e.g., task, meeting)")
-    .requiredOption("--group-by <fields>", "Field(s) to group by (comma-separated)")
+    .option("--group-by <fields>", "Field(s) to group by (comma-separated, omit for total count)")
     .option("--show-percent", "Show percentage of total alongside counts")
     .option("--top <n>", "Return only top N groups by count", parseInt);
 
@@ -138,18 +137,43 @@ export function createAggregateCommand(): Command {
       process.exit(1);
     }
 
-    const wsContext = resolveWorkspaceContext({
-      workspace: options.workspace,
-      requireDatabase: false, // Already checked via resolveDbPath
-    });
-
     const outputOpts = resolveOutputOptions(options);
+    // --format pretty should enable pretty output mode
+    const isPretty = outputOpts.pretty || (options.format as string) === "pretty";
     const format = resolveOutputFormat({ format: options.format, json: options.json, pretty: outputOpts.pretty });
 
     // Create service
     const service = new AggregationService(dbPath);
 
     try {
+      // Handle total-count-only mode (no --group-by)
+      if (!options.groupBy) {
+        const result = service.countOnly(options.tag);
+
+        if (format === "json" || format === "minimal") {
+          console.log(formatJsonOutput(result));
+        } else if (format === "csv") {
+          if (options.header !== false) {
+            console.log("tag,total");
+          }
+          console.log(`"${options.tag}",${result.total}`);
+        } else if (format === "jsonl") {
+          console.log(JSON.stringify({ tag: options.tag, total: result.total }));
+        } else if (format === "ids") {
+          console.log(options.tag);
+        } else {
+          // Table format (default)
+          if (isPretty) {
+            console.log(`\n${header(EMOJI.aggregate, `Total Count`)}\n`);
+            console.log(`   ${options.tag}: ${formatNumber(result.total, true)}`);
+            console.log("");
+          } else {
+            console.log(tsv(options.tag, result.total));
+          }
+        }
+        return;
+      }
+
       // Parse group-by specification
       const groupBySpec = service.parseGroupBy(options.groupBy);
 
@@ -242,7 +266,7 @@ export function createAggregateCommand(): Command {
       } else {
         // Table format (default)
         const isNested = groupBySpec.length > 1;
-        if (outputOpts.pretty) {
+        if (isPretty) {
           if (isNested) {
             formatNestedResult(result, groupBySpec, !!options.showPercent);
           } else {
