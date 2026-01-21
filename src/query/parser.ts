@@ -336,40 +336,55 @@ class Parser {
 
   /**
    * Parse select clause: "select" field_list
+   *
+   * Supports:
+   * - Single quoted list: select "name,email,phone"
+   * - Unquoted comma-separated: select name,email,phone
+   * - Mixed quoted and unquoted: select name,Status,'Due Date'
    */
   private parseSelectClause(): string[] {
     this.expect(TokenType.KEYWORD, "select");
 
     const fields: string[] = [];
 
+    // Parse first field (required)
     const token = this.current();
     if (!token) {
       throw new ParseError("Expected field name after 'select'");
     }
 
+    // Handle first token
     if (token.type === TokenType.STRING) {
-      // Quoted comma-separated list
       const value = String(token.value);
       this.advance();
-      fields.push(...value.split(",").map((f) => f.trim()).filter(Boolean));
+      // Check if this is the only token and contains commas (legacy syntax)
+      if (!this.match(TokenType.COMMA)) {
+        // Single quoted string with comma-separated list inside
+        fields.push(...value.split(",").map((f) => f.trim()).filter(Boolean));
+        return fields;
+      }
+      // Otherwise it's a single quoted field name
+      fields.push(value);
     } else if (token.type === TokenType.IDENTIFIER) {
-      // Unquoted field(s) - may be comma-separated
       fields.push(String(token.value));
       this.advance();
-
-      // Check for comma-separated additional fields
-      while (this.match(TokenType.COMMA)) {
-        this.advance(); // consume comma
-        const nextToken = this.current();
-        if (nextToken?.type === TokenType.IDENTIFIER) {
-          fields.push(String(nextToken.value));
-          this.advance();
-        } else {
-          break;
-        }
-      }
     } else {
       throw new ParseError(`Unexpected token type ${token.type} for select`);
+    }
+
+    // Parse additional comma-separated fields (can be quoted or unquoted)
+    while (this.match(TokenType.COMMA)) {
+      this.advance(); // consume comma
+      const nextToken = this.current();
+      if (nextToken?.type === TokenType.IDENTIFIER) {
+        fields.push(String(nextToken.value));
+        this.advance();
+      } else if (nextToken?.type === TokenType.STRING) {
+        fields.push(String(nextToken.value));
+        this.advance();
+      } else {
+        break;
+      }
     }
 
     return fields;

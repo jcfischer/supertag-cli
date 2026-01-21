@@ -5,20 +5,23 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.12.4] - 2026-01-21
+## [1.12.5] - 2026-01-21
 
 ### Fixed
 
-- **Query Parser Select Clause** - Fixed parsing of unquoted comma-separated fields in select clause
-  - Previously: `find person select name,email` failed with parse error
-  - Now: Both quoted `'name,email'` and unquoted `name,email` syntaxes work
+- **Query Parser Select Clause** - Complete fix for field selection syntax
+  - Unquoted comma-separated: `select name,email,phone`
+  - Mixed quoted and unquoted: `select name,Status,'Due Date'`
+  - Field names with spaces: `select name,"Due Date",Status`
   - Added COMMA token type to tokenizer for proper field list parsing
-  - Example: `supertag query "find person select name,email,phone"`
 
 - **Query Output Duplicate Columns** - Fixed duplicate columns when selecting core fields
   - Previously: `select name,Status` produced header `id,name,created,updated,name,Status`
   - Now: Core fields (id, name, created, updated) are deduplicated when also in select clause
-  - Example: `find todo select name,Status limit 5` now shows proper columns
+
+## [1.12.4] - 2026-01-21
+
+_Incomplete release - use 1.12.5 instead_
 
 ## [1.12.3] - 2026-01-21
 

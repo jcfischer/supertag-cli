@@ -187,6 +187,16 @@ describe("Query Parser", () => {
       expect(ast.select).toEqual(["name", "email", "phone"]);
     });
 
+    it("should parse select with mixed quoted and unquoted fields", () => {
+      const ast = parseQuery("find todo select name,Status,'Due Date'");
+      expect(ast.select).toEqual(["name", "Status", "Due Date"]);
+    });
+
+    it("should parse select with double-quoted field names with spaces", () => {
+      const ast = parseQuery('find todo select name,"Due Date",Status');
+      expect(ast.select).toEqual(["name", "Due Date", "Status"]);
+    });
+
     it("should parse 'select *' as wildcard for all fields", () => {
       const ast = parseQuery("find person select *");
       expect(ast.select).toEqual(["*"]);
