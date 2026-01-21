@@ -17,6 +17,14 @@ import type { OutputFormat } from './output-formatter';
 const VALID_FORMATS: OutputFormat[] = ['json', 'table', 'csv', 'ids', 'minimal', 'jsonl'];
 
 /**
+ * Format aliases for user convenience
+ */
+const FORMAT_ALIASES: Record<string, OutputFormat> = {
+  'pretty': 'table',
+  'tsv': 'table',
+};
+
+/**
  * Output configuration stored in config file
  */
 export interface OutputConfig {
@@ -148,9 +156,14 @@ export function resolveOutputFormat(
 
   // 1. Explicit --format flag (highest priority)
   if (options.format !== undefined) {
-    const format = options.format as OutputFormat;
-    if (VALID_FORMATS.includes(format)) {
-      return format;
+    const format = options.format as string;
+    // Check for exact match
+    if (VALID_FORMATS.includes(format as OutputFormat)) {
+      return format as OutputFormat;
+    }
+    // Check for aliases (pretty, tsv)
+    if (format in FORMAT_ALIASES) {
+      return FORMAT_ALIASES[format];
     }
     // Invalid format falls through to other resolution methods
   }
