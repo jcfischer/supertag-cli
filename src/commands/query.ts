@@ -119,9 +119,13 @@ export function createQueryCommand(): Command {
           : `Query results (${result.count})`;
         console.log(`\n${header(EMOJI.search, headerText)}:\n`);
 
+        // Filter out core field names from custom fields to avoid duplicate columns
+        const tableCoreFieldNames = new Set(["id", "name", "created", "updated"]);
+        const tableCustomFieldNames = fieldNames.filter((f) => !tableCoreFieldNames.has(f.toLowerCase()));
+
         // Build table headers - core fields + custom fields
-        const tableHeaders = ["#", "Name", "ID", "Created", ...fieldNames];
-        const tableAligns: ("left" | "right")[] = ["right", "left", "left", "left", ...fieldNames.map(() => "left" as const)];
+        const tableHeaders = ["#", "Name", "ID", "Created", ...tableCustomFieldNames];
+        const tableAligns: ("left" | "right")[] = ["right", "left", "left", "left", ...tableCustomFieldNames.map(() => "left" as const)];
 
         const tableRows = result.results.map((node, i) => {
           const created = node.created
@@ -136,10 +140,10 @@ export function createQueryCommand(): Command {
             created,
           ];
 
-          // Add field values
+          // Add custom field values (excluding core fields already included above)
           if (hasFields) {
             const fields = (node as any).fields || {};
-            for (const fieldName of fieldNames) {
+            for (const fieldName of tableCustomFieldNames) {
               row.push(String(fields[fieldName] || ""));
             }
           }
@@ -160,7 +164,10 @@ export function createQueryCommand(): Command {
       }
 
       // Other formats: use formatter with dynamic columns
-      const headers = ["id", "name", "created", "updated", ...fieldNames];
+      // Filter out core field names from custom fields to avoid duplicate columns
+      const coreFieldNames = new Set(["id", "name", "created", "updated"]);
+      const customFieldNames = fieldNames.filter((f) => !coreFieldNames.has(f.toLowerCase()));
+      const headers = ["id", "name", "created", "updated", ...customFieldNames];
       const rows = result.results.map((node) => {
         const row = [
           String(node.id),
@@ -169,10 +176,10 @@ export function createQueryCommand(): Command {
           node.updated ? formatDateISO(node.updated as number) : "",
         ];
 
-        // Add field values
+        // Add custom field values (excluding core fields already included above)
         if (hasFields) {
           const fields = (node as any).fields || {};
-          for (const fieldName of fieldNames) {
+          for (const fieldName of customFieldNames) {
             row.push(String(fields[fieldName] || ""));
           }
         }

@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added COMMA token type to tokenizer for proper field list parsing
   - Example: `supertag query "find person select name,email,phone"`
 
+- **Query Output Duplicate Columns** - Fixed duplicate columns when selecting core fields
+  - Previously: `select name,Status` produced header `id,name,created,updated,name,Status`
+  - Now: Core fields (id, name, created, updated) are deduplicated when also in select clause
+  - Example: `find todo select name,Status limit 5` now shows proper columns
+
 ## [1.12.2] - 2026-01-21
 
 ### Fixed
