@@ -319,6 +319,18 @@ See [Graph Traversal Documentation](./docs/graph-traversal.md) for more examples
 
 ### EXPORT - Automated Backup
 
+#### Setup
+
+Before running exports for the first time, install the required browser:
+
+```bash
+supertag-export setup        # Install Playwright browser
+```
+
+This installs the Chromium browser needed for automated Tana exports.
+
+#### Export Commands
+
 ```bash
 supertag-export login        # First-time login
 supertag-export run          # Export workspace
