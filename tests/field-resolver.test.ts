@@ -47,6 +47,19 @@ describe("FieldResolver", () => {
       )
     `);
 
+    // Create supertag_metadata table (Spec 020)
+    db.run(`
+      CREATE TABLE supertag_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_id TEXT NOT NULL UNIQUE,
+        tag_name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        created_at INTEGER
+      )
+    `);
+
     db.run(`
       CREATE TABLE field_values (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +80,14 @@ describe("FieldResolver", () => {
     ]);
     db.run("INSERT INTO supertags (node_id, tag_name, tag_id) VALUES (?, ?, ?)", [
       "tag_employee_node", "employee", "tag_employee",
+    ]);
+
+    // Insert supertag_metadata (needed by FieldResolver.getSupertagFields)
+    db.run("INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name) VALUES (?, ?, ?)", [
+      "tag_person", "person", "person",
+    ]);
+    db.run("INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name) VALUES (?, ?, ?)", [
+      "tag_employee", "employee", "employee",
     ]);
 
     // Insert supertag fields for "person"

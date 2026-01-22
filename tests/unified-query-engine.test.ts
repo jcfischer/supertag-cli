@@ -377,8 +377,22 @@ describe("Unified Query Engine", () => {
           UNIQUE(child_tag_id, parent_tag_id)
         )
       `);
+      db.run(`
+        CREATE TABLE IF NOT EXISTS supertag_metadata (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          tag_id TEXT NOT NULL UNIQUE,
+          tag_name TEXT NOT NULL,
+          normalized_name TEXT NOT NULL,
+          description TEXT,
+          color TEXT,
+          created_at INTEGER
+        )
+      `);
       db.run("INSERT OR IGNORE INTO supertags (node_id, tag_name, tag_id) VALUES (?, ?, ?)", [
         "tag_task_node", "task", "tag_task",
+      ]);
+      db.run("INSERT OR IGNORE INTO supertag_metadata (tag_id, tag_name, normalized_name) VALUES (?, ?, ?)", [
+        "tag_task", "task", "task",
       ]);
       db.run("INSERT OR IGNORE INTO supertag_fields (tag_id, tag_name, field_name, field_order) VALUES (?, ?, ?, ?)", [
         "tag_task", "task", "Status", 1,
