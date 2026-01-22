@@ -376,6 +376,10 @@ supertag embed config --model bge-m3    # Configure
 supertag embed generate                  # Generate embeddings
 supertag embed generate --include-fields # Include field values in context
 supertag search "ideas" --semantic       # Search by meaning
+
+# Maintenance and diagnostics
+supertag embed filter-stats              # Show content filter breakdown
+supertag embed maintain                  # LanceDB maintenance (compact, rebuild)
 ```
 
 See [Embeddings Documentation](./docs/embeddings.md) for details.
