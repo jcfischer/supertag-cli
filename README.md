@@ -369,6 +369,17 @@ supertag-export run --all    # Export all workspaces
 
 See [Export Documentation](./docs/export.md) for details.
 
+#### Export Cleanup
+
+Remove old export files to free disk space:
+
+```bash
+supertag sync cleanup             # Remove old exports, keep most recent
+supertag sync cleanup --keep 3    # Keep 3 most recent files
+supertag sync cleanup --all       # Clean up all workspaces
+supertag sync cleanup --dry-run   # Preview what would be deleted
+```
+
 ### EMBED - Semantic Search
 
 ```bash
