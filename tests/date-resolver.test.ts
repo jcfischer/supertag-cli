@@ -10,6 +10,8 @@ import {
   resolveRelativeDate,
   isRelativeDateValue,
   parseDateValue,
+  parseComparisonDate,
+  isValidDateValue,
 } from "../src/query/date-resolver";
 
 describe("Date Resolver", () => {
@@ -157,6 +159,105 @@ describe("Date Resolver", () => {
       const result = resolveRelativeDate("365d");
       const expected = FIXED_NOW - 365 * 24 * 60 * 60 * 1000;
       expect(Math.abs(result - expected)).toBeLessThan(24 * 60 * 60 * 1000);
+    });
+  });
+
+  describe("parseComparisonDate", () => {
+    it("should parse >7d", () => {
+      const result = parseComparisonDate(">7d");
+      expect(result).toEqual({ operator: ">", value: "7d" });
+    });
+
+    it("should parse <7d", () => {
+      const result = parseComparisonDate("<7d");
+      expect(result).toEqual({ operator: "<", value: "7d" });
+    });
+
+    it("should parse >=7d", () => {
+      const result = parseComparisonDate(">=7d");
+      expect(result).toEqual({ operator: ">=", value: "7d" });
+    });
+
+    it("should parse <=7d", () => {
+      const result = parseComparisonDate("<=7d");
+      expect(result).toEqual({ operator: "<=", value: "7d" });
+    });
+
+    it("should parse >today", () => {
+      const result = parseComparisonDate(">today");
+      expect(result).toEqual({ operator: ">", value: "today" });
+    });
+
+    it("should parse <yesterday", () => {
+      const result = parseComparisonDate("<yesterday");
+      expect(result).toEqual({ operator: "<", value: "yesterday" });
+    });
+
+    it("should parse >=1w", () => {
+      const result = parseComparisonDate(">=1w");
+      expect(result).toEqual({ operator: ">=", value: "1w" });
+    });
+
+    it("should parse <=3m", () => {
+      const result = parseComparisonDate("<=3m");
+      expect(result).toEqual({ operator: "<=", value: "3m" });
+    });
+
+    it("should parse >2025-01-15 (ISO date)", () => {
+      const result = parseComparisonDate(">2025-01-15");
+      expect(result).toEqual({ operator: ">", value: "2025-01-15" });
+    });
+
+    it("should parse <2025-01-15T14:30:00Z (ISO datetime)", () => {
+      const result = parseComparisonDate("<2025-01-15T14:30:00Z");
+      expect(result).toEqual({ operator: "<", value: "2025-01-15T14:30:00Z" });
+    });
+
+    it("should return null for plain values without operator", () => {
+      expect(parseComparisonDate("7d")).toBeNull();
+      expect(parseComparisonDate("today")).toBeNull();
+      expect(parseComparisonDate("2025-01-15")).toBeNull();
+    });
+
+    it("should return null for invalid date after operator", () => {
+      expect(parseComparisonDate(">invalid")).toBeNull();
+      expect(parseComparisonDate("<not-a-date")).toBeNull();
+      expect(parseComparisonDate(">=abc")).toBeNull();
+    });
+
+    it("should return null for empty value after operator", () => {
+      expect(parseComparisonDate(">")).toBeNull();
+      expect(parseComparisonDate("<")).toBeNull();
+      expect(parseComparisonDate(">=")).toBeNull();
+      expect(parseComparisonDate("<=")).toBeNull();
+    });
+
+    it("should return null for non-date strings", () => {
+      expect(parseComparisonDate("hello")).toBeNull();
+      expect(parseComparisonDate("Done")).toBeNull();
+      expect(parseComparisonDate("In Progress")).toBeNull();
+    });
+  });
+
+  describe("isValidDateValue", () => {
+    it("should accept relative dates", () => {
+      expect(isValidDateValue("7d")).toBe(true);
+      expect(isValidDateValue("today")).toBe(true);
+      expect(isValidDateValue("yesterday")).toBe(true);
+      expect(isValidDateValue("2w")).toBe(true);
+      expect(isValidDateValue("3m")).toBe(true);
+      expect(isValidDateValue("1y")).toBe(true);
+    });
+
+    it("should accept ISO dates", () => {
+      expect(isValidDateValue("2025-01-15")).toBe(true);
+      expect(isValidDateValue("2025-01-15T14:30:00Z")).toBe(true);
+    });
+
+    it("should reject invalid strings", () => {
+      expect(isValidDateValue("invalid")).toBe(false);
+      expect(isValidDateValue("not-a-date")).toBe(false);
+      expect(isValidDateValue("abc")).toBe(false);
     });
   });
 });

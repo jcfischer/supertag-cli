@@ -438,7 +438,7 @@ async function handleSemanticSearch(
 
   // Import embedding service dynamically
   const { TanaEmbeddingService } = await import("../embeddings/tana-embedding-service");
-  const { filterAndDeduplicateResults, getOverfetchLimit } = await import("../embeddings/search-filter");
+  const { filterAndDeduplicateResults, getOverfetchLimit, filterByTag } = await import("../embeddings/search-filter");
 
   const embeddingService = new TanaEmbeddingService(lanceDbPath, {
     model: embeddingConfig.model,
@@ -452,15 +452,26 @@ async function handleSemanticSearch(
       console.log("");
     }
 
-    // Over-fetch for filtering
-    const overfetchLimit = getOverfetchLimit(limit);
+    // Over-fetch for filtering (more aggressive if tag filter is specified)
+    const baseOverfetch = getOverfetchLimit(limit);
+    const overfetchLimit = options.tag ? baseOverfetch * 3 : baseOverfetch;
     const rawResults = await embeddingService.search(query, overfetchLimit);
 
     await withDatabase({ dbPath, readonly: true }, async (ctx) => {
       const { db } = ctx;
-      const dedupedResults = filterAndDeduplicateResults(db, rawResults, limit);
-      // Apply min-score filter after deduplication
-      const results = filterByMinScore(dedupedResults, minScore);
+      // Don't apply limit yet - we'll apply it after tag filtering
+      const dedupedResults = filterAndDeduplicateResults(db, rawResults);
+
+      // Apply tag filter if specified
+      const tagFilteredResults = options.tag
+        ? filterByTag(dedupedResults, options.tag)
+        : dedupedResults;
+
+      // Apply min-score filter after tag filtering
+      const scoreFilteredResults = filterByMinScore(tagFilteredResults, minScore);
+
+      // Now apply limit
+      const results = scoreFilteredResults.slice(0, limit);
       const searchTime = performance.now() - startTime;
 
       if (results.length === 0) {

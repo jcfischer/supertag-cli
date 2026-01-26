@@ -103,6 +103,20 @@ export function filterReferenceSyntax(
 }
 
 /**
+ * Filter results to only include nodes with a specific tag
+ * Tag comparison is case-insensitive
+ */
+export function filterByTag(
+  results: EnrichedSearchResult[],
+  tagName: string
+): EnrichedSearchResult[] {
+  const lowerTag = tagName.toLowerCase();
+  return results.filter((r) =>
+    r.tags?.some((t) => t.toLowerCase() === lowerTag)
+  );
+}
+
+/**
  * Deduplicate results by name+tags, keeping highest similarity
  * Nodes with same name but different tags are preserved
  */

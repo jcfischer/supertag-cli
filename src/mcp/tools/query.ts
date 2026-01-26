@@ -11,6 +11,7 @@ import type { QueryInput } from "../schemas";
 import { UnifiedQueryEngine } from "../../query/unified-query-engine";
 import type { QueryAST, WhereClause } from "../../query/types";
 import { resolveWorkspaceContext } from "../../config/workspace-resolver";
+import { parseComparisonDate } from "../../query/date-resolver";
 
 /**
  * Convert MCP input to QueryAST
@@ -35,6 +36,14 @@ function convertInputToAST(input: QueryInput): QueryAST {
         } else if (typeof condition === "string" && condition.startsWith("\\~")) {
           // Escaped tilde: "\~value" means literal "~value"
           clauses.push({ field, operator: "=", value: condition.slice(1) });
+        } else if (typeof condition === "string") {
+          // Check for comparison operator prefix (>7d, <7d, >=7d, <=7d, etc.)
+          const comparison = parseComparisonDate(condition);
+          if (comparison) {
+            clauses.push({ field, operator: comparison.operator, value: comparison.value });
+          } else {
+            clauses.push({ field, operator: "=", value: condition });
+          }
         } else {
           clauses.push({ field, operator: "=", value: condition });
         }

@@ -337,10 +337,12 @@ export type ToolSchemaInput = z.infer<typeof toolSchemaSchema>;
 /**
  * Where condition for a single field
  * Shorthand: "Done" means { eq: "Done" }
+ * Date shorthand: ">7d" means { after: "7d" }, "<7d" means { before: "7d" }
+ * Contains shorthand: "~value" means { contains: "value" }
  * Full form: { eq: "Done", contains: "John", after: "7d", before: "today", exists: true, neq: "Active", gt: 5, gte: 1, lt: 100, lte: 50 }
  */
 const whereConditionSchema = z.union([
-  // Shorthand: "Done" means { eq: "Done" }
+  // Shorthand: "Done" means { eq: "Done" }, ">7d" means { after: "7d" }
   z.string(),
   z.number(),
   // Full condition object
@@ -659,6 +661,62 @@ export const aggregateSchema = z.object({
   workspace: workspaceSchema,
 });
 export type AggregateInput = z.infer<typeof aggregateSchema>;
+
+// tana_timeline (Spec 066: Timeline & Temporal Queries)
+export const timelineSchema = z.object({
+  from: z
+    .string()
+    .optional()
+    .describe('Start date (ISO 8601 or relative: 30d, 1m, 7d, today, yesterday). Default: 30 days ago'),
+  to: z
+    .string()
+    .optional()
+    .describe('End date (ISO 8601 or relative). Default: today'),
+  granularity: z
+    .enum(['hour', 'day', 'week', 'month', 'quarter', 'year'])
+    .default('day')
+    .describe('Time bucket size for grouping'),
+  tag: z
+    .string()
+    .optional()
+    .describe('Filter by supertag name'),
+  limit: z
+    .number()
+    .min(1)
+    .max(100)
+    .default(10)
+    .describe('Maximum items per time bucket'),
+  workspace: workspaceSchema,
+});
+export type TimelineInput = z.infer<typeof timelineSchema>;
+
+// tana_recent (Spec 066: Timeline & Temporal Queries)
+export const recentSchema = z.object({
+  period: z
+    .string()
+    .default('24h')
+    .describe('Time period to look back: Nh (hours), Nd (days), Nw (weeks), Nm (months), Ny (years). Default: 24h'),
+  types: z
+    .array(z.string())
+    .optional()
+    .describe('Filter by supertag names (e.g., ["meeting", "task"])'),
+  createdOnly: z
+    .boolean()
+    .default(false)
+    .describe('Only show items created in the period (exclude updated items)'),
+  updatedOnly: z
+    .boolean()
+    .default(false)
+    .describe('Only show items updated in the period (exclude newly created)'),
+  limit: z
+    .number()
+    .min(1)
+    .max(100)
+    .default(20)
+    .describe('Maximum items to return'),
+  workspace: workspaceSchema,
+});
+export type RecentInput = z.infer<typeof recentSchema>;
 
 /**
  * Parse date range strings into UNIX timestamps (ms)

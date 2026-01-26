@@ -6,6 +6,60 @@
  */
 
 /**
+ * Comparison operators that can prefix date values
+ */
+export type DateComparisonOperator = ">" | "<" | ">=" | "<=";
+
+/**
+ * Result of parsing a comparison-prefixed date string
+ */
+export interface ParsedDateComparison {
+  operator: DateComparisonOperator;
+  value: string;
+}
+
+/**
+ * Check if a string starts with a comparison operator followed by a date value.
+ * Supports: >7d, <7d, >=7d, <=7d, >today, <2025-01-15, etc.
+ *
+ * @param value - String to check
+ * @returns Parsed result with operator and value, or null if not a comparison
+ */
+export function parseComparisonDate(value: string): ParsedDateComparison | null {
+  // Check for >= or <= first (longer operators)
+  if (value.startsWith(">=") || value.startsWith("<=")) {
+    const dateValue = value.slice(2);
+    if (dateValue && isValidDateValue(dateValue)) {
+      return { operator: value.slice(0, 2) as DateComparisonOperator, value: dateValue };
+    }
+    return null;
+  }
+
+  // Check for > or <
+  if (value.startsWith(">") || value.startsWith("<")) {
+    const dateValue = value.slice(1);
+    if (dateValue && isValidDateValue(dateValue)) {
+      return { operator: value.slice(0, 1) as DateComparisonOperator, value: dateValue };
+    }
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Check if a string is a valid date value (relative or ISO format)
+ */
+export function isValidDateValue(value: string): boolean {
+  if (isRelativeDateValue(value)) {
+    return true;
+  }
+  // Check if it's a valid ISO date
+  const date = new Date(value);
+  return !isNaN(date.getTime());
+}
+
+/**
  * Check if a string is a relative date value
  */
 export function isRelativeDateValue(value: string): boolean {
