@@ -87,9 +87,11 @@ export class TimelineService {
       bucketMap.set(key, []);
     }
 
-    // Assign items to buckets
+    // Assign items to buckets (filter out empty names and transcript timestamps)
     for (const item of rawItems) {
       if (!item.created) continue;
+      if (!item.name || !item.name.trim()) continue; // Skip empty nodes
+      if (item.name.startsWith("1970-01-01T")) continue; // Skip transcript timestamps
 
       const bucketKey = getBucketKey(item.created, granularity);
       const bucket = bucketMap.get(bucketKey);

@@ -5,6 +5,15 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.2] - 2026-01-27
+
+### Fixed
+
+- **Timeline Content Filtering** - Filter noise from timeline output at service layer
+  - Empty/whitespace-only nodes excluded from results
+  - Transcript timestamps (209K `1970-01-01T*` nodes) filtered out
+  - Counts now accurately reflect displayed items (was showing "10 items" but displaying fewer)
+
 ## [1.13.1] - 2026-01-27
 
 ### Added
