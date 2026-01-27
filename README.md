@@ -18,6 +18,8 @@
 
 **New to Supertag?** Check out the [Visual Getting Started Guide](./docs/GETTING-STARTED.md) with step-by-step screenshots.
 
+**Learn more:** [Video Course](https://courses.invisible.ch) | [Discord Community](https://discord.gg/MbQpMWsB)
+
 ---
 
 ## Table of Contents

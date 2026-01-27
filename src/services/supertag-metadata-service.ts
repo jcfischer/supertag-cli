@@ -35,7 +35,7 @@ export class SupertagMetadataService {
   getFields(tagId: string): SupertagField[] {
     const results = this.db
       .query(
-        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name
+        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name, option_values
          FROM supertag_fields
          WHERE tag_id = ?
          ORDER BY field_order`
@@ -50,6 +50,7 @@ export class SupertagMetadataService {
       inferred_data_type: string | null;
       target_supertag_id: string | null;
       target_supertag_name: string | null;
+      option_values: string | null;
     }>;
 
     return results.map((r) => ({
@@ -62,6 +63,7 @@ export class SupertagMetadataService {
       inferredDataType: r.inferred_data_type ?? undefined,
       targetSupertagId: r.target_supertag_id ?? undefined,
       targetSupertagName: r.target_supertag_name ?? undefined,
+      optionValues: r.option_values ? JSON.parse(r.option_values) : undefined,
     }));
   }
 
@@ -72,7 +74,7 @@ export class SupertagMetadataService {
   getFieldsByName(tagName: string): SupertagField[] {
     const results = this.db
       .query(
-        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name
+        `SELECT id, tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type, target_supertag_id, target_supertag_name, option_values
          FROM supertag_fields
          WHERE tag_name = ?
          ORDER BY field_order`
@@ -87,6 +89,7 @@ export class SupertagMetadataService {
       inferred_data_type: string | null;
       target_supertag_id: string | null;
       target_supertag_name: string | null;
+      option_values: string | null;
     }>;
 
     return results.map((r) => ({
@@ -99,6 +102,7 @@ export class SupertagMetadataService {
       inferredDataType: r.inferred_data_type ?? undefined,
       targetSupertagId: r.target_supertag_id ?? undefined,
       targetSupertagName: r.target_supertag_name ?? undefined,
+      optionValues: r.option_values ? JSON.parse(r.option_values) : undefined,
     }));
   }
 
@@ -219,6 +223,7 @@ export class SupertagMetadataService {
           inferredDataType: field.inferredDataType,
           targetSupertagId: field.targetSupertagId,
           targetSupertagName: field.targetSupertagName,
+          optionValues: field.optionValues,
         });
       }
     }
@@ -241,6 +246,7 @@ export class SupertagMetadataService {
             inferredDataType: field.inferredDataType,
             targetSupertagId: field.targetSupertagId,
             targetSupertagName: field.targetSupertagName,
+            optionValues: field.optionValues,
           });
         }
       }
@@ -454,6 +460,7 @@ export class SupertagMetadataService {
           inferredDataType: field.inferredDataType,
           targetSupertagId: field.targetSupertagId,
           targetSupertagName: field.targetSupertagName,
+          optionValues: field.optionValues,
         });
       }
     }

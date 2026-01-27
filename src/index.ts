@@ -37,6 +37,7 @@ import { createQueryCommand } from './commands/query';
 import { createAggregateCommand } from './commands/aggregate';
 import { createRelatedCommand } from './commands/related';
 import { createAttachmentsCommand } from './commands/attachments';
+import { createTimelineCommand, createRecentCommand } from './commands/timeline';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
 import { existsSync, copyFileSync } from 'fs';
 import { VERSION } from './version';
@@ -171,6 +172,8 @@ program.addCommand(createCodegenCommand());    // supertag codegen generate -o <
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
 program.addCommand(createErrorsCommand());     // supertag errors [--last N] [--clear] [--export] [--json]
 program.addCommand(createAttachmentsCommand()); // supertag attachments list|extract|get|stats
+program.addCommand(createTimelineCommand());   // supertag timeline --from 30d --granularity week
+program.addCommand(createRecentCommand());     // supertag recent --period 24h --types meeting,task
 
 /**
  * Help text with examples
@@ -218,6 +221,15 @@ program.on('--help', () => {
   console.log('    supertag transcript list       List meetings with transcripts');
   console.log('    supertag transcript show <id>  Show transcript content');
   console.log('    supertag transcript search <q> Search in transcript content');
+  console.log('');
+  console.log('  TIMELINE:');
+  console.log('    supertag timeline              Show activity over time periods');
+  console.log('    supertag timeline --from 7d    Last 7 days timeline');
+  console.log('    supertag timeline --tag task   Filter by supertag');
+  console.log('    supertag timeline --granularity week  Group by week');
+  console.log('    supertag recent                Last 24 hours activity');
+  console.log('    supertag recent --period 7d    Last 7 days');
+  console.log('    supertag recent --types meeting,task  Filter by types');
   console.log('');
   console.log('  EXPORT (Separate Tool):');
   console.log('    supertag-export login          First-time login setup');

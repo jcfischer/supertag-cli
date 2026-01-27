@@ -407,6 +407,8 @@ export function createTagsCommand(): Command {
         dataType?: string;
         origin?: string;
         inherited: boolean;
+        optionValues?: string[];
+        targetSupertagName?: string;
       }>;
 
       if (options.all) {
@@ -417,6 +419,8 @@ export function createTagsCommand(): Command {
           dataType: f.inferredDataType,
           origin: f.originTagName,
           inherited: f.depth > 0,
+          optionValues: f.optionValues,
+          targetSupertagName: f.targetSupertagName,
         }));
       } else {
         // Own fields only - try schema registry first, fall back to service
@@ -424,11 +428,13 @@ export function createTagsCommand(): Command {
         const tag = registry.getSupertagById(tagId) || registry.findTagByName(tagname);
 
         if (tag?.fields && tag.fields.length > 0) {
-          fields = tag.fields.map((field: { name: string; attributeId: string; dataType?: string }) => ({
+          fields = tag.fields.map((field: { name: string; attributeId: string; dataType?: string; optionValues?: string[]; targetSupertagName?: string }) => ({
             name: field.name,
             id: field.attributeId,
             dataType: field.dataType,
             inherited: false,
+            optionValues: field.optionValues,
+            targetSupertagName: field.targetSupertagName,
           }));
         } else {
           // Fall back to service for own fields
@@ -437,6 +443,8 @@ export function createTagsCommand(): Command {
             id: f.fieldLabelId,
             dataType: f.inferredDataType,
             inherited: false,
+            optionValues: f.optionValues,
+            targetSupertagName: f.targetSupertagName,
           }));
         }
       }
@@ -470,6 +478,8 @@ export function createTagsCommand(): Command {
               dataType: field.dataType,
               origin: field.origin,
               inherited: field.inherited,
+              optionValues: field.optionValues,
+              targetSupertagName: field.targetSupertagName,
             });
             for (const line of lines) {
               console.log(line);
@@ -655,6 +665,7 @@ export function createTagsCommand(): Command {
         targetSupertagId?: string;
         targetSupertagName?: string;
         system?: boolean; // Spec 074: True if this is a system field (SYS_A*)
+        optionValues?: string[]; // Option values for inline options fields
       }>;
 
       if (options.all) {
@@ -668,6 +679,7 @@ export function createTagsCommand(): Command {
           targetSupertagId: f.targetSupertagId,
           targetSupertagName: f.targetSupertagName,
           system: f.system,
+          optionValues: f.optionValues,
         }));
       } else if (options.inherited) {
         // Only inherited fields (depth > 0) - includes system fields
@@ -682,6 +694,7 @@ export function createTagsCommand(): Command {
             targetSupertagId: f.targetSupertagId,
             targetSupertagName: f.targetSupertagName,
             system: f.system,
+            optionValues: f.optionValues,
           }));
       } else {
         // Default: own fields only (depth === 0) including system fields
@@ -694,6 +707,7 @@ export function createTagsCommand(): Command {
           targetSupertagId: f.targetSupertagId,
           targetSupertagName: f.targetSupertagName,
           system: f.system,
+          optionValues: f.optionValues,
         }));
       }
 
@@ -715,6 +729,8 @@ export function createTagsCommand(): Command {
               origin: field.originTagName,
               inherited: field.depth > 0,
               system: field.system,
+              optionValues: field.optionValues,
+              targetSupertagName: field.targetSupertagName,
             });
             for (const line of lines) {
               console.log(line);
@@ -934,6 +950,8 @@ export function formatFieldLines(
     origin?: string;
     inherited?: boolean;
     system?: boolean; // Spec 074: True if this is a system field (SYS_A*)
+    optionValues?: string[]; // Option values for inline options fields
+    targetSupertagName?: string; // Target supertag for reference fields
   }
 ): string[] {
   const lines: string[] = [];
@@ -947,9 +965,20 @@ export function formatFieldLines(
   }
   lines.push(mainLine);
 
-  // Add type on the next line if available
+  // Add type on the next line if available, with option values or target supertag
   if (field.dataType) {
-    lines.push(`     Type: ${field.dataType}`);
+    let typeInfo = `     Type: ${field.dataType}`;
+
+    // For inline options, show the option values
+    if (field.optionValues && field.optionValues.length > 0) {
+      typeInfo += ` (${field.optionValues.join(", ")})`;
+    }
+    // For reference fields with target supertag (Options from Supertag)
+    else if (field.targetSupertagName) {
+      typeInfo += ` → ${field.targetSupertagName}`;
+    }
+
+    lines.push(typeInfo);
   }
 
   return lines;

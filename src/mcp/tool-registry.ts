@@ -107,6 +107,18 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Count tasks by Status: { find: "task", groupBy: ["Status"] }',
   },
+  {
+    name: 'tana_timeline',
+    description: 'Time-bucketed activity over a date range',
+    category: 'query',
+    example: 'View last 30 days: { granularity: "week" }',
+  },
+  {
+    name: 'tana_recent',
+    description: 'Recently created or updated items',
+    category: 'query',
+    example: 'Last 24 hours: { period: "24h" }',
+  },
 
   // Explore tools
   {
@@ -227,6 +239,8 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_tool_schema: schemas.zodToJsonSchema(schemas.toolSchemaSchema),
   tana_query: schemas.zodToJsonSchema(schemas.querySchema),
   tana_aggregate: schemas.zodToJsonSchema(schemas.aggregateSchema),
+  tana_timeline: schemas.zodToJsonSchema(schemas.timelineSchema),
+  tana_recent: schemas.zodToJsonSchema(schemas.recentSchema),
 };
 
 // =============================================================================

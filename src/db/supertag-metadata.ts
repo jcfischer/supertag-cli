@@ -278,10 +278,10 @@ export function extractSupertagMetadata(
   let parentsExtracted = 0;
 
   // Prepare statements for batch insertion with upsert
-  // Enhanced field insert includes normalized_name, inferred_data_type (T-2.3), and default values (Spec 092)
+  // Enhanced field insert includes normalized_name, inferred_data_type (T-2.3), default values (Spec 092), and option_values
   const insertField = db.prepare(`
-    INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, default_value_id, default_value_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, normalized_name, inferred_data_type, default_value_id, default_value_text, option_values)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tag_id, field_name) DO UPDATE SET
       tag_name = excluded.tag_name,
       field_label_id = excluded.field_label_id,
@@ -289,7 +289,8 @@ export function extractSupertagMetadata(
       normalized_name = excluded.normalized_name,
       inferred_data_type = excluded.inferred_data_type,
       default_value_id = excluded.default_value_id,
-      default_value_text = excluded.default_value_text
+      default_value_text = excluded.default_value_text,
+      option_values = excluded.option_values
   `);
 
   const insertParent = db.prepare(`
@@ -333,7 +334,7 @@ export function extractSupertagMetadata(
       metadata.color
     );
 
-    // Extract and store enhanced fields with normalized_name, inferred_data_type (T-2.3), and default values (Spec 092)
+    // Extract and store enhanced fields with normalized_name, inferred_data_type (T-2.3), default values (Spec 092), and option_values
     const fields = extractEnhancedFieldsFromTagDef(node, nodes);
     for (const field of fields) {
       insertField.run(
@@ -345,7 +346,8 @@ export function extractSupertagMetadata(
         field.normalizedName,
         field.inferredDataType,
         field.defaultValueId ?? null,
-        field.defaultValueText ?? null
+        field.defaultValueText ?? null,
+        field.optionValues ? JSON.stringify(field.optionValues) : null
       );
       fieldsExtracted++;
     }
@@ -366,11 +368,94 @@ export function extractSupertagMetadata(
 }
 
 /**
+ * Extract option values from a field definition's children.
+ *
+ * For inline options (SYS_D12), the structure is:
+ *   Field Definition (attrDef) → "Values" tuple → Options Container → Option Values
+ *
+ * @param fieldLabelId - ID of the field label/definition node
+ * @param nodes - Map of all nodes for child lookup
+ * @returns Array of option value names, or undefined if no options found
+ */
+export function extractOptionValuesFromField(
+  fieldLabelId: string,
+  nodes: Map<string, NodeDump>
+): string[] | undefined {
+  // Skip system field markers
+  if (fieldLabelId.startsWith("SYS_")) {
+    return undefined;
+  }
+
+  const fieldNode = nodes.get(fieldLabelId);
+  if (!fieldNode?.children || fieldNode.children.length === 0) {
+    return undefined;
+  }
+
+  // Find the "Values" tuple among the field's children
+  let valuesTupleId: string | undefined;
+  for (const childId of fieldNode.children) {
+    const child = nodes.get(childId);
+    if (child?.props._docType === "tuple" && child?.props.name === "Values") {
+      valuesTupleId = childId;
+      break;
+    }
+  }
+
+  if (!valuesTupleId) {
+    return undefined;
+  }
+
+  const valuesTuple = nodes.get(valuesTupleId);
+  if (!valuesTuple?.children || valuesTuple.children.length === 0) {
+    return undefined;
+  }
+
+  // Collect option names from tuple children
+  // Options may be direct children or nested inside a container node
+  const optionNames: string[] = [];
+
+  for (const childId of valuesTuple.children) {
+    // Skip system nodes
+    if (childId.startsWith("SYS_")) {
+      continue;
+    }
+
+    const child = nodes.get(childId);
+    if (!child) {
+      continue;
+    }
+
+    // If the child has children, it might be a container - check its children too
+    if (child.children && child.children.length > 0) {
+      for (const grandchildId of child.children) {
+        if (grandchildId.startsWith("SYS_")) {
+          continue;
+        }
+        const grandchild = nodes.get(grandchildId);
+        if (grandchild?.props.name) {
+          optionNames.push(grandchild.props.name);
+        }
+      }
+    }
+
+    // Also add the node itself if it has a name (might be a direct option)
+    if (child.props.name) {
+      optionNames.push(child.props.name);
+    }
+  }
+
+  // Remove duplicates and return only if we found options
+  const uniqueOptions = [...new Set(optionNames)];
+  return uniqueOptions.length > 0 ? uniqueOptions : undefined;
+}
+
+/**
  * Extract enhanced field definitions from a tagDef node (Spec 020 T-2.3).
  *
  * Extends extractFieldsFromTagDef with:
  * - normalizedName: Lowercase, special chars removed
  * - inferredDataType: Heuristic data type from field name
+ * - optionValues: Option names for inline options fields
  *
  * @param tagDef - The tagDef node to extract fields from
  * @param nodes - Map of all nodes for child lookup
@@ -383,11 +468,12 @@ export function extractEnhancedFieldsFromTagDef(
   // Get base fields using existing function
   const baseFields = extractFieldsFromTagDef(tagDef, nodes);
 
-  // Enhance each field with normalized name and inferred data type
+  // Enhance each field with normalized name, inferred data type, and option values
   return baseFields.map((field) => ({
     ...field,
     normalizedName: normalizeName(field.fieldName),
     inferredDataType: inferDataType(field.fieldName),
+    optionValues: extractOptionValuesFromField(field.fieldLabelId, nodes),
   }));
 }
 

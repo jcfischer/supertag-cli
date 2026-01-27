@@ -36,6 +36,8 @@ export interface SupertagField {
   // Default value (Spec 092)
   defaultValueId?: string; // Node ID of the default value (tuple's second child)
   defaultValueText?: string; // Name/text of the default value node
+  // Option values for inline options (SYS_D12)
+  optionValues?: string[]; // Array of option value names
 }
 
 /**
@@ -65,6 +67,8 @@ export interface InheritedField {
   // Default value (Spec 092)
   defaultValueId?: string; // Node ID of the default value
   defaultValueText?: string; // Name/text of the default value node
+  // Option values for inline options (SYS_D12)
+  optionValues?: string[]; // Array of option value names
 }
 
 /**
@@ -147,6 +151,7 @@ export interface EnhancedExtractedField extends ExtractedField {
   normalizedName: string; // Lowercase, no special chars
   inferredDataType: string; // 'text' | 'date' | 'reference' | 'url' | 'number' | 'checkbox'
   description?: string | null; // Field description if available
+  optionValues?: string[]; // Option value names for inline options (SYS_D12)
 }
 
 /**

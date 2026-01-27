@@ -1,8 +1,9 @@
 ---
 id: "066"
 feature: "Timeline & Temporal Queries"
-status: "draft"
+status: "completed"
 created: "2026-01-01"
+completed: "2026-01-23"
 ---
 
 # Specification: Timeline & Temporal Queries

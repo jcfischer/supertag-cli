@@ -1,20 +1,26 @@
 #!/usr/bin/env bun
 /**
- * Check Day Nodes in Tana Export
+ * Check Recent Nodes in Tana Export
  *
  * Standalone script - no dependencies required except Bun runtime.
- * Parses a Tana JSON export file and finds the most recent #Day nodes.
+ * Parses a Tana JSON export file and shows the most recently created/edited nodes.
  *
  * Usage:
- *   bun check-day-nodes.ts <export-file.json>
+ *   bun check-day-nodes.ts <export-file.json> [--count N] [--days-only]
+ *
+ * Options:
+ *   --count N    Show N most recent nodes (default: 20)
+ *   --days-only  Only show Day nodes (original behavior)
  *
  * Example:
  *   bun check-day-nodes.ts ~/Documents/Tana-Export/main/M9rkJkwuED@2026-01-12.json
+ *   bun check-day-nodes.ts ~/Documents/Tana-Export/main/M9rkJkwuED@2026-01-12.json --count 50
+ *   bun check-day-nodes.ts ~/Documents/Tana-Export/main/M9rkJkwuED@2026-01-12.json --days-only
  *
  * What this diagnoses:
  *   Tana generates workspace snapshots periodically, NOT on-demand.
  *   When you export, you get the most recent snapshot which may be stale.
- *   If recent Day nodes are missing, the snapshot hasn't been updated yet.
+ *   If recent nodes are missing, the snapshot hasn't been updated yet.
  *
  * Installation:
  *   1. Install Bun: curl -fsSL https://bun.sh/install | bash
@@ -102,20 +108,188 @@ function parseDateFromName(name: string): Date | null {
   return null;
 }
 
+function formatTimestamp(ts: number | undefined): string {
+  if (!ts) return "unknown";
+  return new Date(ts).toISOString().replace("T", " ").slice(0, 19);
+}
+
+function formatAge(ts: number | undefined): string {
+  if (!ts) return "";
+  const now = Date.now();
+  const ageMs = now - ts;
+  const ageMinutes = Math.floor(ageMs / (1000 * 60));
+  const ageHours = Math.floor(ageMs / (1000 * 60 * 60));
+  const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+  if (ageMinutes < 60) return `${ageMinutes}m ago`;
+  if (ageHours < 24) return `${ageHours}h ago`;
+  return `${ageDays}d ago`;
+}
+
+function truncate(str: string, maxLen: number): string {
+  if (!str) return "";
+  // Remove newlines and collapse whitespace
+  const clean = str.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLen) return clean;
+  return clean.slice(0, maxLen - 3) + "...";
+}
+
+function showRecentNodes(nodes: TanaNode[], count: number): void {
+  // Filter to nodes with created or edited timestamps and a name
+  const withTimestamp = nodes.filter(n =>
+    n.props.name &&
+    (n.props.created || n.props.edited) &&
+    n.props.docType !== "tuple" && // Skip tuple nodes (field structures)
+    n.props.docType !== "metanode" && // Skip meta nodes
+    !n.props.name.startsWith("1970-01-01T") // Skip timestamp artifact nodes
+  );
+
+  // Sort by most recent activity (edited > created)
+  const sorted = withTimestamp.sort((a, b) => {
+    const aTime = a.props.edited || a.props.created || 0;
+    const bTime = b.props.edited || b.props.created || 0;
+    return bTime - aTime;
+  });
+
+  console.log(`\n--- Most Recent ${count} Nodes (by activity) ---\n`);
+
+  const recent = sorted.slice(0, count);
+  for (const node of recent) {
+    const edited = node.props.edited;
+    const created = node.props.created;
+    const timestamp = edited || created || 0;
+    const timeType = edited ? "edited" : "created";
+    const age = formatAge(timestamp);
+    const docType = node.props.docType || "node";
+    const name = truncate(node.props.name || "", 50);
+
+    console.log(`  ${formatTimestamp(timestamp)} (${age.padEnd(8)}) [${docType.padEnd(10)}] ${name}`);
+    console.log(`    id: ${node.id}`);
+  }
+
+  // Show stats
+  console.log(`\n--- Activity Stats ---\n`);
+
+  const last24h = withTimestamp.filter(n => {
+    const t = n.props.edited || n.props.created || 0;
+    return Date.now() - t < 24 * 60 * 60 * 1000;
+  }).length;
+
+  const last7d = withTimestamp.filter(n => {
+    const t = n.props.edited || n.props.created || 0;
+    return Date.now() - t < 7 * 24 * 60 * 60 * 1000;
+  }).length;
+
+  console.log(`  Nodes with activity in last 24h: ${last24h.toLocaleString()}`);
+  console.log(`  Nodes with activity in last 7d:  ${last7d.toLocaleString()}`);
+}
+
+function showDayNodesAnalysis(nodes: TanaNode[]): void {
+  const dayNodes = findDayNodes(nodes);
+  console.log(`Day nodes found: ${dayNodes.length}`);
+
+  if (dayNodes.length === 0) {
+    console.log("\nNo day nodes found in export.");
+    console.log("This could indicate the export is missing day nodes or uses a different naming format.");
+    return;
+  }
+
+  // Sort by parsed date (most recent first)
+  const sortedDays = dayNodes
+    .map(node => ({
+      node,
+      date: parseDateFromName(node.props.name!),
+      name: node.props.name!,
+    }))
+    .filter(d => d.date !== null)
+    .sort((a, b) => b.date!.getTime() - a.date!.getTime());
+
+  console.log("\n--- Most Recent 10 Day Nodes ---\n");
+
+  const recent = sortedDays.slice(0, 10);
+  for (const day of recent) {
+    const created = day.node.props.created
+      ? new Date(day.node.props.created).toISOString().slice(0, 10)
+      : "unknown";
+    console.log(`  ${day.name.padEnd(20)} (id: ${day.node.id}, created: ${created})`);
+  }
+
+  // Check for gaps in recent days
+  console.log("\n--- Gap Analysis (last 14 days) ---\n");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const existingDates = new Set(
+    sortedDays
+      .filter(d => d.date)
+      .map(d => d.date!.toISOString().slice(0, 10))
+  );
+
+  const missingDays: string[] = [];
+  for (let i = 0; i < 14; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - i);
+    const dateStr = checkDate.toISOString().slice(0, 10);
+
+    if (!existingDates.has(dateStr)) {
+      missingDays.push(dateStr);
+    }
+  }
+
+  if (missingDays.length === 0) {
+    console.log("  All days present for the last 14 days.");
+  } else {
+    console.log(`  Missing days (${missingDays.length}):`);
+    for (const day of missingDays) {
+      console.log(`    - ${day}`);
+    }
+  }
+
+  // Show oldest and newest
+  if (sortedDays.length > 0) {
+    console.log("\n--- Date Range ---\n");
+    const oldest = sortedDays[sortedDays.length - 1];
+    const newest = sortedDays[0];
+    console.log(`  Oldest day: ${oldest.name}`);
+    console.log(`  Newest day: ${newest.name}`);
+  }
+}
+
 function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0) {
-    console.error("Usage: bun scripts/check-day-nodes.ts <export-file.json>");
+  // Parse arguments
+  let filePath = "";
+  let count = 20;
+  let daysOnly = false;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--count" && args[i + 1]) {
+      count = parseInt(args[i + 1], 10);
+      i++;
+    } else if (args[i] === "--days-only") {
+      daysOnly = true;
+    } else if (!args[i].startsWith("-")) {
+      filePath = args[i];
+    }
+  }
+
+  if (!filePath) {
+    console.error("Usage: bun scripts/check-day-nodes.ts <export-file.json> [--count N] [--days-only]");
+    console.error("\nOptions:");
+    console.error("  --count N    Show N most recent nodes (default: 20)");
+    console.error("  --days-only  Only show Day nodes (original behavior)");
     console.error("\nExample:");
     console.error("  bun scripts/check-day-nodes.ts ~/Documents/Tana-Export/main/M9rkJkwuED@2026-01-12.json");
-    console.error("\nThis script checks if your Tana export contains recent Day nodes.");
-    console.error("If recent days are missing, your Tana snapshot may be stale.");
+    console.error("  bun scripts/check-day-nodes.ts ~/Documents/Tana-Export/main/M9rkJkwuED@2026-01-12.json --count 50");
+    console.error("\nThis script checks if your Tana export contains recent nodes.");
+    console.error("If recent nodes are missing, your Tana snapshot may be stale.");
     process.exit(1);
   }
 
-  const filePath = args[0];
-  console.log(`\n=== Tana Export Day Node Analysis ===\n`);
+  const modeLabel = daysOnly ? "Day Node Analysis" : "Recent Node Analysis";
+  console.log(`\n=== Tana Export ${modeLabel} ===\n`);
   console.log(`File: ${basename(filePath)}`);
 
   try {
@@ -138,75 +312,12 @@ function main() {
       }
     }
 
-    const dayNodes = findDayNodes(nodes);
-    console.log(`Day nodes found: ${dayNodes.length}`);
-    console.log("");
-
-    if (dayNodes.length === 0) {
-      console.log("\nNo day nodes found in export.");
-      console.log("This could indicate the export is missing day nodes or uses a different naming format.");
-      process.exit(0);
-    }
-
-    // Sort by parsed date (most recent first)
-    const sortedDays = dayNodes
-      .map(node => ({
-        node,
-        date: parseDateFromName(node.props.name!),
-        name: node.props.name!,
-      }))
-      .filter(d => d.date !== null)
-      .sort((a, b) => b.date!.getTime() - a.date!.getTime());
-
-    console.log("\n--- Most Recent 10 Day Nodes ---\n");
-
-    const recent = sortedDays.slice(0, 10);
-    for (const day of recent) {
-      const created = day.node.props.created
-        ? new Date(day.node.props.created).toISOString().slice(0, 10)
-        : "unknown";
-      console.log(`  ${day.name.padEnd(20)} (id: ${day.node.id}, created: ${created})`);
-    }
-
-    // Check for gaps in recent days
-    console.log("\n--- Gap Analysis (last 14 days) ---\n");
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const existingDates = new Set(
-      sortedDays
-        .filter(d => d.date)
-        .map(d => d.date!.toISOString().slice(0, 10))
-    );
-
-    const missingDays: string[] = [];
-    for (let i = 0; i < 14; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(checkDate.getDate() - i);
-      const dateStr = checkDate.toISOString().slice(0, 10);
-
-      if (!existingDates.has(dateStr)) {
-        missingDays.push(dateStr);
-      }
-    }
-
-    if (missingDays.length === 0) {
-      console.log("  All days present for the last 14 days.");
+    if (daysOnly) {
+      showDayNodesAnalysis(nodes);
     } else {
-      console.log(`  Missing days (${missingDays.length}):`);
-      for (const day of missingDays) {
-        console.log(`    - ${day}`);
-      }
-    }
-
-    // Show oldest and newest
-    if (sortedDays.length > 0) {
-      console.log("\n--- Date Range ---\n");
-      const oldest = sortedDays[sortedDays.length - 1];
-      const newest = sortedDays[0];
-      console.log(`  Oldest day: ${oldest.name}`);
-      console.log(`  Newest day: ${newest.name}`);
+      showRecentNodes(nodes, count);
+      console.log("\n" + "=".repeat(50));
+      showDayNodesAnalysis(nodes);
     }
 
   } catch (error) {

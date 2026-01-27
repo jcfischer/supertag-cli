@@ -471,7 +471,8 @@ describe("Schema Consolidation Migration (Spec 020 T-1.3)", () => {
           target_supertag_id TEXT,
           target_supertag_name TEXT,
           default_value_id TEXT,
-          default_value_text TEXT
+          default_value_text TEXT,
+          option_values TEXT
         )
       `);
       db.run(`

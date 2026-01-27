@@ -331,6 +331,7 @@ export function migrateSchemaConsolidation(db: Database): void {
         target_supertag_name TEXT,
         default_value_id TEXT,
         default_value_text TEXT,
+        option_values TEXT,
         UNIQUE(tag_id, field_name)
       )
     `);
@@ -358,6 +359,10 @@ export function migrateSchemaConsolidation(db: Database): void {
     }
     if (!columnExists(db, "supertag_fields", "default_value_text")) {
       db.run("ALTER TABLE supertag_fields ADD COLUMN default_value_text TEXT");
+    }
+    // Option values column for inline options (SYS_D12) - stores JSON array of option names
+    if (!columnExists(db, "supertag_fields", "option_values")) {
+      db.run("ALTER TABLE supertag_fields ADD COLUMN option_values TEXT");
     }
   }
 
@@ -388,6 +393,8 @@ export function needsSchemaConsolidationMigration(db: Database): boolean {
     // Default value columns (Spec 092)
     if (!columnExists(db, "supertag_fields", "default_value_id")) return true;
     if (!columnExists(db, "supertag_fields", "default_value_text")) return true;
+    // Option values column for inline options
+    if (!columnExists(db, "supertag_fields", "option_values")) return true;
   }
 
   return false;

@@ -37,6 +37,7 @@ import { batchGet } from './tools/batch-get.js';
 import { batchCreate } from './tools/batch-create.js';
 import { query } from './tools/query.js';
 import { aggregate } from './tools/aggregate.js';
+import { timeline, recent } from './tools/timeline.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -221,6 +222,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Aggregate nodes with grouping and counting. Returns grouped counts, percentages, and nested results. Supports: find by tag, group by field or time period (day/week/month/quarter/year), show percentages, top N groups. Example: { find: "task", groupBy: ["Status"] }',
         inputSchema: schemas.zodToJsonSchema(schemas.aggregateSchema),
       },
+      {
+        name: 'tana_timeline',
+        description:
+          'Time-bucketed activity view over a date range. Groups nodes by time period with configurable granularity: hour, day, week, month, quarter, year. Supports relative dates (7d, 1w, 1m) and ISO dates. Returns buckets with counts and sample items. Example: { from: "30d", granularity: "week" }',
+        inputSchema: schemas.zodToJsonSchema(schemas.timelineSchema),
+      },
+      {
+        name: 'tana_recent',
+        description:
+          'Recently created or updated items within a time period. Returns items ordered by most recent activity. Supports period formats: Nh (hours), Nd (days), Nw (weeks), Nm (months). Filter by types (supertags) or activity type (created vs updated). Example: { period: "7d", types: ["meeting", "task"] }',
+        inputSchema: schemas.zodToJsonSchema(schemas.recentSchema),
+      },
     ],
   };
 });
@@ -337,6 +350,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_aggregate': {
         const validated = schemas.aggregateSchema.parse(args);
         result = await aggregate(validated);
+        break;
+      }
+      case 'tana_timeline': {
+        const validated = schemas.timelineSchema.parse(args);
+        result = await timeline(validated);
+        break;
+      }
+      case 'tana_recent': {
+        const validated = schemas.recentSchema.parse(args);
+        result = await recent(validated);
         break;
       }
       default:

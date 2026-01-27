@@ -1,5 +1,16 @@
 # Supertag CLI - Claude Code Context
 
+## SpecFlow Development
+
+**When implementing specs in `.specify/specs/`, invoke the SpecFlow skill.**
+
+This project uses spec-driven development. Specs are stored in `.specify/specs/<feature-id>/` with:
+- `spec.md` - What and Why (requirements)
+- `plan.md` - How (technical design)
+- `tasks.md` - Work items with TDD enforcement
+
+**Triggers:** "work on F-XXX", "implement F-XXX", "/specflow"
+
 ## Documentation Locations
 
 **When releasing a new version, update ALL of these:**
