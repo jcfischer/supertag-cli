@@ -56,7 +56,21 @@
 
 ## Quick Start
 
-### One-Line Install (Recommended)
+### Homebrew (Recommended for macOS)
+
+```bash
+brew tap jcfischer/supertag
+brew install supertag
+```
+
+Or in one command:
+```bash
+brew install jcfischer/supertag/supertag
+```
+
+This installs all binaries (`supertag`, `supertag-mcp`, `supertag-export`) and keeps them updated with `brew upgrade supertag`.
+
+### One-Line Install (Alternative)
 
 **macOS / Linux:**
 ```bash
