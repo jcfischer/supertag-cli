@@ -16,6 +16,7 @@ import { Command } from "commander";
 import { chromium } from "playwright";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { spawn } from "child_process";
 import { $ } from "bun";
 
 // Import shared config from parent tana package
@@ -30,7 +31,7 @@ import {
 import { VERSION } from "../src/version";
 
 // Import API modules
-import { getAuthToken, isTokenValid, getTokenExpiryMinutes, type AuthLogger } from "./lib/auth";
+import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, type AuthLogger } from "./lib/auth";
 import { getAccount, getSnapshotMeta, getSnapshotUrl, downloadSnapshot } from "./lib/api";
 import { discoverWorkspaces } from "./lib/discover";
 
@@ -257,17 +258,173 @@ async function extractFirebaseApiKey(page: any): Promise<string | null> {
   }
 }
 
+interface LoginOptions {
+  channel?: 'chrome' | 'msedge';
+  timeout?: number;
+}
+
+/**
+ * Manual login mode - spawns browser directly (bypasses Playwright launch issues)
+ * Use this when launchPersistentContext fails on Windows
+ */
+async function manualLogin(timeout: number = 180000): Promise<void> {
+  logger.info("Manual login mode - bypassing Playwright browser launch");
+  logger.info("");
+  logger.info("1. A browser window will open to Tana");
+  logger.info("2. Log in to Tana (via Google or email)");
+  logger.info("3. Wait until you see the Tana workspace");
+  logger.info("4. Close the browser window when done");
+  logger.info("");
+
+  // Ensure browser data directory exists
+  if (!existsSync(USER_DATA_DIR)) {
+    mkdirSync(USER_DATA_DIR, { recursive: true });
+  }
+
+  // Find browser executable
+  let browserPath: string;
+  let browserArgs: string[];
+
+  if (process.platform === 'win32') {
+    // Try Chrome first, then Edge
+    const chromePath = join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const edgePath = join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+    const edgePathX86 = join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+
+    if (existsSync(chromePath)) {
+      browserPath = chromePath;
+    } else if (existsSync(edgePath)) {
+      browserPath = edgePath;
+    } else if (existsSync(edgePathX86)) {
+      browserPath = edgePathX86;
+    } else {
+      // Try Playwright's bundled Chromium as fallback
+      try {
+        browserPath = chromium.executablePath();
+      } catch {
+        throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
+      }
+    }
+    browserArgs = [
+      `--user-data-dir=${USER_DATA_DIR}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      TANA_APP_URL,
+    ];
+  } else if (process.platform === 'darwin') {
+    browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (!existsSync(browserPath)) {
+      try {
+        browserPath = chromium.executablePath();
+      } catch {
+        throw new Error("No browser found. Install Chrome or run 'supertag-export setup'");
+      }
+    }
+    browserArgs = [
+      `--user-data-dir=${USER_DATA_DIR}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      TANA_APP_URL,
+    ];
+  } else {
+    // Linux - use Playwright's bundled Chromium
+    try {
+      browserPath = chromium.executablePath();
+    } catch {
+      throw new Error("Browser not available. Run 'supertag-export setup' first");
+    }
+    browserArgs = [
+      `--user-data-dir=${USER_DATA_DIR}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      TANA_APP_URL,
+    ];
+  }
+
+  logger.info(`Launching browser: ${browserPath}`);
+
+  // Spawn browser process directly
+  const browserProcess = spawn(browserPath, browserArgs, {
+    detached: true,
+    stdio: 'ignore',
+  });
+
+  browserProcess.unref();
+
+  logger.info("");
+  logger.info("Browser launched. Complete login, then press Enter when done...");
+
+  // Wait for user to press Enter
+  await new Promise<void>((resolve) => {
+    process.stdin.setRawMode?.(false);
+    process.stdin.resume();
+    process.stdin.once('data', () => {
+      resolve();
+    });
+
+    // Also set a timeout
+    setTimeout(() => {
+      logger.warn("Timeout reached, proceeding with token extraction...");
+      resolve();
+    }, timeout);
+  });
+
+  // Now extract tokens using headless browser
+  logger.info("");
+  logger.info("Extracting authentication tokens...");
+
+  try {
+    const auth = await extractTokenFromBrowser();
+    if (auth) {
+      // Also try to extract Firebase API key
+      const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
+        headless: true,
+      });
+      try {
+        const page = context.pages()[0] || await context.newPage();
+        await page.goto(TANA_APP_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000);
+
+        const apiKey = await extractFirebaseApiKey(page);
+        if (apiKey) {
+          const config = getConfig();
+          config.setFirebaseApiKey(apiKey);
+          logger.info("✓ Firebase API key extracted and saved");
+        }
+      } finally {
+        await context.close();
+      }
+
+      logger.info("✓ Login session saved successfully!");
+      logger.info("  You can now run: supertag-export run");
+    } else {
+      logger.warn("Could not extract auth tokens. Please try again and make sure you're fully logged in.");
+    }
+  } catch (error) {
+    logger.error("Token extraction failed", error as Error);
+    logger.info("");
+    logger.info("Troubleshooting:");
+    logger.info("  1. Make sure you logged in and saw the Tana workspace");
+    logger.info("  2. Try running 'supertag-export login --channel chrome' instead");
+  }
+}
+
 /**
  * Interactive login via browser
  * Extracts and saves Firebase API key for token refresh
  */
-async function interactiveLogin(): Promise<void> {
-  // Ensure browser is installed
-  if (!await ensureBrowser()) {
+async function interactiveLogin(options: LoginOptions = {}): Promise<void> {
+  const { channel, timeout = 180000 } = options;
+
+  // Ensure browser is installed (skip for system browser)
+  if (!channel && !await ensureBrowser()) {
     throw new Error("Browser not available. Please install manually: bunx playwright install chromium");
   }
 
   logger.info("Opening browser for Tana login...");
+  if (channel) {
+    logger.info(`Using system browser: ${channel}`);
+  }
   logger.info("");
   logger.info("1. Log in to Tana (via Google or email)");
   logger.info("2. Once you see the Tana workspace, the API key will be extracted");
@@ -279,15 +436,29 @@ async function interactiveLogin(): Promise<void> {
     mkdirSync(USER_DATA_DIR, { recursive: true });
   }
 
+  // Build launch args - add Windows-specific GPU args to avoid rendering issues
+  const launchArgs = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-first-run",
+    "--no-default-browser-check",
+  ];
+
+  // Windows-specific fixes for Playwright browser launch issues
+  if (process.platform === 'win32') {
+    launchArgs.push(
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-dev-shm-usage",
+    );
+  }
+
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: false,
+    channel: channel, // Use system Chrome/Edge if specified
     viewport: { width: 1280, height: 800 },
     ignoreDefaultArgs: ["--enable-automation"],
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--no-first-run",
-      "--no-default-browser-check",
-    ],
+    args: launchArgs,
+    timeout: timeout,
   });
 
   const page = context.pages()[0] || (await context.newPage());
@@ -421,9 +592,17 @@ program
 program
   .command("login")
   .description("Interactive login to Tana (first-time setup)")
-  .action(async () => {
+  .option("--channel <browser>", "Use system browser: 'chrome' or 'msedge' (Windows fix)")
+  .option("--manual", "Manual login mode: opens browser directly, extracts tokens after")
+  .option("--timeout <seconds>", "Login timeout in seconds (default: 180)", "180")
+  .action(async (options: { channel?: string; manual?: boolean; timeout: string }) => {
     try {
-      await interactiveLogin();
+      const timeout = parseInt(options.timeout) * 1000;
+      if (options.manual) {
+        await manualLogin(timeout);
+      } else {
+        await interactiveLogin({ channel: options.channel as 'chrome' | 'msedge' | undefined, timeout });
+      }
     } catch (error) {
       logger.error("Login failed", error as Error);
       process.exit(1);
