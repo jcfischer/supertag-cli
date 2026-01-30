@@ -47,6 +47,8 @@ import { handleDone, handleUndone } from './tools/done.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
+import { isToolEnabled, getToolMode, getSlimModeToolCount } from './tool-mode.js';
+import { initDeltaSyncPoller, type DeltaSyncPoller } from './delta-sync-poller.js';
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
 
@@ -72,13 +74,12 @@ const server = new Server(
   }
 );
 
-// List available tools
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  logger.info('Listing available tools');
-
-  return {
-    tools: [
-      {
+/**
+ * All tool definitions. Defined outside handlers so both ListTools and
+ * CallTool can reference the same canonical list.
+ */
+const allTools = [
+  {
         name: 'tana_search',
         description:
           'Full-text search on Tana node names. Returns matching nodes with their IDs, names, relevance rank, and supertags. By default includes ancestor context: when a match is nested, shows the containing project/meeting/etc with supertag. Use includeAncestor=false to disable.',
@@ -147,7 +148,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'tana_sync',
         description:
-          'Trigger reindex of Tana exports or check sync status. Use action="index" to reindex, action="status" to check when last indexed.',
+          'Sync Tana data. action="index" for full reindex from exports, action="status" to check sync status, action="delta" for incremental sync via Local API (fast, fetches only changed nodes since last sync).',
         inputSchema: schemas.zodToJsonSchema(schemas.syncSchema),
       },
       {
@@ -295,14 +296,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Mark a node as not done (unchecked). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.undoneSchema),
       },
-    ],
-  };
+];
+
+// List available tools (filtered by tool mode)
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const mode = getToolMode();
+  const filteredTools = allTools.filter((t) => isToolEnabled(t.name, mode));
+  logger.info(`Listing tools: ${filteredTools.length} available (mode: ${mode})`);
+
+  return { tools: filteredTools };
 });
 
 // Execute tools
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  logger.info('Tool called', { tool: name });
+  const mode = getToolMode();
+  logger.info('Tool called', { tool: name, mode });
+
+  // Guard: reject disabled tools in slim mode
+  if (!isToolEnabled(name, mode)) {
+    logger.warn('Tool disabled in current mode', { tool: name, mode });
+    return {
+      isError: true,
+      content: [{
+        type: 'text' as const,
+        text: `Tool '${name}' is disabled in slim mode. Switch to full mode or use tana_semantic_search for queries.`,
+      }],
+    };
+  }
 
   try {
     let result: unknown;
@@ -486,21 +507,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+/**
+ * Module-level reference to the active delta-sync poller.
+ * Exported so the sync tool can call triggerNow() for action='delta'.
+ */
+export let activePoller: DeltaSyncPoller | null = null;
+
 async function main() {
+  const mode = getToolMode();
   logger.info('Starting Supertag MCP server', {
     version: VERSION,
     serviceName: SERVICE_NAME,
+    toolMode: mode,
+    toolCount: mode === 'slim' ? getSlimModeToolCount() : allTools.length,
   });
 
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    logger.info('Supertag MCP server running');
+    logger.info('Supertag MCP server running', { mode });
+
+    // Initialize delta-sync poller if Local API is configured (F-095 T-4.2)
+    try {
+      const { ConfigManager } = await import('../config/manager.js');
+      const { resolveWorkspaceContext } = await import('../config/workspace-resolver.js');
+      const { LocalApiClient } = await import('../api/local-api-client.js');
+      const config = ConfigManager.getInstance();
+      const localApiConfig = config.getLocalApiConfig();
+      const syncInterval = config.getDeltaSyncInterval();
+
+      const poller = initDeltaSyncPoller({
+        localApiConfig,
+        syncInterval,
+        dbPath: resolveWorkspaceContext({ requireDatabase: false }).dbPath,
+        embeddingConfig: config.getEmbeddingConfig(),
+        logger,
+        localApiClientFactory: (cfg) => new LocalApiClient(cfg),
+      });
+
+      if (poller) {
+        activePoller = poller;
+      }
+    } catch (pollerError) {
+      // Non-fatal: MCP server continues without delta-sync
+      logger.warn('Delta-sync poller initialization skipped', {
+        error: String(pollerError),
+      });
+    }
   } catch (error) {
     logger.error('Failed to start MCP server', { error: String(error) });
     process.exit(1);
   }
 }
+
+// Cleanup on shutdown
+process.on('SIGINT', () => {
+  activePoller?.stop();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  activePoller?.stop();
+  process.exit(0);
+});
 
 main().catch((error) => {
   logger.error('Fatal error', { error: String(error) });

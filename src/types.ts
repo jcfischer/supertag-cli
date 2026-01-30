@@ -164,9 +164,16 @@ export interface TanaConfig {
     bearerToken?: string;
     /** API endpoint URL (default: http://localhost:8262) */
     endpoint: string;
+    /** Minutes between automatic delta-syncs (0 = disabled, default: 5) */
+    deltaSyncInterval?: number;
   };
   /** Use Input API as fallback when local API is unavailable (F-094) */
   useInputApiFallback?: boolean;
+  /** MCP server configuration (F-095) */
+  mcp?: {
+    /** Tool registration mode: 'full' (all tools) or 'slim' (semantic + mutations only) */
+    toolMode?: 'full' | 'slim';
+  };
 }
 
 /**
