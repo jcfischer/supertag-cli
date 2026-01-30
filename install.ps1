@@ -34,6 +34,9 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+# PowerShell 5.1 defaults to TLS 1.0/1.1 — GitHub requires TLS 1.2+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -161,11 +164,12 @@ function Resolve-Version {
 
     if ($Requested -eq "latest") {
         try {
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Script:GitHubRepo/releases/latest"
+            $headers = @{ "User-Agent" = "supertag-cli-installer" }
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Script:GitHubRepo/releases/latest" -Headers $headers
             $tag = $release.tag_name -replace '^v', ''
             return $tag
         } catch {
-            throw "Could not fetch latest version from GitHub. Check your network connection."
+            throw "Could not fetch latest version from GitHub: $($_.Exception.Message)"
         }
     }
 
@@ -259,10 +263,11 @@ function Install-Supertag {
 
     try {
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+        $headers = @{ "User-Agent" = "supertag-cli-installer" }
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing -Headers $headers
     } catch {
         Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        throw "Failed to download from $downloadUrl"
+        throw "Failed to download from $downloadUrl`: $($_.Exception.Message)"
     }
 
     Write-Info "Extracting to $Script:InstallDir..."
