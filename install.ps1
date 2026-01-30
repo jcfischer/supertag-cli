@@ -103,11 +103,28 @@ function Get-Confirmation {
 # =============================================================================
 
 function Get-Platform {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-    switch ($arch) {
-        "X64" { return "windows-x64" }
-        "Arm64" { return "windows-arm64" }
-        default { throw "Unsupported architecture: $arch" }
+    # Try .NET RuntimeInformation first (PowerShell 7+ / .NET Core)
+    try {
+        $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+        switch ($arch) {
+            "X64" { return "windows-x64" }
+            "Arm64" { return "windows-arm64" }
+        }
+    } catch { }
+
+    # Fallback for Windows PowerShell 5.1 (.NET Framework)
+    $envArch = $env:PROCESSOR_ARCHITECTURE
+    switch ($envArch) {
+        "AMD64" { return "windows-x64" }
+        "ARM64" { return "windows-arm64" }
+        "x86" {
+            # 32-bit PowerShell on 64-bit OS reports x86, check real arch
+            if ($env:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
+                return "windows-x64"
+            }
+            throw "Unsupported architecture: x86 (32-bit Windows is not supported)"
+        }
+        default { throw "Unsupported architecture: $envArch" }
     }
 }
 
