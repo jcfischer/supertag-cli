@@ -6,6 +6,10 @@
 
 **Complete Tana integration**: Query, write, search, and automate your Tana workspace from the command line.
 
+### What's New in v2.0.0
+
+Tana has officially released their [Local API and MCP server](https://tana.inc), and Supertag CLI now fully integrates with it. This means supertag-cli is no longer limited to read-only exports and basic node creation — you can now **edit nodes, manage tags, set field values, check off tasks, and trash nodes** directly from the command line or through any MCP-compatible AI tool. The new delta-sync feature uses the Local API to fetch only changed nodes since your last sync, making incremental updates fast without needing a full re-export. All you need is Tana Desktop running with the Local API enabled. Supertag CLI auto-detects the Local API and falls back to the Input API when Tana Desktop isn't available, so your existing workflows keep working unchanged.
+
 ## Three-Tool Architecture
 
 | Tool | Size | Purpose |
