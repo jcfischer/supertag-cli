@@ -355,6 +355,7 @@ jobs:
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/jcfischer/homebrew-supertag.git"
           git add Formula/supertag.rb
           git commit -m "chore: bump to v${VERSION}"
           git push
