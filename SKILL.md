@@ -243,17 +243,22 @@ Show database statistics
 ```
 
 ### tana_sync
-Trigger reindex or check sync status.
+Trigger reindex, delta-sync, or check sync status.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | No | "index" to reindex, "status" to check (default: index) |
+| `action` | string | No | "index" to reindex, "delta" for incremental sync, "status" to check (default: index) |
 | `workspace` | string | No | Workspace alias |
+
+**Delta-sync** (`action="delta"`) fetches only nodes changed since the last sync via Tana Desktop's Local API. Much faster than full reindex. Requires Tana Desktop running with Local API enabled.
+
+The MCP server also runs delta-sync automatically in the background (default: every 5 minutes). Configure interval via `localApi.deltaSyncInterval` in config or `TANA_DELTA_SYNC_INTERVAL` env var (0 disables).
 
 **Example:**
 ```
 Reindex my Tana database
+Run incremental sync to get latest changes
 Check when Tana was last synced
 ```
 
@@ -831,10 +836,13 @@ supertag search "meeting" -w work
 ### Sync Commands
 
 ```bash
-# Index export files
+# Full reindex from export files
 supertag sync index
 
-# Check status
+# Delta-sync: fetch only changes since last sync (requires Tana Desktop + Local API)
+supertag sync index --delta
+
+# Check status (includes delta-sync info)
 supertag sync status
 
 # Cleanup old exports
@@ -956,11 +964,19 @@ Config file: `~/.config/supertag/config.json`
   "embedding": {
     "provider": "ollama",
     "model": "bge-m3"
+  },
+  "localApi": {
+    "deltaSyncInterval": 5
+  },
+  "mcp": {
+    "toolMode": "full"
   }
 }
 ```
 
 **Output format options:** `table`, `json`, `csv`, `ids`, `minimal`, `jsonl`
+
+**MCP Slim Mode:** Set `mcp.toolMode` to `"slim"` to reduce from 31 to 16 tools. Keeps semantic search, all mutations, sync, cache clear, capabilities, and tool schema. Useful for AI agents that perform better with fewer tool options.
 
 ## Prerequisites
 
@@ -976,6 +992,10 @@ Config file: `~/.config/supertag/config.json`
 | `TANA_API_TOKEN` | Tana Input API token |
 | `TANA_WORKSPACE` | Default workspace alias |
 | `SUPERTAG_FORMAT` | Default output format (table, json, csv, ids, minimal, jsonl) |
+| `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API |
+| `TANA_LOCAL_API_URL` | Local API endpoint URL (default: `http://localhost:8262`) |
+| `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (default: 5, 0 disables) |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (31 tools) or `slim` (16 tools) |
 | `DEBUG` | Enable debug logging |
 
 ## Data Locations

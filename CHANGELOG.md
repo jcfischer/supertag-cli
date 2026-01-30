@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Delta-Sync via Local API (F-095)** - Incremental sync between full exports using Tana Desktop's local API
+  - `supertag sync index --delta` - Fetch only nodes changed since last sync instead of full reindex
+  - MCP `tana_sync` tool now accepts `action="delta"` for incremental sync from AI tools
+  - Background delta-sync poller in MCP server runs periodic incremental syncs (configurable interval)
+  - Health-aware polling: pauses when Tana Desktop is unreachable, resumes when back
+  - Delta-sync status in `supertag sync status` output (last sync time, nodes synced, embedding coverage)
+  - Configuration: `localApi.deltaSyncInterval` in config (minutes, default 5, 0 disables)
+  - Environment variables: `TANA_DELTA_SYNC_INTERVAL`, `TANA_MCP_TOOL_MODE`
+
+- **MCP Slim Mode (F-095)** - Reduced tool set for AI agents that benefit from fewer tools
+  - `mcp.toolMode: "slim"` config option reduces from 31 tools to 16 essential tools
+  - Slim mode keeps: semantic_search, all mutations, sync, cache_clear, capabilities, tool_schema
+  - Environment variable: `TANA_MCP_TOOL_MODE=slim`
+
 - **Local API Integration (F-094)** - Tana Desktop's tana-local REST API as write backend
   - New backend abstraction layer: `TanaBackend` interface with `InputApiBackend` and `LocalApiBackend` implementations
   - Auto-detects available backend: Local API (if Tana Desktop running) → Input API fallback

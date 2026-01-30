@@ -114,6 +114,22 @@ export class ConfigManager {
       }
       config.localApi.endpoint = process.env.TANA_LOCAL_API_URL;
     }
+    if (process.env.TANA_DELTA_SYNC_INTERVAL) {
+      if (!config.localApi) {
+        config.localApi = { enabled: true, endpoint: DEFAULT_LOCAL_API_ENDPOINT };
+      }
+      const interval = parseInt(process.env.TANA_DELTA_SYNC_INTERVAL, 10);
+      if (!isNaN(interval) && interval >= 0 && interval <= 60) {
+        config.localApi.deltaSyncInterval = interval;
+      }
+    }
+    if (process.env.TANA_MCP_TOOL_MODE) {
+      const mode = process.env.TANA_MCP_TOOL_MODE;
+      if (mode === 'full' || mode === 'slim') {
+        if (!config.mcp) config.mcp = {};
+        config.mcp.toolMode = mode;
+      }
+    }
 
     return config;
   }
@@ -430,6 +446,24 @@ export class ConfigManager {
    */
   getUseInputApiFallback(): boolean {
     return this.config.useInputApiFallback ?? false;
+  }
+
+  /**
+   * Get delta-sync interval in minutes (F-095)
+   * @returns Interval in minutes (0 = disabled, default: 5)
+   */
+  getDeltaSyncInterval(): number {
+    return this.config.localApi?.deltaSyncInterval ?? 5;
+  }
+
+  /**
+   * Get MCP tool mode (F-095)
+   * @returns 'full' or 'slim' (default: 'full')
+   */
+  getMcpToolMode(): 'full' | 'slim' {
+    const mode = this.config.mcp?.toolMode;
+    if (mode === 'slim') return 'slim';
+    return 'full';
   }
 
   /**

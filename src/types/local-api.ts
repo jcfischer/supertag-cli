@@ -24,12 +24,15 @@ export interface LocalApiConfig {
   bearerToken?: string;
   /** API endpoint URL (default: http://localhost:8262) */
   endpoint: string;
+  /** Minutes between automatic delta-syncs (0 = disabled, default: 5) */
+  deltaSyncInterval?: number;
 }
 
 export const LocalApiConfigSchema = z.object({
   enabled: z.boolean().default(true),
   bearerToken: z.string().optional(),
   endpoint: z.string().url().default("http://localhost:8262"),
+  deltaSyncInterval: z.number().min(0).max(60).optional(),
 });
 
 /** Default local API endpoint */
@@ -328,3 +331,77 @@ export const CalendarNodeResponseSchema = z.object({
 export type CalendarNodeResponse = z.infer<typeof CalendarNodeResponseSchema>;
 
 export type CalendarGranularity = "day" | "week" | "month" | "year";
+
+// =============================================================================
+// Delta-Sync Types (F-095)
+// =============================================================================
+
+/**
+ * Options for initializing DeltaSyncService.
+ * Uses structural typing for localApiClient to avoid circular dependencies.
+ */
+export interface DeltaSyncOptions {
+  /** Path to SQLite database */
+  dbPath: string;
+  /** LocalApiClient-compatible object with searchNodes and health methods */
+  localApiClient: {
+    searchNodes(
+      query: Record<string, unknown>,
+      options?: { limit?: number; offset?: number },
+    ): Promise<SearchResultNode[]>;
+    health(): Promise<boolean>;
+  };
+  /** Embedding config (optional - embeddings skipped if not provided) */
+  embeddingConfig?: {
+    model: string;
+    endpoint?: string;
+  };
+  /** Logger (compatible with project's unified Logger interface) */
+  logger?: {
+    info(message: string, data?: Record<string, unknown>): void;
+    warn(message: string, data?: Record<string, unknown>): void;
+    error(message: string, data?: Record<string, unknown>): void;
+  };
+}
+
+/**
+ * Result of a delta-sync cycle
+ */
+export interface DeltaSyncResult {
+  /** Total changed nodes returned by API */
+  nodesFound: number;
+  /** New nodes inserted into DB */
+  nodesInserted: number;
+  /** Existing nodes updated in DB */
+  nodesUpdated: number;
+  /** Nodes skipped (e.g., trash nodes with no useful data) */
+  nodesSkipped: number;
+  /** Number of embeddings generated */
+  embeddingsGenerated: number;
+  /** Whether embedding generation was skipped entirely */
+  embeddingsSkipped: boolean;
+  /** Previous watermark (ms epoch) */
+  watermarkBefore: number;
+  /** New watermark after sync (ms epoch) */
+  watermarkAfter: number;
+  /** Total duration in milliseconds */
+  durationMs: number;
+  /** Number of API pages fetched */
+  pages: number;
+}
+
+/**
+ * Delta-sync status for reporting
+ */
+export interface DeltaSyncStatus {
+  /** Last full sync timestamp (ms epoch), null if never run */
+  lastFullSync: number | null;
+  /** Last delta-sync timestamp (ms epoch), null if never run */
+  lastDeltaSync: number | null;
+  /** Number of nodes synced in last delta-sync */
+  lastDeltaNodesCount: number;
+  /** Total nodes in database */
+  totalNodes: number;
+  /** Embedding coverage as percentage (0-100) */
+  embeddingCoverage: number;
+}

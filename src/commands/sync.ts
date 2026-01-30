@@ -5,6 +5,9 @@
  * Supports multi-workspace configuration via -w/--workspace option
  *
  * Automatically syncs schema registry after indexing exports.
+ *
+ * Delta-sync (F-095): Use --delta flag with `sync index` for incremental
+ * sync via tana-local API instead of full reindex from export files.
  */
 
 import { Command } from "commander";
@@ -19,17 +22,20 @@ import {
 } from "../config/paths";
 import {
   processWorkspaces,
-  createProgressLogger,
   type ResolvedWorkspace,
 } from "../config";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import { getConfig } from "../config/manager";
+import { ConfigManager } from "../config/manager";
 import {
   cleanupExports,
   getExportFiles,
   formatBytes,
 } from "../cleanup/cleanup";
 import { syncSchemaToPath, getSchemaRegistryFromDatabase } from "./schema";
+import { DeltaSyncService } from "../services/delta-sync";
+import { LocalApiClient } from "../api/local-api-client";
+import type { DeltaSyncResult } from "../types/local-api";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');
@@ -72,6 +78,91 @@ function resolvePaths(options: {
     schemaPath: ws.schemaPath,
     alias: ws.alias,
   };
+}
+
+/**
+ * Format a relative time string from a millisecond timestamp.
+ * Returns human-readable "X minutes ago" style strings.
+ */
+export function formatRelativeTime(timestampMs: number): string {
+  const now = Date.now();
+  const diffMs = now - timestampMs;
+
+  if (diffMs < 0) return "just now";
+
+  const seconds = Math.floor(diffMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days > 1 ? "s" : ""} ago`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+  return "just now";
+}
+
+/**
+ * Print delta-sync result summary to the logger.
+ */
+function logDeltaSyncResult(result: DeltaSyncResult): void {
+  logger.info('Delta-sync complete:');
+  logger.info(`  Changed nodes found: ${result.nodesFound}`);
+  logger.info(`  Inserted: ${result.nodesInserted}, Updated: ${result.nodesUpdated}, Skipped: ${result.nodesSkipped}`);
+  if (result.embeddingsSkipped) {
+    logger.info('  Embeddings: skipped (no config)');
+  } else {
+    logger.info(`  Embeddings: ${result.embeddingsGenerated} generated`);
+  }
+  logger.info(`  Duration: ${result.durationMs}ms (${result.pages} pages)`);
+}
+
+/**
+ * Run delta-sync via Local API.
+ * Returns the DeltaSyncResult or throws on error.
+ */
+async function runDeltaSync(dbPath: string): Promise<DeltaSyncResult> {
+  // Step 1: Get Local API config
+  const config = ConfigManager.getInstance();
+  const localApiConfig = config.getLocalApiConfig();
+
+  if (!localApiConfig.bearerToken) {
+    throw new Error(
+      "No bearer token configured. Set it with: supertag config set localApi.bearerToken <token>"
+    );
+  }
+
+  // Step 2: Create client and check health
+  const client = new LocalApiClient({
+    endpoint: localApiConfig.endpoint,
+    bearerToken: localApiConfig.bearerToken,
+  });
+
+  let healthy: boolean;
+  try {
+    healthy = await client.health();
+  } catch (error) {
+    throw new Error(
+      `Tana Desktop is not running or Local API is disabled. Start Tana Desktop and enable Local API in Settings. (${error instanceof Error ? error.message : String(error)})`
+    );
+  }
+
+  if (!healthy) {
+    throw new Error(
+      "Tana Desktop is not running or Local API is disabled. Start Tana Desktop and enable Local API in Settings."
+    );
+  }
+
+  // Step 3: Create DeltaSyncService and run sync
+  const deltaSyncService = new DeltaSyncService({
+    dbPath,
+    localApiClient: client,
+  });
+
+  try {
+    return await deltaSyncService.sync();
+  } finally {
+    deltaSyncService.close();
+  }
 }
 
 export function registerSyncCommands(program: Command): void {
@@ -163,9 +254,27 @@ export function registerSyncCommands(program: Command): void {
     .description("Manually index latest export")
     .option("-w, --workspace <alias>", "Workspace alias or nodeid")
     .option("--all", "Index all enabled workspaces")
+    .option("--delta", "Run incremental delta-sync via Local API instead of full reindex")
     .option("--export-dir <path>", "Export directory path (overrides workspace)")
     .option("--db-path <path>", "Database path (overrides workspace)")
     .action(async (options) => {
+      // Handle --delta mode (F-095 T-3.1)
+      if (options.delta) {
+        const paths = resolvePaths(options);
+        logger.info(`Workspace: ${paths.alias}`);
+        logger.info(`Database: ${paths.dbPath}`);
+        logger.info('Running delta-sync via Local API...');
+
+        try {
+          const result = await runDeltaSync(paths.dbPath);
+          logDeltaSyncResult(result);
+          process.exit(0);
+        } catch (error) {
+          logger.error(error instanceof Error ? error.message : String(error));
+          process.exit(1);
+        }
+      }
+
       // Handle --all option for batch indexing
       if (options.all) {
         const batchResult = await processWorkspaces(
@@ -351,6 +460,36 @@ export function registerSyncCommands(program: Command): void {
       logger.info(`Last indexed: ${status.lastIndexed ? new Date(status.lastIndexed).toLocaleString() : "Never"}`);
 
       watcher.close();
+
+      // Delta-sync status (F-095 T-3.2)
+      if (existsSync(paths.dbPath)) {
+        try {
+          const deltaSyncService = new DeltaSyncService({
+            dbPath: paths.dbPath,
+            // Dummy client - only used for status reporting, not syncing
+            localApiClient: { searchNodes: async () => [], health: async () => false },
+          });
+
+          const deltaStatus = deltaSyncService.getStatus();
+          deltaSyncService.close();
+
+          logger.info('Delta Sync:');
+          if (deltaStatus.lastDeltaSync !== null) {
+            const dateStr = new Date(deltaStatus.lastDeltaSync).toLocaleString();
+            const relativeStr = formatRelativeTime(deltaStatus.lastDeltaSync);
+            logger.info(`  Last delta-sync: ${dateStr} (${relativeStr})`);
+          } else {
+            logger.info('  Last delta-sync: Never');
+          }
+          logger.info(`  Nodes synced: ${deltaStatus.lastDeltaNodesCount}`);
+          if (deltaStatus.totalNodes > 0) {
+            const coverage = deltaStatus.embeddingCoverage.toFixed(1);
+            logger.info(`  Embedding coverage: ${coverage}% (${deltaStatus.totalNodes.toLocaleString()} nodes)`);
+          }
+        } catch {
+          // Delta-sync status is optional, don't fail the command
+        }
+      }
     });
 
   sync

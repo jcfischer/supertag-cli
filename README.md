@@ -419,6 +419,26 @@ Total: 8
 
 See [Graph Traversal Documentation](./docs/graph-traversal.md) for more examples.
 
+### SYNC - Index and Delta-Sync
+
+```bash
+# Full reindex from export files
+supertag sync index
+
+# Delta-sync: fetch only changes since last sync (requires Tana Desktop + Local API)
+supertag sync index --delta
+
+# Check sync status (includes delta-sync info)
+supertag sync status
+
+# Cleanup old exports
+supertag sync cleanup --keep 5
+```
+
+**Delta-sync** uses Tana Desktop's Local API to fetch only nodes changed since the last sync, making it much faster than a full reindex. Requires Tana Desktop running with Local API enabled and a bearer token configured (`supertag config --bearer-token <token>`).
+
+The MCP server can run delta-sync automatically in the background at a configurable interval (default: every 5 minutes). Set `localApi.deltaSyncInterval` in config or use `TANA_DELTA_SYNC_INTERVAL` environment variable (0 disables polling).
+
 ### EXPORT - Automated Backup
 
 #### Setup
@@ -698,6 +718,20 @@ Integrate with Claude Desktop, ChatGPT, Cursor, VS Code, and other MCP-compatibl
 }
 ```
 
+**Slim Mode:** Reduce the tool count from 31 to 16 essential tools for AI agents that work better with fewer options:
+
+```bash
+# Via environment variable
+TANA_MCP_TOOL_MODE=slim supertag-mcp
+
+# Or in config.json
+# { "mcp": { "toolMode": "slim" } }
+```
+
+Slim mode keeps: semantic search, all mutation tools, sync, cache clear, capabilities, and tool schema. Removes read-only query tools that overlap with semantic search.
+
+**Background Delta-Sync:** The MCP server automatically runs incremental syncs in the background (default: every 5 minutes) when Tana Desktop is reachable. Configure with `localApi.deltaSyncInterval` or `TANA_DELTA_SYNC_INTERVAL` (0 disables).
+
 See [MCP Documentation](./docs/mcp.md) for setup guides.
 
 ### WORKSPACES - Multi-Workspace
@@ -831,6 +865,15 @@ Set defaults in `~/.config/supertag/config.json`:
 ```bash
 export SUPERTAG_FORMAT=csv  # Default to CSV output
 ```
+
+**Additional Environment Variables:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (0 disables) | `5` |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (31 tools) or `slim` (16 tools) | `full` |
+| `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API | |
+| `TANA_LOCAL_API_URL` | Local API endpoint URL | `http://localhost:8262` |
 
 ---
 

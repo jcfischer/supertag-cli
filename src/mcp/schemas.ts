@@ -197,9 +197,9 @@ export type CreateInput = z.infer<typeof createSchema>;
 // tana_sync (Phase 2)
 export const syncSchema = z.object({
   action: z
-    .enum(['index', 'status'])
+    .enum(['index', 'status', 'delta'])
     .default('index')
-    .describe('Action to perform: "index" to reindex, "status" to check sync status'),
+    .describe('Action: "index" full reindex from export, "status" check sync status, "delta" incremental sync via Local API'),
   workspace: workspaceSchema,
 });
 export type SyncInput = z.infer<typeof syncSchema>;
