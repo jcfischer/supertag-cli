@@ -376,7 +376,7 @@ export class TanaIndexer {
           node.props.name || null,
           parentMap.get(id) || null,
           "node",
-          node.props.created,
+          node.props.created ?? 0,
           updated,
           doneAt,
           JSON.stringify(node)
@@ -619,7 +619,7 @@ export class TanaIndexer {
             node.props.name || null,
             parentMap.get(id) || null,
             "node",
-            node.props.created,
+            node.props.created ?? 0,
             updated,
             doneAt,
             JSON.stringify(node)

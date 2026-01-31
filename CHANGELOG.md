@@ -5,6 +5,12 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-02-01
+
+### Fixed
+
+- **Index fails on imported workspaces** - Workspaces imported from Roam Research (and potentially other tools) have nodes missing the `created` timestamp in their props. The Zod schema validation now treats `created` as optional, defaulting to `0` in the database. Fixes #34.
+
 ## [2.0.2] - 2026-01-30
 
 ### Fixed

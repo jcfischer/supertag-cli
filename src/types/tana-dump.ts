@@ -22,7 +22,7 @@ import { z } from "zod";
  * that may exist in the export (e.g., _view, _imageHeight, _imageWidth, etc.)
  */
 export const PropsSchema = z.object({
-  created: z.number(),
+  created: z.number().optional(), // Optional: some imported workspaces (e.g. Roam) lack this
   name: z.string().optional(),
   description: z.string().optional(),
   _ownerId: z.string().optional(),
