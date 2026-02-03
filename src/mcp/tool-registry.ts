@@ -9,6 +9,7 @@
 
 import { VERSION } from '../version.js';
 import * as schemas from './schemas.js';
+import { isToolEnabled, type ToolMode } from './tool-mode.js';
 
 // =============================================================================
 // Types
@@ -42,6 +43,7 @@ export interface ToolMetadata {
 /** Capabilities response structure */
 export interface CapabilitiesResponse {
   version: string;
+  mode?: string;
   categories: ToolCategory[];
   quickActions: string[];
 }
@@ -319,18 +321,21 @@ const schemaCache = new Map<string, Record<string, unknown>>();
 /**
  * Get lightweight capabilities inventory
  */
-export function getCapabilities(filter?: { category?: CategoryName }): CapabilitiesResponse {
+export function getCapabilities(filter?: { category?: CategoryName; mode?: ToolMode }): CapabilitiesResponse {
   const categoryNames: CategoryName[] = ['query', 'explore', 'transcript', 'mutate', 'system'];
   const filteredCategories = filter?.category ? [filter.category] : categoryNames;
+  const mode = filter?.mode ?? 'full';
 
   const categories: ToolCategory[] = filteredCategories.map((categoryName) => {
-    const tools = TOOL_METADATA.filter((t) => t.category === categoryName).map(
-      (t): ToolSummary => ({
-        name: t.name,
-        description: t.description,
-        example: t.example,
-      })
-    );
+    const tools = TOOL_METADATA
+      .filter((t) => t.category === categoryName && isToolEnabled(t.name, mode))
+      .map(
+        (t): ToolSummary => ({
+          name: t.name,
+          description: t.description,
+          example: t.example,
+        })
+      );
 
     return {
       name: categoryName,
@@ -341,6 +346,7 @@ export function getCapabilities(filter?: { category?: CategoryName }): Capabilit
 
   return {
     version: VERSION,
+    mode: mode !== 'full' ? mode : undefined,
     categories,
     quickActions: QUICK_ACTIONS,
   };

@@ -722,17 +722,29 @@ Integrate with Claude Desktop, ChatGPT, Cursor, VS Code, and other MCP-compatibl
 }
 ```
 
-**Slim Mode:** Reduce the tool count from 31 to 16 essential tools for AI agents that work better with fewer options:
+**Tool Modes:** Three modes control which tools are registered:
+
+| Mode | Tools | Flag | Use Case |
+|------|-------|------|----------|
+| `full` | 32 | (default) | Standalone — all tools available |
+| `slim` | 14 | `--slim` | Context-optimized — fewer tools for AI agents |
+| `lite` | 16 | `--lite` | Complement tana-local MCP — analytics & search only |
 
 ```bash
-# Via environment variable
-TANA_MCP_TOOL_MODE=slim supertag-mcp
+# Lite mode: complement tana-local with analytics/search tools
+supertag-mcp --lite
 
-# Or in config.json
-# { "mcp": { "toolMode": "slim" } }
+# Slim mode: reduced tool set for simpler AI agents
+supertag-mcp --slim
+
+# Or via environment variable / config
+TANA_MCP_TOOL_MODE=lite supertag-mcp
+# { "mcp": { "toolMode": "lite" } }
 ```
 
-Slim mode keeps: semantic search, all mutation tools, sync, cache clear, capabilities, and tool schema. Removes read-only query tools that overlap with semantic search.
+**Lite mode** is designed for two-layer MCP setups where Tana's official `tana-local` MCP handles live workspace CRUD (read, create, edit, tag, trash) and supertag-mcp provides the complementary analytics layer: semantic search, aggregation, timeline, field queries, transcripts, and graph traversal. Excluded tools return a message pointing to the equivalent tana-local tool.
+
+**Slim mode** keeps semantic search, all mutation tools, sync, cache clear, capabilities, and tool schema. Removes read-only query tools that overlap with semantic search.
 
 **Background Delta-Sync:** The MCP server automatically runs incremental syncs in the background (default: every 5 minutes) when Tana Desktop is reachable. Configure with `localApi.deltaSyncInterval` or `TANA_DELTA_SYNC_INTERVAL` (0 disables).
 
@@ -875,7 +887,7 @@ export SUPERTAG_FORMAT=csv  # Default to CSV output
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (0 disables) | `5` |
-| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (31 tools) or `slim` (16 tools) | `full` |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (32 tools), `slim` (14 tools), or `lite` (16 tools) | `full` |
 | `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API | |
 | `TANA_LOCAL_API_URL` | Local API endpoint URL | `http://localhost:8262` |
 

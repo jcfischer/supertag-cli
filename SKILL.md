@@ -976,7 +976,25 @@ Config file: `~/.config/supertag/config.json`
 
 **Output format options:** `table`, `json`, `csv`, `ids`, `minimal`, `jsonl`
 
-**MCP Slim Mode:** Set `mcp.toolMode` to `"slim"` to reduce from 31 to 16 tools. Keeps semantic search, all mutations, sync, cache clear, capabilities, and tool schema. Useful for AI agents that perform better with fewer tool options.
+**MCP Tool Modes:**
+
+| Mode | Tools | Use Case |
+|------|-------|----------|
+| `full` | 32 | Standalone use — all tools available |
+| `slim` | 14 | Context-optimized — fewer tools for AI agents that perform better with less choice |
+| `lite` | 16 | Complement tana-local — analytics, search, and offline tools that tana-local doesn't provide |
+
+Set via `mcp.toolMode` in config or `TANA_MCP_TOOL_MODE` env var.
+
+**Lite Mode** is designed for two-layer MCP setups where tana-local handles live workspace CRUD (read, create, edit, tag, trash) and supertag-mcp provides the analytics and search layer (semantic search, aggregation, timeline, field queries, transcripts). Excluded tools return a helpful message pointing to the equivalent tana-local tool.
+
+```bash
+# Start in lite mode
+supertag-mcp --lite
+
+# Or via environment variable
+TANA_MCP_TOOL_MODE=lite supertag-mcp
+```
 
 ## Prerequisites
 
@@ -995,7 +1013,7 @@ Config file: `~/.config/supertag/config.json`
 | `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API |
 | `TANA_LOCAL_API_URL` | Local API endpoint URL (default: `http://localhost:8262`) |
 | `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (default: 5, 0 disables) |
-| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (31 tools) or `slim` (16 tools) |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (32 tools), `slim` (14 tools), or `lite` (16 tools) |
 | `DEBUG` | Enable debug logging |
 
 ## Data Locations

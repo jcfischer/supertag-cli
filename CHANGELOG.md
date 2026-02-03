@@ -5,6 +5,18 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-03
+
+### Added
+
+- **MCP Lite Mode (F-096)** - Complement tana-local MCP with analytics and search tools
+  - `mcp.toolMode: "lite"` config option or `--lite` CLI flag
+  - 16 tools: semantic search, aggregation, timeline, field queries, transcripts, graph traversal
+  - Excludes CRUD tools handled by tana-local (create, edit, tag, trash, done/undone)
+  - Excluded tools return helpful message pointing to the equivalent tana-local tool
+  - `TANA_MCP_TOOL_MODE=lite` environment variable support
+  - Three-mode comparison: `full` (32 tools), `slim` (14), `lite` (16)
+
 ## [2.0.3] - 2026-02-01
 
 ### Fixed

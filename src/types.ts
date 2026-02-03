@@ -171,8 +171,8 @@ export interface TanaConfig {
   useInputApiFallback?: boolean;
   /** MCP server configuration (F-095) */
   mcp?: {
-    /** Tool registration mode: 'full' (all tools) or 'slim' (semantic + mutations only) */
-    toolMode?: 'full' | 'slim';
+    /** Tool registration mode: 'full' (all tools), 'slim' (semantic + mutations), or 'lite' (complement tana-local) */
+    toolMode?: 'full' | 'slim' | 'lite';
   };
 }
 

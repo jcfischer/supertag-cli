@@ -125,7 +125,7 @@ export class ConfigManager {
     }
     if (process.env.TANA_MCP_TOOL_MODE) {
       const mode = process.env.TANA_MCP_TOOL_MODE;
-      if (mode === 'full' || mode === 'slim') {
+      if (mode === 'full' || mode === 'slim' || mode === 'lite') {
         if (!config.mcp) config.mcp = {};
         config.mcp.toolMode = mode;
       }
@@ -457,12 +457,13 @@ export class ConfigManager {
   }
 
   /**
-   * Get MCP tool mode (F-095)
-   * @returns 'full' or 'slim' (default: 'full')
+   * Get MCP tool mode (F-095, F-096)
+   * @returns 'full', 'slim', or 'lite' (default: 'full')
    */
-  getMcpToolMode(): 'full' | 'slim' {
+  getMcpToolMode(): 'full' | 'slim' | 'lite' {
     const mode = this.config.mcp?.toolMode;
     if (mode === 'slim') return 'slim';
+    if (mode === 'lite') return 'lite';
     return 'full';
   }
 

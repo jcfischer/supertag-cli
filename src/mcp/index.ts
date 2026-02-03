@@ -47,8 +47,15 @@ import { handleDone, handleUndone } from './tools/done.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
-import { isToolEnabled, getToolMode, getSlimModeToolCount } from './tool-mode.js';
+import { isToolEnabled, getToolMode, getSlimModeToolCount, getLiteModeToolCount, LITE_TOOL_MAPPING } from './tool-mode.js';
 import { initDeltaSyncPoller, type DeltaSyncPoller } from './delta-sync-poller.js';
+
+// CLI flag parsing (highest priority override for tool mode)
+if (process.argv.includes('--lite')) {
+  process.env.TANA_MCP_TOOL_MODE = 'lite';
+} else if (process.argv.includes('--slim')) {
+  process.env.TANA_MCP_TOOL_MODE = 'slim';
+}
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
 
@@ -313,14 +320,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const mode = getToolMode();
   logger.info('Tool called', { tool: name, mode });
 
-  // Guard: reject disabled tools in slim mode
+  // Guard: reject disabled tools in slim/lite mode
   if (!isToolEnabled(name, mode)) {
     logger.warn('Tool disabled in current mode', { tool: name, mode });
+    const mapping = LITE_TOOL_MAPPING[name];
+    const suggestion = mode === 'lite' && mapping
+      ? ` Use tana-local's '${mapping}' instead.`
+      : '';
     return {
       isError: true,
       content: [{
         type: 'text' as const,
-        text: `Tool '${name}' is disabled in slim mode. Switch to full mode or use tana_semantic_search for queries.`,
+        text: `Tool '${name}' is not available in ${mode} mode.${suggestion} Switch to full mode for standalone access.`,
       }],
     };
   }
@@ -519,7 +530,7 @@ async function main() {
     version: VERSION,
     serviceName: SERVICE_NAME,
     toolMode: mode,
-    toolCount: mode === 'slim' ? getSlimModeToolCount() : allTools.length,
+    toolCount: mode === 'slim' ? getSlimModeToolCount() : mode === 'lite' ? getLiteModeToolCount() : allTools.length,
   });
 
   try {
