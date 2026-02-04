@@ -204,7 +204,7 @@ function loadCachedToken(): FirebaseAuth | null {
 /**
  * Save token to disk cache
  */
-function saveCachedToken(auth: FirebaseAuth): void {
+export function saveCachedToken(auth: FirebaseAuth): void {
   try {
     const dir = dirname(TOKEN_CACHE_FILE);
     if (!existsSync(dir)) {

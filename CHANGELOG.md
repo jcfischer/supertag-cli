@@ -5,6 +5,13 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-02-04
+
+### Fixed
+
+- **Windows installer MCP configuration** - `install.ps1` failed at step [6/6] with "A parameter cannot be found that matches parameter name 'AsHashtable'" because `ConvertFrom-Json -AsHashtable` requires PowerShell 7+. Added recursive PSCustomObject-to-hashtable converter for PowerShell 5.1 compatibility.
+- **Windows manual login token extraction** - `supertag-export login --manual` failed with "Token extraction failed" because it launched Playwright's Chromium to read Chrome/Edge's IndexedDB profile — incompatible formats on Windows. Now uses Chrome DevTools Protocol (CDP) to extract tokens directly from the running browser session. User instructions updated to keep browser open while pressing Enter.
+
 ## [2.1.0] - 2026-02-03
 
 ### Added

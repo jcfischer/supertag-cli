@@ -31,7 +31,7 @@ import {
 import { VERSION } from "../src/version";
 
 // Import API modules
-import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, type AuthLogger } from "./lib/auth";
+import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, saveCachedToken, type AuthLogger } from "./lib/auth";
 import { getAccount, getSnapshotMeta, getSnapshotUrl, downloadSnapshot } from "./lib/api";
 import { discoverWorkspaces } from "./lib/discover";
 
@@ -273,13 +273,16 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
   logger.info("1. A browser window will open to Tana");
   logger.info("2. Log in to Tana (via Google or email)");
   logger.info("3. Wait until you see the Tana workspace");
-  logger.info("4. Close the browser window when done");
+  logger.info("4. Press Enter here (keep the browser open!)");
   logger.info("");
 
   // Ensure browser data directory exists
   if (!existsSync(USER_DATA_DIR)) {
     mkdirSync(USER_DATA_DIR, { recursive: true });
   }
+
+  // Use a fixed debug port for CDP token extraction
+  const debugPort = 19222;
 
   // Find browser executable
   let browserPath: string;
@@ -307,6 +310,7 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     }
     browserArgs = [
       `--user-data-dir=${USER_DATA_DIR}`,
+      `--remote-debugging-port=${debugPort}`,
       "--no-first-run",
       "--no-default-browser-check",
       TANA_APP_URL,
@@ -322,6 +326,7 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     }
     browserArgs = [
       `--user-data-dir=${USER_DATA_DIR}`,
+      `--remote-debugging-port=${debugPort}`,
       "--no-first-run",
       "--no-default-browser-check",
       TANA_APP_URL,
@@ -335,6 +340,7 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     }
     browserArgs = [
       `--user-data-dir=${USER_DATA_DIR}`,
+      `--remote-debugging-port=${debugPort}`,
       "--no-first-run",
       "--no-default-browser-check",
       TANA_APP_URL,
@@ -369,43 +375,106 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     }, timeout);
   });
 
-  // Now extract tokens using headless browser
+  // Extract tokens via CDP (connects to the running browser)
   logger.info("");
   logger.info("Extracting authentication tokens...");
 
+  let extracted = false;
+
+  // Method 1: CDP connection to the running browser (most reliable)
   try {
-    const auth = await extractTokenFromBrowser();
-    if (auth) {
-      // Also try to extract Firebase API key
-      const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
-        headless: true,
+    logger.info("Connecting to browser...");
+    const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 10000 });
+    const contexts = browser.contexts();
+    const pages = contexts[0]?.pages() || [];
+    const page = pages.find(p => p.url().includes('tana.inc')) || pages[0];
+
+    if (page) {
+      // Extract auth tokens from the live browser session
+      const firebaseData = await page.evaluate(async () => {
+        return new Promise((resolve) => {
+          const request = indexedDB.open('firebaseLocalStorageDb');
+          request.onsuccess = () => {
+            const db = request.result;
+            try {
+              const tx = db.transaction('firebaseLocalStorage', 'readonly');
+              const store = tx.objectStore('firebaseLocalStorage');
+              const getAllRequest = store.getAll();
+              getAllRequest.onsuccess = () => resolve(getAllRequest.result);
+              getAllRequest.onerror = () => resolve([]);
+            } catch { resolve([]); }
+          };
+          request.onerror = () => resolve([]);
+        });
       });
-      try {
-        const page = context.pages()[0] || await context.newPage();
-        await page.goto(TANA_APP_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await page.waitForTimeout(2000);
 
-        const apiKey = await extractFirebaseApiKey(page);
-        if (apiKey) {
-          const config = getConfig();
-          config.setFirebaseApiKey(apiKey);
-          logger.info("✓ Firebase API key extracted and saved");
+      if (Array.isArray(firebaseData)) {
+        for (const item of firebaseData as any[]) {
+          if (item?.value?.stsTokenManager) {
+            const { accessToken, refreshToken, expirationTime } = item.value.stsTokenManager;
+            saveCachedToken({ accessToken, refreshToken, expirationTime });
+            logger.info("✓ Auth tokens extracted and saved");
+
+            // Also extract Firebase API key
+            if (item.value.apiKey) {
+              getConfig().setFirebaseApiKey(item.value.apiKey);
+              logger.info("✓ Firebase API key saved");
+            }
+            extracted = true;
+            break;
+          }
         }
-      } finally {
-        await context.close();
       }
-
-      logger.info("✓ Login session saved successfully!");
-      logger.info("  You can now run: supertag-export run");
-    } else {
-      logger.warn("Could not extract auth tokens. Please try again and make sure you're fully logged in.");
     }
-  } catch (error) {
-    logger.error("Token extraction failed", error as Error);
+
+    // Disconnect without closing the user's browser
+    browser.close().catch(() => {});
+  } catch (cdpError) {
+    logger.info("Could not connect via CDP (browser may be closed), trying profile extraction...");
+  }
+
+  // Method 2: Fallback to profile-based extraction (original method)
+  if (!extracted) {
+    try {
+      const auth = await extractTokenFromBrowser();
+      if (auth) {
+        logger.info("✓ Auth tokens extracted from browser profile");
+        extracted = true;
+
+        // Try to extract Firebase API key via headless browser
+        try {
+          const context = await chromium.launchPersistentContext(USER_DATA_DIR, { headless: true });
+          try {
+            const page = context.pages()[0] || await context.newPage();
+            await page.goto(TANA_APP_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(2000);
+            const apiKey = await extractFirebaseApiKey(page);
+            if (apiKey) {
+              const config = getConfig();
+              config.setFirebaseApiKey(apiKey);
+              logger.info("✓ Firebase API key saved");
+            }
+          } finally {
+            await context.close();
+          }
+        } catch { /* API key extraction is optional */ }
+      }
+    } catch (profileError) {
+      logger.info("Profile extraction also failed");
+    }
+  }
+
+  if (extracted) {
+    logger.info("");
+    logger.info("✓ Login session saved successfully!");
+    logger.info("  You can now run: supertag-export run");
+  } else {
+    logger.warn("Could not extract auth tokens.");
     logger.info("");
     logger.info("Troubleshooting:");
     logger.info("  1. Make sure you logged in and saw the Tana workspace");
-    logger.info("  2. Try running 'supertag-export login --channel chrome' instead");
+    logger.info("  2. Keep the browser open when you press Enter");
+    logger.info("  3. Try: supertag-export login --channel chrome");
   }
 }
 
