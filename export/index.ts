@@ -16,7 +16,8 @@ import { Command } from "commander";
 import { chromium } from "playwright";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
+import { homedir } from "os";
 import { $ } from "bun";
 
 // Import shared config from parent tana package
@@ -264,29 +265,128 @@ interface LoginOptions {
 }
 
 /**
+ * Detect which browser type a given executable path represents
+ */
+function detectBrowserType(browserPath: string): 'chrome' | 'edge' | 'other' {
+  const lower = browserPath.toLowerCase();
+  if (lower.includes('edge') || lower.includes('msedge')) return 'edge';
+  if (lower.includes('chrome') || lower.includes('chromium')) return 'chrome';
+  return 'other';
+}
+
+/**
+ * Check if a browser (Chrome or Edge) is already running
+ */
+async function isBrowserRunning(browser: 'chrome' | 'edge'): Promise<boolean> {
+  try {
+    if (process.platform === 'win32') {
+      const imageName = browser === 'edge' ? 'msedge.exe' : 'chrome.exe';
+      const result = execSync(`tasklist /FI "IMAGENAME eq ${imageName}" /NH`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      return result.includes(imageName);
+    } else if (process.platform === 'darwin') {
+      const processName = browser === 'edge' ? 'Microsoft Edge' : 'Google Chrome';
+      try {
+        execSync(`pgrep -x "${processName}"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+        return true;
+      } catch {
+        return false; // pgrep exits non-zero when no match
+      }
+    } else {
+      // Linux
+      const processName = browser === 'edge' ? 'msedge' : 'chrome';
+      try {
+        execSync(`pgrep -x "${processName}"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Kill a running browser process
+ */
+async function killBrowser(browser: 'chrome' | 'edge'): Promise<void> {
+  try {
+    if (process.platform === 'win32') {
+      const imageName = browser === 'edge' ? 'msedge.exe' : 'chrome.exe';
+      execSync(`taskkill /IM ${imageName} /F`, { stdio: ['pipe', 'pipe', 'pipe'] });
+    } else {
+      const processName = process.platform === 'darwin'
+        ? (browser === 'edge' ? 'Microsoft Edge' : 'Google Chrome')
+        : (browser === 'edge' ? 'msedge' : 'chrome');
+      execSync(`pkill -x "${processName}"`, { stdio: ['pipe', 'pipe', 'pipe'] });
+    }
+  } catch {
+    // Process may have already exited
+  }
+
+  // Wait for processes to fully exit (up to 5s)
+  for (let i = 0; i < 10; i++) {
+    if (!(await isBrowserRunning(browser))) return;
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+/**
+ * Get the real user profile path for a browser
+ * Using the real profile means existing Tana sessions persist - no re-login needed
+ */
+function getRealProfilePath(browser: 'chrome' | 'edge'): string | null {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (!localAppData) return null;
+    const profilePath = browser === 'edge'
+      ? join(localAppData, 'Microsoft', 'Edge', 'User Data')
+      : join(localAppData, 'Google', 'Chrome', 'User Data');
+    return existsSync(profilePath) ? profilePath : null;
+  } else if (process.platform === 'darwin') {
+    const profilePath = browser === 'edge'
+      ? join(homedir(), 'Library', 'Application Support', 'Microsoft Edge')
+      : join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
+    return existsSync(profilePath) ? profilePath : null;
+  } else {
+    // Linux
+    const profilePath = browser === 'edge'
+      ? join(homedir(), '.config', 'microsoft-edge')
+      : join(homedir(), '.config', 'google-chrome');
+    return existsSync(profilePath) ? profilePath : null;
+  }
+}
+
+/**
+ * Poll for the CDP debug port to become ready
+ * Returns true if port is reachable, false on timeout
+ */
+async function waitForPort(port: number, timeoutMs: number = 15000): Promise<boolean> {
+  const start = Date.now();
+  const interval = 500;
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const response = await fetch(`http://localhost:${port}/json/version`);
+      if (response.ok) return true;
+    } catch {
+      // Port not ready yet
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  return false;
+}
+
+/**
  * Manual login mode - spawns browser directly (bypasses Playwright launch issues)
  * Use this when launchPersistentContext fails on Windows
  */
 async function manualLogin(timeout: number = 180000): Promise<void> {
-  logger.info("Manual login mode - bypassing Playwright browser launch");
-  logger.info("");
-  logger.info("1. A browser window will open to Tana");
-  logger.info("2. Log in to Tana (via Google or email)");
-  logger.info("3. Wait until you see the Tana workspace");
-  logger.info("4. Press Enter here (keep the browser open!)");
-  logger.info("");
-
-  // Ensure browser data directory exists
-  if (!existsSync(USER_DATA_DIR)) {
-    mkdirSync(USER_DATA_DIR, { recursive: true });
-  }
-
   // Use a fixed debug port for CDP token extraction
   const debugPort = 19222;
 
   // Find browser executable
   let browserPath: string;
-  let browserArgs: string[];
 
   if (process.platform === 'win32') {
     // Try Chrome first, then Edge
@@ -308,13 +408,6 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
         throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
       }
     }
-    browserArgs = [
-      `--user-data-dir=${USER_DATA_DIR}`,
-      `--remote-debugging-port=${debugPort}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      TANA_APP_URL,
-    ];
   } else if (process.platform === 'darwin') {
     browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
     if (!existsSync(browserPath)) {
@@ -324,13 +417,6 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
         throw new Error("No browser found. Install Chrome or run 'supertag-export setup'");
       }
     }
-    browserArgs = [
-      `--user-data-dir=${USER_DATA_DIR}`,
-      `--remote-debugging-port=${debugPort}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      TANA_APP_URL,
-    ];
   } else {
     // Linux - use Playwright's bundled Chromium
     try {
@@ -338,14 +424,71 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     } catch {
       throw new Error("Browser not available. Run 'supertag-export setup' first");
     }
-    browserArgs = [
-      `--user-data-dir=${USER_DATA_DIR}`,
-      `--remote-debugging-port=${debugPort}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      TANA_APP_URL,
-    ];
   }
+
+  // Detect browser type and check if already running
+  const browserType = detectBrowserType(browserPath);
+  let useRealProfile = false;
+  let profileDir = USER_DATA_DIR;
+
+  if (browserType !== 'other') {
+    const running = await isBrowserRunning(browserType);
+
+    if (running) {
+      logger.info(`${browserType === 'edge' ? 'Edge' : 'Chrome'} is already running.`);
+      logger.info("Authentication requires restarting it with debugging enabled.");
+      logger.info("Your tabs will be restored when the browser reopens.");
+      logger.info("");
+      logger.info("Press Enter to restart the browser, or Ctrl+C to cancel...");
+
+      await new Promise<void>((resolve) => {
+        process.stdin.setRawMode?.(false);
+        process.stdin.resume();
+        process.stdin.once('data', () => resolve());
+      });
+
+      logger.info(`Closing ${browserType === 'edge' ? 'Edge' : 'Chrome'}...`);
+      await killBrowser(browserType);
+      logger.info("Browser closed.");
+    }
+
+    // Use real profile if available (user stays logged in to Tana)
+    const realProfile = getRealProfilePath(browserType);
+    if (realProfile) {
+      useRealProfile = true;
+      profileDir = realProfile;
+      logger.info("Using existing browser profile (no re-login needed).");
+    }
+  }
+
+  // Ensure profile directory exists (only needed for custom profile)
+  if (!useRealProfile && !existsSync(profileDir)) {
+    mkdirSync(profileDir, { recursive: true });
+  }
+
+  logger.info("");
+  logger.info("Manual login mode - bypassing Playwright browser launch");
+  logger.info("");
+  if (useRealProfile) {
+    logger.info("1. A browser window will open to Tana");
+    logger.info("2. You should already be logged in (existing session)");
+    logger.info("3. Wait until you see the Tana workspace");
+    logger.info("4. Press Enter here (keep the browser open!)");
+  } else {
+    logger.info("1. A browser window will open to Tana");
+    logger.info("2. Log in to Tana (via Google or email)");
+    logger.info("3. Wait until you see the Tana workspace");
+    logger.info("4. Press Enter here (keep the browser open!)");
+  }
+  logger.info("");
+
+  const browserArgs = [
+    `--user-data-dir=${profileDir}`,
+    `--remote-debugging-port=${debugPort}`,
+    "--no-first-run",
+    "--no-default-browser-check",
+    TANA_APP_URL,
+  ];
 
   logger.info(`Launching browser: ${browserPath}`);
 
@@ -357,22 +500,39 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
 
   browserProcess.unref();
 
+  // Wait for debug port to become ready
+  logger.info("Waiting for browser debug port...");
+  const portReady = await waitForPort(debugPort);
+  if (portReady) {
+    logger.info("Debug port ready.");
+  } else {
+    logger.warn("Debug port did not open within 15 seconds.");
+    logger.warn("CDP token extraction may fail. Profile extraction will be attempted as fallback.");
+  }
+
   logger.info("");
   logger.info("Browser launched. Complete login, then press Enter when done...");
 
-  // Wait for user to press Enter
+  // Wait for user to press Enter (with properly cleared timeout)
   await new Promise<void>((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        logger.warn("Timeout reached, proceeding with token extraction...");
+        resolve();
+      }
+    }, timeout);
+
     process.stdin.setRawMode?.(false);
     process.stdin.resume();
     process.stdin.once('data', () => {
-      resolve();
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve();
+      }
     });
-
-    // Also set a timeout
-    setTimeout(() => {
-      logger.warn("Timeout reached, proceeding with token extraction...");
-      resolve();
-    }, timeout);
   });
 
   // Extract tokens via CDP (connects to the running browser)
@@ -384,7 +544,7 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
   // Method 1: CDP connection to the running browser (most reliable)
   try {
     logger.info("Connecting to browser...");
-    const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 10000 });
+    const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 30000 });
     const contexts = browser.contexts();
     const pages = contexts[0]?.pages() || [];
     const page = pages.find(p => p.url().includes('tana.inc')) || pages[0];

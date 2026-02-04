@@ -5,6 +5,15 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-02-04
+
+### Fixed
+
+- **Windows manual login browser process merging** - `supertag-export login --manual` failed to extract tokens when Chrome/Edge was already running because the spawned process merged into the existing one, ignoring `--remote-debugging-port`. Now detects running browsers, prompts user to restart with debugging enabled, and uses the real user profile so no re-login is needed.
+- **CDP debug port readiness** - Added port polling (up to 15s) after browser launch to catch cases where the debug port never opens, with clear diagnostic logging before attempting CDP connection.
+- **setTimeout leak in manual login** - The 180s timeout was never cleared when user pressed Enter, causing a confusing "Timeout reached" message after extraction had already completed.
+- **CDP connection timeout** - Increased from 10s to 30s to accommodate slower Windows machines.
+
 ## [2.1.1] - 2026-02-04
 
 ### Fixed
