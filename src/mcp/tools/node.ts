@@ -15,6 +15,7 @@ import {
   applyProjection,
 } from '../../utils/select-projection.js';
 import { formatInlineRefs } from '../../utils/inline-ref-formatter.js';
+import { isCalendarNode, resolveEffectiveDepth } from '../../commands/show.js';
 
 interface NodeData {
   id: string;
@@ -251,9 +252,13 @@ function getNodeContentsWithDepth(
 
 export async function showNode(input: NodeInput): Promise<Partial<Record<string, unknown>> | null> {
   const workspace = resolveWorkspaceContext({ workspace: input.workspace });
-  const depth = input.depth || 0;
+  const requestedDepth = input.depth || 0;
+  const depthExplicitlySet = input.depth !== undefined && input.depth !== null;
 
   const result = withDatabase({ dbPath: workspace.dbPath, readonly: true }, (ctx) => {
+    // Resolve effective depth: calendar/day pages auto-expand to depth 1
+    const depth = resolveEffectiveDepth(ctx.db, input.nodeId, requestedDepth, depthExplicitlySet);
+
     if (depth > 0) {
       return getNodeContentsWithDepth(ctx.db, input.nodeId, 0, depth);
     } else {

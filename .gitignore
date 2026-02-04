@@ -53,3 +53,6 @@ config.local.json
 
 # LanceDB embeddings
 .lance/
+.bun-build
+.claude-checkpoint.md
+homebrew-tap/

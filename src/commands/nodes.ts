@@ -33,6 +33,7 @@ import {
   getNodeContentsWithDepth,
   formatNodeOutput,
   formatNodeWithDepth,
+  resolveEffectiveDepth,
 } from "./show";
 import {
   tsv,
@@ -92,7 +93,8 @@ export function createNodesCommand(): Command {
       process.exit(1);
     }
 
-    const depth = options.depth ? parseInt(String(options.depth)) : 0;
+    const requestedDepth = options.depth ? parseInt(String(options.depth)) : 0;
+    const depthExplicitlySet = showCmd.getOptionValueSource("depth") === "cli";
     const outputOpts = resolveOutputOptions(options);
     const format = resolveOutputFormat(options);
 
@@ -101,6 +103,9 @@ export function createNodesCommand(): Command {
     const projection = parseSelectPaths(selectFields);
 
     await withDatabase({ dbPath, readonly: true }, (ctx) => {
+      // Resolve effective depth: calendar/day pages auto-expand to depth 1
+      const depth = resolveEffectiveDepth(ctx.db, nodeId, requestedDepth, depthExplicitlySet);
+
       // Get node contents (with or without depth)
       const contents = depth > 0
         ? getNodeContentsWithDepth(ctx.db, nodeId, 0, depth)

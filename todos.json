@@ -1,0 +1,17 @@
+[
+  {
+    "supertag": "todo",
+    "name": "Review proposal",
+    "fields": {
+      "Status": "Active",
+      "Priority": "High"
+    }
+  },
+  {
+    "supertag": "todo",
+    "name": "Send follow-up email",
+    "fields": {
+      "Status": "Pending"
+    }
+  }
+]
