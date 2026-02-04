@@ -5,6 +5,12 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Improved
+
+- **Day page smart depth** - `nodes show` and `tana_node_read` MCP tool auto-expand calendar/day page nodes to depth 1 so section children (Todos, Notes, etc.) are visible by default. Non-calendar nodes still default to depth 0. Explicit `--depth` flag overrides auto-detection. Closes #37.
+
 ## [2.1.3] - 2026-02-04
 
 ### Fixed

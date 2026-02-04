@@ -141,7 +141,8 @@ supertag search "ideas" --semantic --min-score 0.5  # Filter by similarity
 supertag search --tag todo                   # All nodes with #todo tag
 supertag search "groceries" --tag todo       # #todo nodes containing "groceries"
 supertag search --tag meeting --field "Location=Zurich"  # Filter by field
-supertag nodes show <id> --depth 3           # Node contents
+supertag nodes show <id>                     # Node contents (day pages auto-expand)
+supertag nodes show <id> --depth 3           # Explicit depth traversal
 supertag related <id>                        # Find related nodes
 supertag related <id> --depth 2              # Multi-hop traversal
 supertag tags top                            # Most used tags
