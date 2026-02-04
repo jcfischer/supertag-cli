@@ -34,7 +34,7 @@ import { VERSION } from "../src/version";
 // Import API modules
 import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, saveCachedToken, type AuthLogger } from "./lib/auth";
 import { getAccount, getSnapshotMeta, getSnapshotUrl, downloadSnapshot } from "./lib/api";
-import { discoverWorkspaces } from "./lib/discover";
+import { discoverWorkspaces, discoverWorkspacesViaCDP } from "./lib/discover";
 
 const USER_DATA_DIR = BROWSER_DATA_DIR;
 const TANA_APP_URL = "https://app.tana.inc";
@@ -747,6 +747,208 @@ async function interactiveLogin(options: LoginOptions = {}): Promise<void> {
 }
 
 /**
+ * Manual workspace discovery - spawns browser directly and connects via CDP
+ * Used when Playwright's launchPersistentContext fails (Windows)
+ */
+async function manualDiscover(options: { timeout?: number } = {}): Promise<import("./lib/discover").DiscoveredWorkspace[]> {
+  const debugPort = 19222;
+  const timeout = options.timeout ?? 15000;
+
+  // Find browser executable (same logic as manualLogin)
+  let browserPath: string;
+
+  if (process.platform === 'win32') {
+    const chromePath = join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const edgePath = join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+    const edgePathX86 = join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+
+    if (existsSync(chromePath)) {
+      browserPath = chromePath;
+    } else if (existsSync(edgePath)) {
+      browserPath = edgePath;
+    } else if (existsSync(edgePathX86)) {
+      browserPath = edgePathX86;
+    } else {
+      try {
+        browserPath = chromium.executablePath();
+      } catch {
+        throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
+      }
+    }
+  } else if (process.platform === 'darwin') {
+    browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (!existsSync(browserPath)) {
+      try {
+        browserPath = chromium.executablePath();
+      } catch {
+        throw new Error("No browser found. Install Chrome or run 'supertag-export setup'");
+      }
+    }
+  } else {
+    try {
+      browserPath = chromium.executablePath();
+    } catch {
+      throw new Error("Browser not available. Run 'supertag-export setup' first");
+    }
+  }
+
+  // Detect browser type and check if already running
+  const browserType = detectBrowserType(browserPath);
+  let profileDir = USER_DATA_DIR;
+
+  if (browserType !== 'other') {
+    const running = await isBrowserRunning(browserType);
+
+    if (running) {
+      logger.info(`${browserType === 'edge' ? 'Edge' : 'Chrome'} is already running.`);
+      logger.info("Discovery requires restarting it with debugging enabled.");
+      logger.info("Your tabs will be restored when the browser reopens.");
+      logger.info("");
+      logger.info("Press Enter to restart the browser, or Ctrl+C to cancel...");
+
+      await new Promise<void>((resolve) => {
+        process.stdin.setRawMode?.(false);
+        process.stdin.resume();
+        process.stdin.once('data', () => resolve());
+      });
+
+      logger.info(`Closing ${browserType === 'edge' ? 'Edge' : 'Chrome'}...`);
+      await killBrowser(browserType);
+      logger.info("Browser closed.");
+    }
+
+    // Use real profile if available (user stays logged in to Tana)
+    const realProfile = getRealProfilePath(browserType);
+    if (realProfile) {
+      profileDir = realProfile;
+      logger.info("Using existing browser profile.");
+    }
+  }
+
+  // Ensure profile directory exists
+  if (!existsSync(profileDir)) {
+    mkdirSync(profileDir, { recursive: true });
+  }
+
+  const browserArgs = [
+    `--user-data-dir=${profileDir}`,
+    `--remote-debugging-port=${debugPort}`,
+    "--no-first-run",
+    "--no-default-browser-check",
+    TANA_APP_URL,
+  ];
+
+  logger.info(`Launching browser: ${browserPath}`);
+
+  const browserProcess = spawn(browserPath, browserArgs, {
+    detached: true,
+    stdio: 'ignore',
+  });
+  browserProcess.unref();
+
+  // Wait for debug port to become ready
+  logger.info("Waiting for browser debug port...");
+  const portReady = await waitForPort(debugPort);
+  if (!portReady) {
+    throw new Error("Browser debug port did not open. Make sure the browser launched correctly.");
+  }
+
+  logger.info("Debug port ready. Waiting for Tana to load...");
+
+  try {
+    const workspaces = await discoverWorkspacesViaCDP({
+      port: debugPort,
+      timeout: timeout,
+      verbose: true,
+    });
+
+    return workspaces;
+  } finally {
+    // Try to close the browser we spawned
+    if (browserType !== 'other') {
+      await killBrowser(browserType);
+    }
+  }
+}
+
+/**
+ * Display discovered workspaces and optionally configure them
+ */
+function displayAndConfigureWorkspaces(
+  workspaces: import("./lib/discover").DiscoveredWorkspace[],
+  options: { add?: boolean; update?: boolean },
+): void {
+  console.log(`\nDiscovered ${workspaces.length} workspace(s):\n`);
+
+  const config = getConfig();
+  const existingWorkspaces = config.getAllWorkspaces();
+
+  for (const ws of workspaces) {
+    // Check if this workspace is already configured
+    let existingAlias: string | undefined;
+    for (const [alias, existing] of Object.entries(existingWorkspaces)) {
+      if (existing.nodeid === ws.homeNodeId || existing.rootFileId === ws.rootFileId) {
+        existingAlias = alias;
+        break;
+      }
+    }
+
+    const status = existingAlias ? `(configured as "${existingAlias}")` : "(not configured)";
+    const rootMarker = ws.isRootFile ? " [root]" : "";
+    console.log(`  ${ws.name}${rootMarker}`);
+    console.log(`    nodeid: ${ws.homeNodeId}`);
+    console.log(`    rootFileId: ${ws.rootFileId}`);
+    console.log(`    nodes: ${ws.nodeCount.toLocaleString()}`);
+    console.log(`    status: ${status}`);
+    console.log("");
+
+    // Auto-add if requested
+    if (options.add && !existingAlias) {
+      const alias = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      config.addWorkspace(alias, ws.rootFileId, {
+        name: ws.name,
+        nodeid: ws.homeNodeId,
+        enabled: true,
+      });
+      console.log(`    → Added as "${alias}"\n`);
+    }
+
+    // Auto-update if requested
+    if (options.update && existingAlias) {
+      const existing = existingWorkspaces[existingAlias];
+      if (!existing.rootFileId || existing.rootFileId !== ws.rootFileId) {
+        config.updateWorkspace(existingAlias, { rootFileId: ws.rootFileId });
+        console.log(`    → Updated rootFileId for "${existingAlias}"\n`);
+      }
+    }
+  }
+
+  // Auto-add first workspace as 'main' if no workspaces configured
+  const hasConfiguredWorkspaces = Object.keys(existingWorkspaces).length > 0;
+
+  if (!hasConfiguredWorkspaces && !options.add && !options.update && workspaces.length > 0) {
+    const firstWorkspace = workspaces[0]; // Root workspace (sorted first)
+    config.addWorkspace("main", firstWorkspace.rootFileId, {
+      name: firstWorkspace.name,
+      nodeid: firstWorkspace.homeNodeId,
+      enabled: true,
+    });
+    config.setDefaultWorkspace("main");
+    console.log(`\n✓ Automatically added "${firstWorkspace.name}" as workspace "main"\n`);
+    console.log("Next steps:");
+    console.log("  1. Run: supertag-export run");
+    console.log("  2. Then: supertag sync index\n");
+  } else if (!options.add && !options.update) {
+    console.log("To add a workspace:");
+    console.log("  supertag workspace add <rootFileId> --alias <name>\n");
+    console.log("Or use --add to automatically add all discovered workspaces:");
+    console.log("  supertag-export discover --add\n");
+    console.log("Or use --update to update existing workspaces with rootFileIds:");
+    console.log("  supertag-export discover --update");
+  }
+}
+
+/**
  * Show export status
  */
 async function showStatus(): Promise<void> {
@@ -931,10 +1133,35 @@ program
   .option("-t, --timeout <seconds>", "How long to wait for workspace data (default: 15)", "15")
   .option("--add", "Automatically add discovered workspaces to config")
   .option("--update", "Update existing workspaces with discovered rootFileIds")
-  .action(async (options: { timeout: string; add?: boolean; update?: boolean }) => {
-    // Ensure browser is installed
+  .option("--manual", "Use manual browser launch (bypasses Playwright issues on Windows)")
+  .action(async (options: { timeout: string; add?: boolean; update?: boolean; manual?: boolean }) => {
+    // Manual mode: spawn browser directly and connect via CDP
+    if (options.manual) {
+      console.log("Discovering Tana workspaces (manual mode)...\n");
+
+      try {
+        const workspaces = await manualDiscover({
+          timeout: parseInt(options.timeout) * 1000,
+        });
+
+        if (workspaces.length === 0) {
+          console.log("\nNo workspaces discovered. Make sure you are logged in to Tana.");
+          console.log("Run: supertag-export login --manual");
+          return;
+        }
+
+        displayAndConfigureWorkspaces(workspaces, options);
+      } catch (error) {
+        console.error("Discovery failed:", error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+      return;
+    }
+
+    // Standard mode: use Playwright's launchPersistentContext
     if (!await ensureBrowser()) {
       console.error("Browser not available. Please install manually: bunx playwright install chromium");
+      console.error("Or try: supertag-export discover --manual");
       process.exit(1);
     }
 
@@ -952,77 +1179,10 @@ program
         return;
       }
 
-      console.log(`\nDiscovered ${workspaces.length} workspace(s):\n`);
-
-      const config = getConfig();
-      const existingWorkspaces = config.getAllWorkspaces();
-
-      for (const ws of workspaces) {
-        // Check if this workspace is already configured
-        let existingAlias: string | undefined;
-        for (const [alias, existing] of Object.entries(existingWorkspaces)) {
-          if (existing.nodeid === ws.homeNodeId || existing.rootFileId === ws.rootFileId) {
-            existingAlias = alias;
-            break;
-          }
-        }
-
-        const status = existingAlias ? `(configured as "${existingAlias}")` : "(not configured)";
-        const rootMarker = ws.isRootFile ? " [root]" : "";
-        console.log(`  ${ws.name}${rootMarker}`);
-        console.log(`    nodeid: ${ws.homeNodeId}`);
-        console.log(`    rootFileId: ${ws.rootFileId}`);
-        console.log(`    nodes: ${ws.nodeCount.toLocaleString()}`);
-        console.log(`    status: ${status}`);
-        console.log("");
-
-        // Auto-add if requested
-        if (options.add && !existingAlias) {
-          const alias = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-          config.addWorkspace(alias, ws.rootFileId, {
-            name: ws.name,
-            nodeid: ws.homeNodeId,
-            enabled: true,
-          });
-          console.log(`    → Added as "${alias}"\n`);
-        }
-
-        // Auto-update if requested
-        if (options.update && existingAlias) {
-          const existing = existingWorkspaces[existingAlias];
-          if (!existing.rootFileId || existing.rootFileId !== ws.rootFileId) {
-            config.updateWorkspace(existingAlias, { rootFileId: ws.rootFileId });
-            console.log(`    → Updated rootFileId for "${existingAlias}"\n`);
-          }
-        }
-      }
-
-      // Auto-add first workspace as 'main' if no workspaces configured
-      const hasConfiguredWorkspaces = Object.keys(existingWorkspaces).length > 0;
-
-      if (!hasConfiguredWorkspaces && !options.add && !options.update && workspaces.length > 0) {
-        const firstWorkspace = workspaces[0]; // Root workspace (sorted first)
-        config.addWorkspace("main", firstWorkspace.rootFileId, {
-          name: firstWorkspace.name,
-          nodeid: firstWorkspace.homeNodeId,
-          enabled: true,
-        });
-        config.setDefaultWorkspace("main");
-        console.log(`\n✓ Automatically added "${firstWorkspace.name}" as workspace "main"\n`);
-        console.log("Next steps:");
-        console.log("  1. Run: supertag-export run");
-        console.log("  2. Then: supertag sync index\n");
-      } else if (!options.add && !options.update) {
-        // Show usage hints if workspaces already configured
-        console.log("To add a workspace:");
-        console.log("  supertag workspace add <rootFileId> --alias <name>\n");
-        console.log("Or use --add to automatically add all discovered workspaces:");
-        console.log("  supertag-export discover --add\n");
-        console.log("Or use --update to update existing workspaces with rootFileIds:");
-        console.log("  supertag-export discover --update");
-      }
+      displayAndConfigureWorkspaces(workspaces, options);
     } catch (error) {
       console.error("Discovery failed:", error instanceof Error ? error.message : error);
+      console.error("\nIf browser launch failed, try: supertag-export discover --manual");
       process.exit(1);
     }
   });
