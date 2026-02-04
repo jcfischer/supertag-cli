@@ -1,6 +1,6 @@
 {
   "name": "@pai/supertag-export",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Browser automation for Tana workspace exports using Playwright",
   "type": "module",
   "bin": {
