@@ -369,6 +369,21 @@ function Set-McpConfiguration {
     }
 }
 
+function ConvertTo-HashtableRecursive {
+    param([Parameter(ValueFromPipeline)]$InputObject)
+    if ($null -eq $InputObject) { return @{} }
+    if ($InputObject -is [System.Collections.IDictionary]) { return $InputObject }
+    $hash = @{}
+    foreach ($prop in $InputObject.PSObject.Properties) {
+        if ($prop.Value -is [PSCustomObject]) {
+            $hash[$prop.Name] = ConvertTo-HashtableRecursive $prop.Value
+        } else {
+            $hash[$prop.Name] = $prop.Value
+        }
+    }
+    return $hash
+}
+
 function Set-McpClientConfig {
     param(
         [string]$ConfigFile,
@@ -382,9 +397,10 @@ function Set-McpClientConfig {
             Copy-Item -Path $ConfigFile -Destination "$ConfigFile.backup.$timestamp"
         }
 
-        # Load or create config
+        # Load or create config (compatible with PowerShell 5.1+)
         if (Test-Path $ConfigFile) {
-            $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json -AsHashtable
+            $json = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+            $config = ConvertTo-HashtableRecursive $json
         } else {
             $config = @{}
         }
