@@ -487,8 +487,17 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     `--remote-debugging-port=${debugPort}`,
     "--no-first-run",
     "--no-default-browser-check",
-    TANA_APP_URL,
   ];
+
+  // Prevent Edge from restarting itself on Windows (kills the debug port)
+  if (process.platform === 'win32' && browserPath.toLowerCase().includes('msedge')) {
+    browserArgs.push(
+      "--disable-features=msEdgeAutoStartAndRestart,msEdgeSplashScreen",
+      "--disable-background-timer-throttling",
+    );
+  }
+
+  browserArgs.push(TANA_APP_URL);
 
   logger.info(`Launching browser: ${browserPath}`);
 
@@ -539,88 +548,158 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
   logger.info("");
   logger.info("Extracting authentication tokens...");
 
+  // Verify debug port is still alive (Edge on Windows may restart, losing the port)
+  let portAlive = await waitForPort(debugPort, 5000);
+  if (!portAlive) {
+    logger.warn("Debug port is no longer reachable (browser may have restarted).");
+
+    // Try to recover by killing and relaunching with debug port
+    if (browserType !== 'other') {
+      logger.info("Restarting browser with debug port...");
+      await killBrowser(browserType as 'chrome' | 'edge');
+      await new Promise(r => setTimeout(r, 1000));
+
+      const retryProcess = spawn(browserPath, browserArgs, {
+        detached: true,
+        stdio: 'ignore',
+      });
+      retryProcess.unref();
+
+      portAlive = await waitForPort(debugPort, 15000);
+      if (portAlive) {
+        logger.info("Debug port reconnected. Waiting for page to load...");
+        await new Promise(r => setTimeout(r, 5000));
+      } else {
+        logger.warn("Could not re-establish debug port.");
+      }
+    }
+  }
+
   let extracted = false;
 
   // Method 1: CDP connection to the running browser (most reliable)
-  try {
-    logger.info("Connecting to browser...");
-    const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 30000 });
-    const contexts = browser.contexts();
-    const pages = contexts[0]?.pages() || [];
-    const page = pages.find(p => p.url().includes('tana.inc')) || pages[0];
+  if (portAlive) {
+    try {
+      logger.info("Connecting to browser...");
+      const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 30000 });
+      const contexts = browser.contexts();
+      const pages = contexts[0]?.pages() || [];
+      const page = pages.find(p => p.url().includes('tana.inc')) || pages[0];
 
-    if (page) {
-      // Extract auth tokens from the live browser session
-      const firebaseData = await page.evaluate(async () => {
-        return new Promise((resolve) => {
-          const request = indexedDB.open('firebaseLocalStorageDb');
-          request.onsuccess = () => {
-            const db = request.result;
-            try {
-              const tx = db.transaction('firebaseLocalStorage', 'readonly');
-              const store = tx.objectStore('firebaseLocalStorage');
-              const getAllRequest = store.getAll();
-              getAllRequest.onsuccess = () => resolve(getAllRequest.result);
-              getAllRequest.onerror = () => resolve([]);
-            } catch { resolve([]); }
-          };
-          request.onerror = () => resolve([]);
+      if (page) {
+        // Extract auth tokens from the live browser session
+        const firebaseData = await page.evaluate(async () => {
+          return new Promise((resolve) => {
+            const request = indexedDB.open('firebaseLocalStorageDb');
+            request.onsuccess = () => {
+              const db = request.result;
+              try {
+                const tx = db.transaction('firebaseLocalStorage', 'readonly');
+                const store = tx.objectStore('firebaseLocalStorage');
+                const getAllRequest = store.getAll();
+                getAllRequest.onsuccess = () => resolve(getAllRequest.result);
+                getAllRequest.onerror = () => resolve([]);
+              } catch { resolve([]); }
+            };
+            request.onerror = () => resolve([]);
+          });
         });
-      });
 
-      if (Array.isArray(firebaseData)) {
-        for (const item of firebaseData as any[]) {
-          if (item?.value?.stsTokenManager) {
-            const { accessToken, refreshToken, expirationTime } = item.value.stsTokenManager;
-            saveCachedToken({ accessToken, refreshToken, expirationTime });
-            logger.info("✓ Auth tokens extracted and saved");
+        if (Array.isArray(firebaseData)) {
+          for (const item of firebaseData as any[]) {
+            if (item?.value?.stsTokenManager) {
+              const { accessToken, refreshToken, expirationTime } = item.value.stsTokenManager;
+              saveCachedToken({ accessToken, refreshToken, expirationTime });
+              logger.info("✓ Auth tokens extracted and saved");
 
-            // Also extract Firebase API key
-            if (item.value.apiKey) {
-              getConfig().setFirebaseApiKey(item.value.apiKey);
-              logger.info("✓ Firebase API key saved");
+              // Also extract Firebase API key
+              if (item.value.apiKey) {
+                getConfig().setFirebaseApiKey(item.value.apiKey);
+                logger.info("✓ Firebase API key saved");
+              }
+              extracted = true;
+              break;
             }
-            extracted = true;
-            break;
           }
         }
       }
-    }
 
-    // Disconnect without closing the user's browser
-    browser.close().catch(() => {});
-  } catch (cdpError) {
-    logger.info("Could not connect via CDP (browser may be closed), trying profile extraction...");
+      // Disconnect without closing the user's browser
+      browser.close().catch(() => {});
+    } catch (cdpError) {
+      logger.info("Could not connect via CDP (browser may be closed), trying profile extraction...");
+    }
+  } else {
+    logger.info("Skipping CDP extraction (port not available), trying profile extraction...");
   }
 
-  // Method 2: Fallback to profile-based extraction (original method)
+  // Method 2: Fallback to profile-based extraction
   if (!extracted) {
     try {
-      const auth = await extractTokenFromBrowser();
-      if (auth) {
-        logger.info("✓ Auth tokens extracted from browser profile");
-        extracted = true;
+      // When using real browser profile, close browser first to unlock the profile,
+      // then launch headless Playwright with the same profile to extract tokens
+      const extractionProfileDir = useRealProfile ? profileDir : USER_DATA_DIR;
 
-        // Try to extract Firebase API key via headless browser
-        try {
-          const context = await chromium.launchPersistentContext(USER_DATA_DIR, { headless: true });
-          try {
-            const page = context.pages()[0] || await context.newPage();
-            await page.goto(TANA_APP_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await page.waitForTimeout(2000);
-            const apiKey = await extractFirebaseApiKey(page);
-            if (apiKey) {
-              const config = getConfig();
-              config.setFirebaseApiKey(apiKey);
-              logger.info("✓ Firebase API key saved");
+      if (useRealProfile && browserType !== 'other') {
+        logger.info("Closing browser to access profile data...");
+        await killBrowser(browserType as 'chrome' | 'edge');
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      logger.info(`Extracting tokens from profile: ${extractionProfileDir}`);
+      const context = await chromium.launchPersistentContext(extractionProfileDir, {
+        headless: true,
+        ...(process.platform === 'win32' ? {
+          args: ['--disable-gpu', '--disable-software-rasterizer'],
+        } : {}),
+      });
+
+      try {
+        const page = context.pages()[0] || await context.newPage();
+        await page.goto(TANA_APP_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000);
+
+        const firebaseData = await page.evaluate(async () => {
+          return new Promise((resolve) => {
+            const request = indexedDB.open('firebaseLocalStorageDb');
+            request.onsuccess = () => {
+              const db = request.result;
+              try {
+                const tx = db.transaction('firebaseLocalStorage', 'readonly');
+                const store = tx.objectStore('firebaseLocalStorage');
+                const getAllRequest = store.getAll();
+                getAllRequest.onsuccess = () => resolve(getAllRequest.result);
+                getAllRequest.onerror = () => resolve([]);
+              } catch { resolve([]); }
+            };
+            request.onerror = () => resolve([]);
+          });
+        });
+
+        if (Array.isArray(firebaseData)) {
+          for (const item of firebaseData as any[]) {
+            if (item?.value?.stsTokenManager) {
+              const { accessToken, refreshToken, expirationTime } = item.value.stsTokenManager;
+              saveCachedToken({ accessToken, refreshToken, expirationTime });
+              logger.info("✓ Auth tokens extracted from browser profile");
+
+              if (item.value.apiKey) {
+                getConfig().setFirebaseApiKey(item.value.apiKey);
+                logger.info("✓ Firebase API key saved");
+              }
+              extracted = true;
+              break;
             }
-          } finally {
-            await context.close();
           }
-        } catch { /* API key extraction is optional */ }
+        }
+      } finally {
+        await context.close();
       }
     } catch (profileError) {
       logger.info("Profile extraction also failed");
+      if (useRealProfile) {
+        logger.info("Hint: Edge may lock the profile. Try closing all Edge windows and retry.");
+      }
     }
   }
 
@@ -835,8 +914,17 @@ async function manualDiscover(options: { timeout?: number } = {}): Promise<impor
     `--remote-debugging-port=${debugPort}`,
     "--no-first-run",
     "--no-default-browser-check",
-    TANA_APP_URL,
   ];
+
+  // Prevent Edge from restarting itself on Windows (kills the debug port)
+  if (process.platform === 'win32' && browserPath.toLowerCase().includes('msedge')) {
+    browserArgs.push(
+      "--disable-features=msEdgeAutoStartAndRestart,msEdgeSplashScreen",
+      "--disable-background-timer-throttling",
+    );
+  }
+
+  browserArgs.push(TANA_APP_URL);
 
   logger.info(`Launching browser: ${browserPath}`);
 
