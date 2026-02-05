@@ -5,6 +5,21 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Live Read Backend (F-097)** - Search and node-read operations now route through Tana's Local API when available, with automatic SQLite fallback
+  - `TanaReadBackend` interface with `LocalApiReadBackend` and `SqliteReadBackend` implementations
+  - Backend resolver: prefers Local API when healthy, falls back to SQLite silently
+  - `--offline` flag on all commands to force SQLite backend regardless of Local API availability
+  - FTS search (`supertag search`) uses live data when Tana Desktop is running
+  - Node show (`supertag nodes show`) reads live content from Tana Desktop
+  - MCP tools (`tana_search`, `tana_node`) use live backend when available
+  - Canonical types (`ReadSearchResult`, `ReadNodeContent`, `ReadTagInfo`) normalize both backends
+  - Session-cached health check — one probe per session, cached like write resolver
+  - Semantic search stays on SQLite (embeddings are local-only)
+
 ## [2.1.3] - 2026-02-04
 
 ### Fixed

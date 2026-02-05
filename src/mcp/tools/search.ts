@@ -1,12 +1,15 @@
 /**
  * tana_search Tool
+ * Spec: F-097 Live Read Backend (T-4.1)
  *
- * Full-text search on Tana node names using FTS5.
+ * Full-text search on Tana node names.
+ * Routes through TanaReadBackend: Local API when available, SQLite fallback.
  */
 
-import { TanaQueryEngine } from '../../query/tana-query-engine.js';
 import { resolveWorkspaceContext } from '../../config/workspace-resolver.js';
+import { resolveReadBackend } from '../../api/read-backend-resolver.js';
 import { findMeaningfulAncestor } from '../../embeddings/ancestor-resolution.js';
+import { withDatabase } from '../../db/with-database.js';
 import type { SearchInput } from '../schemas.js';
 import { parseDateRange } from '../schemas.js';
 import {
@@ -38,60 +41,66 @@ export interface SearchResult {
 
 export async function search(input: SearchInput): Promise<SearchResult> {
   const workspace = resolveWorkspaceContext({ workspace: input.workspace });
+  const readBackend = await resolveReadBackend({ workspace: input.workspace });
 
-  const engine = new TanaQueryEngine(workspace.dbPath);
+  const dateRange = parseDateRange(input);
+  const results = await readBackend.search(input.query, {
+    limit: input.limit || 20,
+    ...dateRange,
+  });
 
-  try {
-    // Ensure FTS index exists
-    if (!(await engine.hasFTSIndex())) {
-      await engine.initializeFTS();
+  const includeAncestor = input.includeAncestor ?? true;
+
+  // Map ReadSearchResult[] to SearchResultItem[]
+  // Tags already resolved by the read backend
+  const resultsWithTags: SearchResultItem[] = results.map((r) => {
+    const item: SearchResultItem = {
+      id: r.id,
+      name: r.name,
+      rank: r.rank ?? 0,
+    };
+
+    // Include tags if not raw mode (already in ReadSearchResult)
+    if (!input.raw) {
+      item.tags = r.tags;
     }
 
-    const dateRange = parseDateRange(input);
-    const results = await engine.searchNodes(input.query, {
-      limit: input.limit || 20,
-      ...dateRange,
-    });
-
-    const includeAncestor = input.includeAncestor ?? true;
-
-    // Optionally get tags and ancestor for each result
-    const resultsWithTags: SearchResultItem[] = results.map((r) => {
-      const item: SearchResultItem = {
-        id: r.id,
-        name: r.name,
-        rank: r.rank,
+    // For live backend: use breadcrumb for ancestor context
+    if (includeAncestor && !input.raw && readBackend.isLive() && r.breadcrumb && r.breadcrumb.length > 1) {
+      item.ancestor = {
+        id: '',
+        name: r.breadcrumb[r.breadcrumb.length - 2] || '',
+        tags: [],
       };
+      item.pathFromAncestor = r.breadcrumb;
+      item.depthFromAncestor = r.breadcrumb.length - 1;
+    }
 
-      // Include tags if not raw mode
-      if (!input.raw) {
-        item.tags = engine.getNodeTags(r.id);
-      }
+    return item;
+  });
 
-      // Add ancestor info if enabled
-      if (includeAncestor && !input.raw) {
-        const ancestorResult = findMeaningfulAncestor(engine.rawDb, r.id);
+  // For SQLite backend: resolve ancestors using findMeaningfulAncestor
+  if (!readBackend.isLive() && includeAncestor && !input.raw) {
+    withDatabase({ dbPath: workspace.dbPath, readonly: true }, (ctx) => {
+      for (const item of resultsWithTags) {
+        const ancestorResult = findMeaningfulAncestor(ctx.db, item.id);
         if (ancestorResult && ancestorResult.depth > 0) {
           item.ancestor = ancestorResult.ancestor;
           item.pathFromAncestor = ancestorResult.path;
           item.depthFromAncestor = ancestorResult.depth;
         }
       }
-
-      return item;
     });
-
-    // Apply field projection if select is specified
-    const projection = parseSelectPaths(input.select);
-    const projectedResults = applyProjectionToArray(resultsWithTags, projection);
-
-    return {
-      workspace: workspace.alias,
-      query: input.query,
-      results: projectedResults,
-      count: projectedResults.length,
-    };
-  } finally {
-    engine.close();
   }
+
+  // Apply field projection if select is specified
+  const projection = parseSelectPaths(input.select);
+  const projectedResults = applyProjectionToArray(resultsWithTags, projection);
+
+  return {
+    workspace: workspace.alias,
+    query: input.query,
+    results: projectedResults,
+    count: projectedResults.length,
+  };
 }

@@ -14,7 +14,7 @@
  */
 
 import { Command } from "commander";
-import { withDatabase, withQueryEngine } from "../db/with-database";
+import { withQueryEngine } from "../db/with-database";
 import {
   resolveDbPath,
   checkDb,
@@ -22,6 +22,7 @@ import {
   formatJsonOutput,
   parseDateRangeOptions,
   parseSelectOption,
+  resolveReadBackendFromOptions,
 } from "./helpers";
 import {
   parseSelectPaths,
@@ -29,13 +30,6 @@ import {
   applyProjectionToArray,
 } from "../utils/select-projection";
 import {
-  getNodeContents,
-  getNodeContentsWithDepth,
-  formatNodeOutput,
-  formatNodeWithDepth,
-} from "./show";
-import {
-  tsv,
   EMOJI,
   header,
   formatDateISO,
@@ -87,11 +81,6 @@ export function createNodesCommand(): Command {
   showCmd.option("--select <fields>", "Select specific fields in JSON output (comma-separated, e.g., id,name,fields)");
 
   showCmd.action(async (nodeId: string, options: NodeShowOptions) => {
-    const dbPath = resolveDbPath(options);
-    if (!checkDb(dbPath, options.workspace)) {
-      process.exit(1);
-    }
-
     const depth = options.depth ? parseInt(String(options.depth)) : 0;
     const outputOpts = resolveOutputOptions(options);
     const format = resolveOutputFormat(options);
@@ -100,37 +89,36 @@ export function createNodesCommand(): Command {
     const selectFields = parseSelectOption(options.select);
     const projection = parseSelectPaths(selectFields);
 
-    await withDatabase({ dbPath, readonly: true }, (ctx) => {
-      // Get node contents (with or without depth)
-      const contents = depth > 0
-        ? getNodeContentsWithDepth(ctx.db, nodeId, 0, depth)
-        : getNodeContents(ctx.db, nodeId);
+    const readBackend = await resolveReadBackendFromOptions(options);
 
-      if (!contents) {
-        console.error(`❌ Node not found: ${nodeId}`);
-        process.exit(1);
+    try {
+      const content = await readBackend.readNode(nodeId, depth);
+
+      // Table format: display markdown content
+      if (format === "table") {
+        console.log(content.markdown);
+        return;
       }
 
-      // Table format: use rich pretty output
-      if (format === "table") {
-        if (depth > 0) {
-          const output = formatNodeWithDepth(ctx.db, nodeId, 0, depth);
-          if (output) {
-            console.log(output);
-          }
-        } else {
-          // For depth=0, contents is NodeContents type
-          const nodeContents = getNodeContents(ctx.db, nodeId);
-          if (nodeContents) {
-            console.log(formatNodeOutput(nodeContents));
-          }
-        }
-        return;
+      // Build output object for structured formats
+      const output: Record<string, unknown> = {
+        id: content.id,
+        name: content.name,
+        tags: content.tags || [],
+        markdown: content.markdown,
+      };
+
+      if (content.description) {
+        output.description = content.description;
+      }
+
+      if (content.children && content.children.length > 0) {
+        output.children = content.children;
       }
 
       // JSON formats: use projection and format output
       if (format === "json" || format === "jsonl" || format === "minimal") {
-        const projected = applyProjection(contents, projection);
+        const projected = applyProjection(output, projection);
         console.log(formatJsonOutput(projected));
         return;
       }
@@ -143,17 +131,16 @@ export function createNodesCommand(): Command {
         verbose: outputOpts.verbose,
       });
 
-      // For single-node show, use record() instead of table()
       formatter.record({
-        id: contents.id,
-        name: contents.name,
-        tags: contents.tags.join(", "),
-        created: contents.created ? formatDateISO(contents.created) : "",
-        fields: contents.fields.map(f => `${f.fieldName}=${f.value}`).join("; "),
-        children: contents.children.length,
+        id: content.id,
+        name: content.name,
+        tags: (content.tags || []).join(", "),
       });
       formatter.finalize();
-    });
+    } catch (error) {
+      console.error(`❌ Node not found: ${nodeId}`);
+      process.exit(1);
+    }
   });
 
   // nodes refs <node-id>

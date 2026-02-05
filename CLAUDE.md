@@ -329,6 +329,45 @@ supertag tags list --format csv --no-header
 - `src/utils/output-options.ts` - Format resolution logic
 - `tests/format-integration.test.ts` - E2E format tests
 
+### Live Read Backend (F-097)
+
+**Read/search operations route through Tana's Local API when available, with SQLite fallback.**
+
+```typescript
+import { resolveReadBackend } from '../api/read-backend-resolver';
+
+// Get the best available backend (never throws)
+const backend = await resolveReadBackend({ workspace: 'main' });
+const results = await backend.search('meeting notes', { limit: 20 });
+const node = await backend.readNode('nodeId', 2); // depth=2
+console.log(node.markdown);
+```
+
+**Resolution order:** `--offline` flag → cached backend → Local API healthy → SQLite fallback.
+
+**Key files:**
+- `src/api/read-backend.ts` - `TanaReadBackend` interface + canonical types
+- `src/api/local-api-read-backend.ts` - Local API implementation
+- `src/api/sqlite-read-backend.ts` - SQLite implementation (wraps TanaQueryEngine + show.ts)
+- `src/api/read-backend-resolver.ts` - Backend resolver (never throws, session-cached)
+
+**CLI helper:**
+```typescript
+import { resolveReadBackendFromOptions } from './helpers';
+
+// In command action handlers:
+const backend = await resolveReadBackendFromOptions(options); // respects --offline, --workspace
+```
+
+**What routes through the read backend:**
+- FTS search (`supertag search`, `tana_search` MCP tool)
+- Node content (`supertag nodes show`, `tana_node` MCP tool)
+
+**What stays on SQLite:**
+- Semantic search (embeddings are local-only)
+- Tagged search, nodes recent, tags list (need structured query support)
+- Reference graph, field queries, aggregation
+
 ### Error Handling System (Spec 073)
 
 **Structured Errors** - All errors extend `StructuredError` with consistent structure:

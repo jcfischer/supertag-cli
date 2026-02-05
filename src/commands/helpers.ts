@@ -17,6 +17,8 @@ import {
   WorkspaceNotFoundError,
   WorkspaceDatabaseMissingError,
 } from "../config/workspace-resolver";
+import { resolveReadBackend } from "../api/read-backend-resolver";
+import type { TanaReadBackend } from "../api/read-backend";
 import type { StandardOptions } from "../types";
 import { OUTPUT_FORMATS } from "../utils/output-formatter";
 
@@ -95,10 +97,11 @@ export function addStandardOptions(
     defaultLimit = "10",
   } = config;
 
-  // Always add workspace and json options
+  // Always add workspace, json, and offline options
   cmd.option("-w, --workspace <alias>", "Workspace alias or nodeid");
   cmd.option("-l, --limit <n>", "Limit results", defaultLimit);
   cmd.option("--json", "Output as JSON", false);
+  cmd.option("--offline", "Force SQLite backend (skip Local API even if available)");
 
   // Output formatting options (T-2.1)
   cmd.option("--pretty", "Human-friendly output with formatting");
@@ -235,4 +238,26 @@ export function parseSelectOption(select: string | undefined): string[] | undefi
     .split(",")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+}
+
+/**
+ * Resolve a TanaReadBackend from standard CLI options.
+ * Spec: F-097 Live Read Backend
+ *
+ * Maps CLI flags to read backend resolution:
+ * - --offline → forces SQLite
+ * - --workspace → workspace alias
+ * - --db-path → direct database path
+ *
+ * @param options - Standard CLI options
+ * @returns Resolved TanaReadBackend instance (never throws)
+ */
+export async function resolveReadBackendFromOptions(
+  options: StandardOptions,
+): Promise<TanaReadBackend> {
+  return resolveReadBackend({
+    workspace: options.workspace,
+    offline: options.offline,
+    dbPath: options.dbPath,
+  });
 }
