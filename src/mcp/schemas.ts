@@ -109,8 +109,8 @@ export const nodeSchema = z.object({
     .number()
     .min(0)
     .max(10)
-    .default(0)
-    .describe('Depth of child traversal (0 = no children, 1 = direct children, etc.)'),
+    .optional()
+    .describe('Depth of child traversal (0 = no children, 1 = direct children). Auto-expands to 1 for day/calendar pages when not specified.'),
   select: selectSchema,
 });
 export type NodeInput = z.infer<typeof nodeSchema>;

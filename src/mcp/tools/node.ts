@@ -8,6 +8,7 @@
  * Routes through resolveReadBackend() which selects Local API or SQLite.
  */
 
+import { Database } from 'bun:sqlite';
 import { resolveReadBackend } from '../../api/read-backend-resolver.js';
 import type { ReadNodeContent } from '../../api/read-backend.js';
 import type { NodeInput } from '../schemas.js';
@@ -15,6 +16,8 @@ import {
   parseSelectPaths,
   applyProjection,
 } from '../../utils/select-projection.js';
+import { resolveEffectiveDepth } from '../../commands/show.js';
+import { resolveWorkspaceContext } from '../../config/workspace-resolver.js';
 
 // ---------------------------------------------------------------------------
 // Exported types (backward compatibility for batch-operations.ts)
@@ -75,7 +78,24 @@ function mapReadNodeContentToOutput(content: ReadNodeContent): Record<string, un
 
 export async function showNode(input: NodeInput): Promise<Partial<Record<string, unknown>> | null> {
   const readBackend = await resolveReadBackend({ workspace: input.workspace });
-  const depth = input.depth || 0;
+  const requestedDepth = input.depth || 0;
+  const depthExplicitlySet = input.depth !== undefined && input.depth !== null;
+
+  // Smart depth: calendar/day pages auto-expand to depth 1 (SQLite backend only)
+  let depth = requestedDepth;
+  if (!readBackend.isLive() && !depthExplicitlySet) {
+    try {
+      const ws = resolveWorkspaceContext({ workspace: input.workspace });
+      const db = new Database(ws.dbPath, { readonly: true });
+      try {
+        depth = resolveEffectiveDepth(db, input.nodeId, requestedDepth, depthExplicitlySet);
+      } finally {
+        db.close();
+      }
+    } catch {
+      // DB unavailable — use requested depth
+    }
+  }
 
   try {
     const nodeContent = await readBackend.readNode(input.nodeId, depth);

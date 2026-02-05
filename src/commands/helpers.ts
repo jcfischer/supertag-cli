@@ -129,7 +129,7 @@ export function addStandardOptions(
 
   // Optional depth flag
   if (includeDepth) {
-    cmd.option("-d, --depth <n>", "Child traversal depth", "0");
+    cmd.option("-d, --depth <n>", "Child traversal depth (auto-expands to 1 for day pages)", "0");
   }
 
   return cmd;

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Session-cached health check — one probe per session, cached like write resolver
   - Semantic search stays on SQLite (embeddings are local-only)
 
+### Improved
+
+- **Day page smart depth** - `nodes show` and `tana_node_read` MCP tool auto-expand calendar/day page nodes to depth 1 so section children (Todos, Notes, etc.) are visible by default. Non-calendar nodes still default to depth 0. Explicit `--depth` flag overrides auto-detection. Closes #37.
+
 ## [2.1.3] - 2026-02-04
 
 ### Fixed

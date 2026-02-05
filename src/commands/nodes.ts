@@ -14,6 +14,7 @@
  */
 
 import { Command } from "commander";
+import { Database } from "bun:sqlite";
 import { withQueryEngine } from "../db/with-database";
 import {
   resolveDbPath,
@@ -29,6 +30,9 @@ import {
   applyProjection,
   applyProjectionToArray,
 } from "../utils/select-projection";
+import {
+  resolveEffectiveDepth,
+} from "./show";
 import {
   EMOJI,
   header,
@@ -81,7 +85,8 @@ export function createNodesCommand(): Command {
   showCmd.option("--select <fields>", "Select specific fields in JSON output (comma-separated, e.g., id,name,fields)");
 
   showCmd.action(async (nodeId: string, options: NodeShowOptions) => {
-    const depth = options.depth ? parseInt(String(options.depth)) : 0;
+    const requestedDepth = options.depth ? parseInt(String(options.depth)) : 0;
+    const depthExplicitlySet = showCmd.getOptionValueSource("depth") === "cli";
     const outputOpts = resolveOutputOptions(options);
     const format = resolveOutputFormat(options);
 
@@ -90,6 +95,22 @@ export function createNodesCommand(): Command {
     const projection = parseSelectPaths(selectFields);
 
     const readBackend = await resolveReadBackendFromOptions(options);
+
+    // Smart depth: calendar/day pages auto-expand to depth 1 (SQLite backend only)
+    let depth = requestedDepth;
+    if (!readBackend.isLive() && !depthExplicitlySet) {
+      try {
+        const dbPath = resolveDbPath(options);
+        const db = new Database(dbPath, { readonly: true });
+        try {
+          depth = resolveEffectiveDepth(db, nodeId, requestedDepth, depthExplicitlySet);
+        } finally {
+          db.close();
+        }
+      } catch {
+        // DB unavailable — use requested depth
+      }
+    }
 
     try {
       const content = await readBackend.readNode(nodeId, depth);

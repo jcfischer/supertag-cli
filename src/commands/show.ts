@@ -18,6 +18,43 @@ import { formatInlineRefs } from "../utils/inline-ref-formatter";
 // Default database path - uses XDG with legacy fallback
 const DEFAULT_DB_PATH = getDatabasePath();
 
+/** Tana docTypes that represent calendar/day page nodes with nested section structure */
+const CALENDAR_DOC_TYPES = new Set(["journalPart", "journal"]);
+
+/**
+ * Check if a node is a calendar/day page node by examining its _docType.
+ * Calendar nodes (journalPart = day/week pages, journal = calendar root)
+ * have nested section structure where depth 0 only shows headers.
+ */
+export function isCalendarNode(db: Database, nodeId: string): boolean {
+  const result = withDbRetrySync(
+    () => db
+      .query("SELECT json_extract(raw_data, '$.props._docType') as docType FROM nodes WHERE id = ?")
+      .get(nodeId) as { docType: string | null } | null,
+    "isCalendarNode"
+  );
+  return result?.docType ? CALENDAR_DOC_TYPES.has(result.docType) : false;
+}
+
+/**
+ * Resolve the effective depth for a node.
+ * If the user didn't explicitly set --depth, calendar nodes default to 1.
+ */
+export function resolveEffectiveDepth(
+  db: Database,
+  nodeId: string,
+  requestedDepth: number,
+  depthExplicitlySet: boolean
+): number {
+  if (depthExplicitlySet) {
+    return requestedDepth;
+  }
+  if (requestedDepth === 0 && isCalendarNode(db, nodeId)) {
+    return 1;
+  }
+  return requestedDepth;
+}
+
 /**
  * Resolve the database path from options
  * Priority: --db-path > --workspace > default workspace > legacy
