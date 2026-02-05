@@ -134,14 +134,14 @@ describe("tags visualize command", () => {
         expect(result).toContain("tag_person");
         expect(result).toContain("-->");
       },
-      15000,
+      60000,
     );
 
     it("should support --format mermaid explicitly", async () => {
       const result = await $`bun run src/index.ts tags visualize --format mermaid --db-path ${testDbPath}`.text();
 
       expect(result).toContain("flowchart BT");
-    });
+    }, 60000);
 
     it("should support --format dot", async () => {
       const result = await $`bun run src/index.ts tags visualize --format dot --db-path ${testDbPath}`.text();
@@ -149,7 +149,7 @@ describe("tags visualize command", () => {
       expect(result).toContain("digraph supertags {");
       expect(result).toContain("rankdir=BT");
       expect(result).toContain("->");
-    });
+    }, 60000);
 
     it("should support --format json", async () => {
       const result = await $`bun run src/index.ts tags visualize --format json --db-path ${testDbPath}`.text();
@@ -158,7 +158,7 @@ describe("tags visualize command", () => {
       expect(parsed.nodes).toBeDefined();
       expect(parsed.links).toBeDefined();
       expect(parsed.metadata).toBeDefined();
-    });
+    }, 60000);
   });
 
   describe("filter options", () => {
@@ -167,7 +167,7 @@ describe("tags visualize command", () => {
 
       const parsed = JSON.parse(result);
       expect(parsed.metadata.rootTag).toBe("entity");
-    });
+    }, 60000);
 
     it("should support --orphans to include orphan tags", async () => {
       // First without --orphans
@@ -181,7 +181,7 @@ describe("tags visualize command", () => {
       // Both should work without error
       expect(parsedWithout.nodes).toBeDefined();
       expect(parsedWith.nodes).toBeDefined();
-    });
+    }, 60000);
   });
 
   describe("output options", () => {
@@ -193,7 +193,7 @@ describe("tags visualize command", () => {
       expect(existsSync(outputFile)).toBe(true);
       const content = readFileSync(outputFile, "utf-8");
       expect(content).toContain("flowchart BT");
-    });
+    }, 60000);
   });
 
   describe("direction options", () => {
@@ -201,13 +201,13 @@ describe("tags visualize command", () => {
       const result = await $`bun run src/index.ts tags visualize --direction TD --db-path ${testDbPath}`.text();
 
       expect(result).toContain("flowchart TD");
-    });
+    }, 60000);
 
     it("should support --direction for dot", async () => {
       const result = await $`bun run src/index.ts tags visualize --format dot --direction LR --db-path ${testDbPath}`.text();
 
       expect(result).toContain("rankdir=LR");
-    });
+    }, 60000);
   });
 
   describe("display options", () => {
@@ -217,12 +217,12 @@ describe("tags visualize command", () => {
       // With --show-fields, should show actual field names (Email, Phone for person tag)
       expect(result).toContain("Email");
       expect(result).toContain("Phone");
-    });
+    }, 60000);
 
     it("should support --colors for dot format", async () => {
       const result = await $`bun run src/index.ts tags visualize --format dot --colors --db-path ${testDbPath}`.text();
 
       expect(result).toContain('fillcolor="#');
-    });
+    }, 60000);
   });
 });

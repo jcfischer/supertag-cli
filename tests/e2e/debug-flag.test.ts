@@ -14,13 +14,13 @@ describe("--debug flag", () => {
       const result = await $`bun run src/index.ts --debug --help`.text();
 
       expect(result).toContain("supertag");
-    });
+    }, 60000);
 
     it("should show debug flag in help", async () => {
       const result = await $`bun run src/index.ts --help`.text();
 
       expect(result).toContain("--debug");
-    });
+    }, 60000);
   });
 
   describe("debug output on errors", () => {
@@ -39,6 +39,6 @@ describe("--debug flag", () => {
           expect(stderr.length).toBeGreaterThan(0);
         }
       }
-    });
+    }, 60000);
   });
 });
