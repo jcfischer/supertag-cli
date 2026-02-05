@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Live Read Backend (F-097)** - Search and node-read operations now route through Tana's Local API when available, with automatic SQLite fallback
+  - `TanaReadBackend` interface with `LocalApiReadBackend` and `SqliteReadBackend` implementations
+  - Backend resolver: prefers Local API when healthy, falls back to SQLite silently
+  - `--offline` flag on all commands to force SQLite backend regardless of Local API availability
+  - FTS search (`supertag search`) uses live data when Tana Desktop is running
+  - Node show (`supertag nodes show`) reads live content from Tana Desktop
+  - MCP tools (`tana_search`, `tana_node`) use live backend when available
+  - Canonical types (`ReadSearchResult`, `ReadNodeContent`, `ReadTagInfo`) normalize both backends
+  - Session-cached health check — one probe per session, cached like write resolver
+  - Semantic search stays on SQLite (embeddings are local-only)
+
 ### Improved
 
 - **Day page smart depth** - `nodes show` and `tana_node_read` MCP tool auto-expand calendar/day page nodes to depth 1 so section children (Todos, Notes, etc.) are visible by default. Non-calendar nodes still default to depth 0. Explicit `--depth` flag overrides auto-detection. Closes #37.

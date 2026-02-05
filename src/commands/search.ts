@@ -15,7 +15,7 @@
  */
 
 import { Command } from "commander";
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import { findMeaningfulAncestor } from "../embeddings/ancestor-resolution";
 import { ConfigManager } from "../config/manager";
@@ -28,6 +28,7 @@ import {
   formatJsonOutput,
   parseDateRangeOptions,
   parseSelectOption,
+  resolveReadBackendFromOptions,
 } from "./helpers";
 import {
   parseSelectPaths,
@@ -50,6 +51,7 @@ import {
   formatNodeOutput,
   formatNodeWithDepth,
 } from "./show";
+import type { ReadSearchResult } from "../api/read-backend";
 import type { StandardOptions, SearchType } from "../types";
 
 interface SearchOptions extends StandardOptions {
@@ -221,6 +223,7 @@ export function createSearchCommand(): Command {
 
 /**
  * Handle full-text search
+ * Spec: F-097 — Routes through TanaReadBackend (Local API or SQLite)
  */
 async function handleFtsSearch(
   query: string,
@@ -234,23 +237,48 @@ async function handleFtsSearch(
   const format = resolveOutputFormat(options);
   const startTime = performance.now();
 
-  await withQueryEngine({ dbPath }, async (ctx) => {
-    const { engine } = ctx;
+  // Resolve read backend (Local API or SQLite)
+  const readBackend = await resolveReadBackendFromOptions(options);
+  const isLive = readBackend.isLive();
 
-    // Ensure FTS index exists
-    const hasFTS = await engine.hasFTSIndex();
-    if (!hasFTS) {
-      console.log("🔄 Creating FTS index...");
-      await engine.initializeFTS();
+  const dateRange = parseDateRangeOptions(options);
+  const results = await readBackend.search(query, {
+    limit,
+    ...dateRange,
+  });
+  const searchTime = performance.now() - startTime;
+
+  // Lazily-opened SQLite DB for ancestor resolution and show mode (SQLite only)
+  let sqliteDb: Database | null = null;
+  const getSqliteDb = (): Database => {
+    if (!sqliteDb) {
+      sqliteDb = new Database(dbPath, { readonly: true });
     }
+    return sqliteDb;
+  };
 
-    const dateRange = parseDateRangeOptions(options);
-    const results = await engine.searchNodes(query, {
-      limit,
-      ...dateRange,
-    });
-    const searchTime = performance.now() - startTime;
+  // Dual-path ancestor resolution
+  const resolveAncestor = (result: ReadSearchResult): { name: string; fullStr: string } => {
+    if (!includeAncestor) return { name: "", fullStr: "" };
 
+    if (isLive && result.breadcrumb && result.breadcrumb.length > 1) {
+      const name = result.breadcrumb[result.breadcrumb.length - 2] || "";
+      return { name, fullStr: name };
+    }
+    if (!isLive) {
+      const ancestorResult = findMeaningfulAncestor(getSqliteDb(), result.id);
+      if (ancestorResult && ancestorResult.depth > 0) {
+        const tagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
+        return {
+          name: ancestorResult.ancestor.name,
+          fullStr: `${ancestorResult.ancestor.name} ${tagStr}`,
+        };
+      }
+    }
+    return { name: "", fullStr: "" };
+  };
+
+  try {
     // Handle --show separately (rich output with full node contents)
     if (options.show && format === "table") {
       console.log(`\n🔍 Search results for "${query}" (${results.length}):\n`);
@@ -260,24 +288,26 @@ async function handleFtsSearch(
         console.log(`━━━ Result ${i + 1} ━━━`);
 
         // Show ancestor context
-        if (includeAncestor) {
-          const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-          if (ancestorResult && ancestorResult.depth > 0) {
-            const tagStr = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-            console.log(`📂 Context: ${ancestorResult.ancestor.name} ${tagStr}`);
-          }
+        const ancestor = resolveAncestor(result);
+        if (ancestor.fullStr) {
+          console.log(`📂 Context: ${ancestor.fullStr}`);
         }
 
         // Show full node content
-        if (depth > 0) {
-          const output = formatNodeWithDepth(engine.rawDb, result.id, 0, depth, "");
-          if (output) {
-            console.log(output);
-          }
+        if (isLive) {
+          const nodeContent = await readBackend.readNode(result.id, depth);
+          console.log(nodeContent.markdown);
         } else {
-          const contents = getNodeContents(engine.rawDb, result.id);
-          if (contents) {
-            console.log(formatNodeOutput(contents));
+          if (depth > 0) {
+            const output = formatNodeWithDepth(getSqliteDb(), result.id, 0, depth, "");
+            if (output) {
+              console.log(output);
+            }
+          } else {
+            const contents = getNodeContents(getSqliteDb(), result.id);
+            if (contents) {
+              console.log(formatNodeOutput(contents));
+            }
           }
         }
         console.log();
@@ -287,33 +317,26 @@ async function handleFtsSearch(
 
     // Build enriched data for all formats
     const enriched = results.map((result) => {
-      const tags = options.raw ? [] : engine.getNodeTags(result.id);
-      let ancestorName = "";
-
-      if (includeAncestor) {
-        const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-        if (ancestorResult && ancestorResult.depth > 0) {
-          ancestorName = ancestorResult.ancestor.name;
-        }
-      }
+      const tags = options.raw ? [] : result.tags;
+      const ancestor = resolveAncestor(result);
 
       const item: Record<string, unknown> = {
         id: result.id,
         name: result.name || "",
         tags: tags.join(", "),
-        rank: result.rank.toFixed(2),
-        ancestor: ancestorName,
+        rank: result.rank !== undefined ? result.rank.toFixed(2) : "",
+        ancestor: ancestor.name,
       };
 
-      // Add full content if --show (for JSON formats)
-      if (options.show) {
+      // Add full content if --show (for JSON formats) — SQLite path
+      if (options.show && !isLive) {
         if (depth > 0) {
-          const contents = getNodeContentsWithDepth(engine.rawDb, result.id, 0, depth);
+          const contents = getNodeContentsWithDepth(getSqliteDb(), result.id, 0, depth);
           if (contents) {
             item.contents = contents;
           }
         } else {
-          const contents = getNodeContents(engine.rawDb, result.id);
+          const contents = getNodeContents(getSqliteDb(), result.id);
           if (contents) {
             item.contents = contents;
           }
@@ -322,6 +345,18 @@ async function handleFtsSearch(
 
       return item;
     });
+
+    // Add contents for live backend --show mode (async)
+    if (options.show && isLive) {
+      for (const item of enriched) {
+        try {
+          const nodeContent = await readBackend.readNode(item.id as string, depth);
+          item.contents = nodeContent;
+        } catch {
+          // Skip nodes that can't be read
+        }
+      }
+    }
 
     // Create formatter and output based on format
     const formatter = createFormatter({
@@ -341,25 +376,17 @@ async function handleFtsSearch(
       // Build table rows
       const tableHeaders = ["#", "Name", "ID", "Tags", "Rank", "Ancestor"];
       const tableRows = results.map((result, i) => {
-        const tags = options.raw ? [] : engine.getNodeTags(result.id);
+        const tags = options.raw ? [] : result.tags;
         const tagStr = tags.length > 0 ? `#${tags.join(" #")}` : "";
-
-        let ancestorName = "";
-        if (includeAncestor) {
-          const ancestorResult = findMeaningfulAncestor(engine.rawDb, result.id);
-          if (ancestorResult && ancestorResult.depth > 0) {
-            const ancestorTags = ancestorResult.ancestor.tags.map(t => `#${t}`).join(" ");
-            ancestorName = `${ancestorResult.ancestor.name} ${ancestorTags}`;
-          }
-        }
+        const ancestor = resolveAncestor(result);
 
         return [
           String(i + 1),
           (result.name || "(unnamed)").substring(0, 40),
           result.id,
           tagStr.substring(0, 30),
-          result.rank.toFixed(2),
-          ancestorName.substring(0, 40),
+          result.rank !== undefined ? result.rank.toFixed(2) : "",
+          ancestor.fullStr.substring(0, 40),
         ];
       });
 
@@ -401,7 +428,10 @@ async function handleFtsSearch(
     if (outputOpts.verbose) {
       console.error(`# Query time: ${searchTime.toFixed(1)}ms, Results: ${results.length}`);
     }
-  });
+  } finally {
+    // TS can't track mutation through the getSqliteDb() closure
+    (sqliteDb as Database | null)?.close();
+  }
 }
 
 /**
