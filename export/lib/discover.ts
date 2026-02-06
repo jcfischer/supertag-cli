@@ -130,10 +130,11 @@ export async function discoverWorkspaces(options?: {
 }
 
 /**
- * Discover workspaces via CDP connection to a running browser
+ * Discover workspaces via CDP connection to a running browser (Playwright)
  *
  * Used when Playwright's launchPersistentContext fails (Windows).
  * Requires browser to be running with --remote-debugging-port.
+ * NOTE: On Windows, prefer discoverWorkspacesViaRawCDP instead (bypasses Playwright).
  *
  * @param options.port - CDP debug port (default: 19222)
  * @param options.timeout - How long to wait for app to initialize (default: 30000ms)
@@ -151,7 +152,7 @@ export async function discoverWorkspacesViaCDP(options?: {
 
   if (verbose) console.log(`Connecting to browser on port ${port}...`);
 
-  const browser = await chromium.connectOverCDP(`http://localhost:${port}`, { timeout: 30000 });
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 30000 });
 
   try {
     const contexts = browser.contexts();
@@ -181,6 +182,194 @@ export async function discoverWorkspacesViaCDP(options?: {
     // Disconnect without closing the user's browser
     browser.close().catch(() => {});
   }
+}
+
+/**
+ * The workspace extraction script as a string for raw CDP Runtime.evaluate.
+ * This is the same logic as extractWorkspacesScript but as an IIFE string.
+ */
+const extractWorkspacesScriptString = `
+  (function() {
+    var appState = window.appState;
+    if (!appState || !appState.nodeSpace) return JSON.stringify([]);
+
+    var results = [];
+    var openFiles = appState.nodeSpace.openFiles;
+    if (!openFiles) return JSON.stringify([]);
+
+    var files = openFiles instanceof Set ? Array.from(openFiles) :
+                openFiles instanceof Map ? Array.from(openFiles.values()) :
+                Array.isArray(openFiles) ? openFiles : [];
+
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      if (!file || !file.fileId) continue;
+
+      var nodeCountData = appState.nodeSpace.nodeCountsFor ? appState.nodeSpace.nodeCountsFor(file) : null;
+      var nodeCount = nodeCountData ? (nodeCountData.unpacked + nodeCountData.untouched) : 0;
+
+      var rawName = (file.homeNode && file.homeNode.name) || file.name || 'Unknown';
+      var name = rawName.replace(/<[^>]*>/g, '').trim();
+
+      results.push({
+        rootFileId: file.fileId,
+        homeNodeId: (file.homeNode && file.homeNode.id) || file.homeNodeId || '',
+        name: name,
+        nodeCount: nodeCount,
+        isRootFile: file.isRootFile || false
+      });
+    }
+
+    return JSON.stringify(results);
+  })()
+`;
+
+/**
+ * Discover workspaces via raw CDP protocol (no Playwright dependency).
+ * Bypasses Playwright entirely - uses fetch() for page discovery and native WebSocket
+ * for CDP commands. Required on Windows where Playwright fails in Bun-compiled binaries.
+ *
+ * @param options.port - CDP debug port (default: 19222)
+ * @param options.timeout - How long to wait for app to initialize (default: 30000ms)
+ * @param options.verbose - Log progress to console
+ * @returns Array of discovered workspaces
+ */
+export async function discoverWorkspacesViaRawCDP(options?: {
+  port?: number;
+  timeout?: number;
+  verbose?: boolean;
+}): Promise<DiscoveredWorkspace[]> {
+  const port = options?.port ?? 19222;
+  const timeout = options?.timeout ?? 30000;
+  const verbose = options?.verbose ?? false;
+
+  if (verbose) console.log(`Connecting to browser on port ${port} (raw CDP)...`);
+
+  // 1. Discover pages via CDP HTTP endpoint
+  const pagesResponse = await fetch(`http://127.0.0.1:${port}/json`);
+  if (!pagesResponse.ok) {
+    throw new Error(`CDP endpoint returned status ${pagesResponse.status}`);
+  }
+  const pages = await pagesResponse.json() as Array<{ url: string; webSocketDebuggerUrl: string; title: string }>;
+
+  // 2. Find the Tana page
+  let tanaPage = pages.find(p => p.url?.includes('tana.inc'));
+
+  if (!tanaPage) {
+    // Navigate the first page to Tana if needed
+    if (pages.length > 0 && pages[0].webSocketDebuggerUrl) {
+      if (verbose) console.log('No Tana page found, navigating first tab to Tana...');
+      tanaPage = pages[0];
+
+      // Navigate via CDP
+      const navigated = await cdpCommand(tanaPage.webSocketDebuggerUrl, 'Page.navigate', {
+        url: 'https://app.tana.inc',
+      });
+      if (!navigated) {
+        throw new Error('Could not navigate to Tana');
+      }
+    } else {
+      throw new Error('No browser pages found. Make sure the browser is open.');
+    }
+  }
+
+  if (!tanaPage?.webSocketDebuggerUrl) {
+    throw new Error('No WebSocket debug URL available for the page');
+  }
+
+  // 3. Wait for app to initialize
+  if (verbose) console.log(`Waiting for app to initialize (${timeout / 1000}s)...`);
+  await new Promise(r => setTimeout(r, timeout));
+
+  if (verbose) console.log('Extracting workspace data from appState...');
+
+  // 4. Execute the extraction script via raw CDP
+  const wsUrl = tanaPage.webSocketDebuggerUrl.replace('localhost', '127.0.0.1');
+  const result = await new Promise<string | null>((resolve) => {
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch {}
+      resolve(null);
+    }, 30000);
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        id: 1,
+        method: 'Runtime.evaluate',
+        params: {
+          expression: extractWorkspacesScriptString,
+          returnByValue: true,
+        },
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+        if (msg.id === 1) {
+          clearTimeout(timer);
+          try { ws.close(); } catch {}
+          resolve(msg.result?.result?.value ?? null);
+        }
+      } catch {
+        clearTimeout(timer);
+        try { ws.close(); } catch {}
+        resolve(null);
+      }
+    };
+
+    ws.onerror = () => {
+      clearTimeout(timer);
+      resolve(null);
+    };
+  });
+
+  if (!result) {
+    throw new Error('Could not extract workspace data from browser');
+  }
+
+  const workspaces: DiscoveredWorkspace[] = typeof result === 'string' ? JSON.parse(result) : result;
+  return sortAndLogWorkspaces(workspaces, verbose);
+}
+
+/**
+ * Send a single CDP command via raw WebSocket and return the result
+ */
+async function cdpCommand(wsDebuggerUrl: string, method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  const wsUrl = wsDebuggerUrl.replace('localhost', '127.0.0.1');
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch {}
+      resolve(null);
+    }, 15000);
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ id: 1, method, params }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+        if (msg.id === 1) {
+          clearTimeout(timer);
+          try { ws.close(); } catch {}
+          resolve(msg.result ?? null);
+        }
+      } catch {
+        clearTimeout(timer);
+        try { ws.close(); } catch {}
+        resolve(null);
+      }
+    };
+
+    ws.onerror = () => {
+      clearTimeout(timer);
+      resolve(null);
+    };
+  });
 }
 
 /**

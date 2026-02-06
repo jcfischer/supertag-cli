@@ -34,7 +34,7 @@ import { VERSION } from "../src/version";
 // Import API modules
 import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, saveCachedToken, type AuthLogger } from "./lib/auth";
 import { getAccount, getSnapshotMeta, getSnapshotUrl, downloadSnapshot } from "./lib/api";
-import { discoverWorkspaces, discoverWorkspacesViaCDP } from "./lib/discover";
+import { discoverWorkspaces, discoverWorkspacesViaCDP, discoverWorkspacesViaRawCDP } from "./lib/discover";
 
 const USER_DATA_DIR = BROWSER_DATA_DIR;
 const TANA_APP_URL = "https://app.tana.inc";
@@ -360,6 +360,7 @@ function getRealProfilePath(browser: 'chrome' | 'edge'): string | null {
 /**
  * Poll for the CDP debug port to become ready
  * Returns true if port is reachable, false on timeout
+ * Uses 127.0.0.1 instead of localhost to avoid IPv6 resolution issues on Windows
  */
 async function waitForPort(port: number, timeoutMs: number = 15000): Promise<boolean> {
   const start = Date.now();
@@ -367,7 +368,7 @@ async function waitForPort(port: number, timeoutMs: number = 15000): Promise<boo
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const response = await fetch(`http://localhost:${port}/json/version`);
+      const response = await fetch(`http://127.0.0.1:${port}/json/version`);
       if (response.ok) return true;
     } catch {
       // Port not ready yet
@@ -375,6 +376,132 @@ async function waitForPort(port: number, timeoutMs: number = 15000): Promise<boo
     await new Promise(r => setTimeout(r, interval));
   }
   return false;
+}
+
+/**
+ * Extract Firebase auth tokens from a running browser via raw CDP protocol.
+ * Bypasses Playwright entirely - uses fetch() for page discovery and native WebSocket
+ * for CDP commands. This is critical for Windows where Playwright's internal communication
+ * (both pipe-based and WebSocket-based) fails in Bun-compiled binaries.
+ */
+async function extractTokensViaRawCDP(port: number, timeoutMs: number = 30000): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  expirationTime: number;
+  apiKey?: string;
+} | null> {
+  try {
+    // 1. Discover browser pages via CDP HTTP endpoint
+    const pagesResponse = await fetch(`http://127.0.0.1:${port}/json`);
+    if (!pagesResponse.ok) {
+      logger.info("CDP endpoint returned non-OK status");
+      return null;
+    }
+    const pages = await pagesResponse.json() as Array<{ url: string; webSocketDebuggerUrl: string; title: string }>;
+
+    // 2. Find the Tana page
+    const tanaPage = pages.find(p => p.url?.includes('tana.inc'));
+    if (!tanaPage?.webSocketDebuggerUrl) {
+      logger.info(`No Tana page found in ${pages.length} browser tab(s)`);
+      if (pages.length > 0) {
+        logger.info(`Open tabs: ${pages.map(p => p.url || p.title || 'unknown').join(', ')}`);
+      }
+      return null;
+    }
+
+    // 3. Connect via WebSocket - use 127.0.0.1 to avoid IPv6 resolution issues on Windows
+    const wsUrl = tanaPage.webSocketDebuggerUrl.replace('localhost', '127.0.0.1');
+
+    return await new Promise<{
+      accessToken: string;
+      refreshToken: string;
+      expirationTime: number;
+      apiKey?: string;
+    } | null>((resolve) => {
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch {}
+        logger.info("Raw CDP extraction timed out");
+        resolve(null);
+      }, timeoutMs);
+
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        // Send Runtime.evaluate to extract Firebase IndexedDB data
+        ws.send(JSON.stringify({
+          id: 1,
+          method: 'Runtime.evaluate',
+          params: {
+            expression: `
+              new Promise((resolve) => {
+                const req = indexedDB.open('firebaseLocalStorageDb');
+                req.onsuccess = () => {
+                  const db = req.result;
+                  try {
+                    const tx = db.transaction('firebaseLocalStorage', 'readonly');
+                    const store = tx.objectStore('firebaseLocalStorage');
+                    const getAll = store.getAll();
+                    getAll.onsuccess = () => resolve(JSON.stringify(getAll.result));
+                    getAll.onerror = () => resolve('[]');
+                  } catch(e) { resolve('[]'); }
+                };
+                req.onerror = () => resolve('[]');
+              })
+            `,
+            awaitPromise: true,
+            returnByValue: true,
+          },
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+          if (msg.id === 1) {
+            clearTimeout(timer);
+            try { ws.close(); } catch {}
+
+            // CDP returns the resolved value in result.result.value
+            const rawValue = msg.result?.result?.value;
+            if (!rawValue) {
+              resolve(null);
+              return;
+            }
+
+            const data = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
+
+            if (Array.isArray(data)) {
+              for (const item of data) {
+                if (item?.value?.stsTokenManager) {
+                  const { accessToken, refreshToken, expirationTime } = item.value.stsTokenManager;
+                  resolve({
+                    accessToken,
+                    refreshToken,
+                    expirationTime,
+                    apiKey: item.value.apiKey,
+                  });
+                  return;
+                }
+              }
+            }
+            resolve(null);
+          }
+        } catch {
+          clearTimeout(timer);
+          try { ws.close(); } catch {}
+          resolve(null);
+        }
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timer);
+        resolve(null);
+      };
+    });
+  } catch (error) {
+    logger.info(`Raw CDP extraction error: ${error instanceof Error ? error.message : error}`);
+    return null;
+  }
 }
 
 /**
@@ -577,17 +704,40 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
 
   let extracted = false;
 
-  // Method 1: CDP connection to the running browser (most reliable)
+  // Method 1: Raw CDP extraction (bypasses Playwright entirely)
+  // This is the primary method because Playwright's internal communication
+  // (both pipe-based and WebSocket-based) fails in Bun-compiled binaries on Windows.
   if (portAlive) {
+    logger.info("Connecting to browser via CDP...");
+    const tokens = await extractTokensViaRawCDP(debugPort);
+    if (tokens) {
+      saveCachedToken({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expirationTime: tokens.expirationTime,
+      });
+      logger.info("✓ Auth tokens extracted and saved");
+
+      if (tokens.apiKey) {
+        getConfig().setFirebaseApiKey(tokens.apiKey);
+        logger.info("✓ Firebase API key saved");
+      }
+      extracted = true;
+    } else {
+      logger.info("Raw CDP extraction did not find tokens, trying Playwright CDP...");
+    }
+  }
+
+  // Method 2: Playwright CDP connection (fallback - works on macOS/Linux)
+  if (!extracted && portAlive && process.platform !== 'win32') {
     try {
-      logger.info("Connecting to browser...");
-      const browser = await chromium.connectOverCDP(`http://localhost:${debugPort}`, { timeout: 30000 });
+      logger.info("Connecting via Playwright CDP...");
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`, { timeout: 30000 });
       const contexts = browser.contexts();
       const pages = contexts[0]?.pages() || [];
       const page = pages.find(p => p.url().includes('tana.inc')) || pages[0];
 
       if (page) {
-        // Extract auth tokens from the live browser session
         const firebaseData = await page.evaluate(async () => {
           return new Promise((resolve) => {
             const request = indexedDB.open('firebaseLocalStorageDb');
@@ -612,7 +762,6 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
               saveCachedToken({ accessToken, refreshToken, expirationTime });
               logger.info("✓ Auth tokens extracted and saved");
 
-              // Also extract Firebase API key
               if (item.value.apiKey) {
                 getConfig().setFirebaseApiKey(item.value.apiKey);
                 logger.info("✓ Firebase API key saved");
@@ -624,20 +773,17 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
         }
       }
 
-      // Disconnect without closing the user's browser
       browser.close().catch(() => {});
     } catch (cdpError) {
-      logger.info("Could not connect via CDP (browser may be closed), trying profile extraction...");
+      logger.info("Playwright CDP also failed, trying profile extraction...");
     }
-  } else {
-    logger.info("Skipping CDP extraction (port not available), trying profile extraction...");
   }
 
-  // Method 2: Fallback to profile-based extraction
-  if (!extracted) {
+  // Method 3: Fallback to profile-based extraction (non-Windows only)
+  // On Windows, headless launchPersistentContext has the same pipe issue,
+  // so this fallback is skipped.
+  if (!extracted && process.platform !== 'win32') {
     try {
-      // When using real browser profile, close browser first to unlock the profile,
-      // then launch headless Playwright with the same profile to extract tokens
       const extractionProfileDir = useRealProfile ? profileDir : USER_DATA_DIR;
 
       if (useRealProfile && browserType !== 'other') {
@@ -649,9 +795,6 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
       logger.info(`Extracting tokens from profile: ${extractionProfileDir}`);
       const context = await chromium.launchPersistentContext(extractionProfileDir, {
         headless: true,
-        ...(process.platform === 'win32' ? {
-          args: ['--disable-gpu', '--disable-software-rasterizer'],
-        } : {}),
       });
 
       try {
@@ -697,9 +840,6 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
       }
     } catch (profileError) {
       logger.info("Profile extraction also failed");
-      if (useRealProfile) {
-        logger.info("Hint: Edge may lock the profile. Try closing all Edge windows and retry.");
-      }
     }
   }
 
@@ -711,9 +851,12 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
     logger.warn("Could not extract auth tokens.");
     logger.info("");
     logger.info("Troubleshooting:");
-    logger.info("  1. Make sure you logged in and saw the Tana workspace");
+    logger.info("  1. Make sure you logged in and saw the Tana workspace fully loaded");
     logger.info("  2. Keep the browser open when you press Enter");
-    logger.info("  3. Try: supertag-export login --channel chrome");
+    logger.info("  3. Close ALL other browser windows before retrying");
+    if (process.platform === 'win32') {
+      logger.info("  4. If Edge keeps failing, install Chrome and retry");
+    }
   }
 }
 
@@ -944,7 +1087,9 @@ async function manualDiscover(options: { timeout?: number } = {}): Promise<impor
   logger.info("Debug port ready. Waiting for Tana to load...");
 
   try {
-    const workspaces = await discoverWorkspacesViaCDP({
+    // On Windows, use raw CDP to bypass Playwright's broken pipe/WebSocket in compiled binaries
+    const discoverFn = process.platform === 'win32' ? discoverWorkspacesViaRawCDP : discoverWorkspacesViaCDP;
+    const workspaces = await discoverFn({
       port: debugPort,
       timeout: timeout,
       verbose: true,
@@ -1117,7 +1262,14 @@ program
   .action(async (options: { channel?: string; manual?: boolean; timeout: string }) => {
     try {
       const timeout = parseInt(options.timeout) * 1000;
-      if (options.manual) {
+
+      // On Windows, always use manual mode (spawn browser + raw CDP extraction).
+      // Playwright's launchPersistentContext uses --remote-debugging-pipe internally,
+      // which fails in Bun-compiled binaries on Windows because file handle inheritance
+      // for stdio pipes doesn't work correctly in the compiled context.
+      const useManual = options.manual || process.platform === 'win32';
+
+      if (useManual) {
         await manualLogin(timeout);
       } else {
         await interactiveLogin({ channel: options.channel as 'chrome' | 'msedge' | undefined, timeout });
@@ -1223,8 +1375,11 @@ program
   .option("--update", "Update existing workspaces with discovered rootFileIds")
   .option("--manual", "Use manual browser launch (bypasses Playwright issues on Windows)")
   .action(async (options: { timeout: string; add?: boolean; update?: boolean; manual?: boolean }) => {
+    // On Windows, always use manual mode (same reason as login - Playwright pipes broken in compiled binary)
+    const useManual = options.manual || process.platform === 'win32';
+
     // Manual mode: spawn browser directly and connect via CDP
-    if (options.manual) {
+    if (useManual) {
       console.log("Discovering Tana workspaces (manual mode)...\n");
 
       try {
