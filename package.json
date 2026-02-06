@@ -1,6 +1,6 @@
 {
   "name": "supertag-cli",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "CLI for Tana integration - query, create, sync, and manage Tana workspaces with semantic search",
   "type": "module",
   "bin": {
