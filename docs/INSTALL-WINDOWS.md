@@ -374,6 +374,47 @@ See [MCP Documentation](./mcp.md) for other AI tools.
 
 ## Troubleshooting
 
+### Corporate Proxy / Firewall
+
+If the quick install fails with errors like "302 Moved Temporarily", "Umbrella Cloud Security Gateway", or `WebException`, your corporate proxy is likely blocking `raw.githubusercontent.com`.
+
+**Option 1: Download the installer manually**
+
+```powershell
+# Download install.ps1 from GitHub (use a browser if PowerShell is blocked)
+# https://github.com/jcfischer/supertag-cli/blob/main/install.ps1
+# Save to Downloads, then run:
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+& "$env:USERPROFILE\Downloads\install.ps1"
+```
+
+**Option 2: Use explicit proxy**
+
+If you know your proxy URL:
+```powershell
+# Download and run with proxy
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$proxy = "http://your-proxy-server:8080"
+iwr -Proxy $proxy -Uri "https://raw.githubusercontent.com/jcfischer/supertag-cli/main/install.ps1" -OutFile install.ps1
+.\install.ps1 -Proxy $proxy
+```
+
+**Option 3: Manual install (no scripts needed)**
+
+1. Download the ZIP from [GitHub Releases](https://github.com/jcfischer/supertag-cli/releases/latest) using your browser
+2. Extract to `%USERPROFILE%\Tools\supertag-cli`
+3. Follow [Step 2: Add to PATH](#step-2-add-to-path) below
+
+**Finding your proxy URL:**
+```powershell
+# Check system proxy settings
+netsh winhttp show proxy
+# Or check environment variable
+echo $env:HTTP_PROXY
+```
+
+---
+
 ### "Cannot require module @lancedb/lancedb-win32-x64-msvc"
 
 This error affects versions before v1.6.4 due to cross-compilation issues with native modules.

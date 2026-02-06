@@ -5,6 +5,12 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-02-06
+
+### Fixed
+
+- **Windows installer fails behind corporate proxy** - Added `-Proxy` parameter to `install.ps1` for explicit proxy configuration. All HTTP calls now route through a proxy-aware `Invoke-Download` helper that detects proxy/firewall blocks (Cisco Umbrella, Zscaler, etc.) and shows actionable workarounds. Added "Corporate Proxy / Firewall" troubleshooting section to Windows install docs with manual download, explicit proxy, and direct ZIP download options.
+
 ## [2.2.1] - 2026-02-05
 
 ### Fixed

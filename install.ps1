@@ -14,6 +14,9 @@
 .PARAMETER NoMcp
     Skip MCP auto-configuration
 
+.PARAMETER Proxy
+    HTTP proxy URL for corporate networks (e.g. http://proxy:8080)
+
 .EXAMPLE
     irm https://raw.githubusercontent.com/jcfischer/supertag-cli/main/install.ps1 | iex
 
@@ -22,13 +25,17 @@
 
 .EXAMPLE
     .\install.ps1 -NoMcp
+
+.EXAMPLE
+    .\install.ps1 -Proxy http://your-proxy:8080
 #>
 
 [CmdletBinding()]
 param(
     [string]$Version = "latest",
     [switch]$NoMcp,
-    [switch]$Help
+    [switch]$Help,
+    [string]$Proxy
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,6 +90,45 @@ function Test-Command {
     param([string]$Command)
     $null = Get-Command $Command -ErrorAction SilentlyContinue
     return $?
+}
+
+function Get-ProxyParams {
+    $params = @{}
+    if ($Script:Proxy) {
+        $params["Proxy"] = $Script:Proxy
+        $params["ProxyUseDefaultCredentials"] = $true
+    }
+    return $params
+}
+
+function Invoke-Download {
+    param(
+        [string]$Uri,
+        [string]$OutFile,
+        [hashtable]$Headers = @{}
+    )
+    $proxyParams = Get-ProxyParams
+    try {
+        if ($OutFile) {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -Headers $Headers @proxyParams
+        } else {
+            Invoke-RestMethod -Uri $Uri -Headers $Headers @proxyParams
+        }
+    } catch [System.Net.WebException] {
+        $response = $_.Exception.Response
+        $status = if ($response) { [int]$response.StatusCode } else { 0 }
+        if ($status -eq 302 -or $status -eq 407 -or $_.Exception.Message -match "proxy|Umbrella|Zscaler|Forcepoint|gateway") {
+            Write-Error "HTTP request to $Uri was blocked (possibly by a corporate proxy/firewall)."
+            Write-Host ""
+            Write-Host "      Workarounds:" -ForegroundColor Yellow
+            Write-Host "        1. Try with explicit proxy:  .\install.ps1 -Proxy http://your-proxy:8080"
+            Write-Host "        2. Download manually from:   https://github.com/$Script:GitHubRepo/releases/latest"
+            Write-Host "        3. See: https://github.com/$Script:GitHubRepo/blob/main/docs/INSTALL-WINDOWS.md#corporate-proxy"
+            Write-Host ""
+            throw "Download blocked by proxy/firewall: $Uri"
+        }
+        throw
+    }
 }
 
 function Get-Confirmation {
@@ -165,7 +211,7 @@ function Resolve-Version {
     if ($Requested -eq "latest") {
         try {
             $headers = @{ "User-Agent" = "supertag-cli-installer" }
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Script:GitHubRepo/releases/latest" -Headers $headers
+            $release = Invoke-Download -Uri "https://api.github.com/repos/$Script:GitHubRepo/releases/latest" -Headers $headers
             $tag = $release.tag_name -replace '^v', ''
             return $tag
         } catch {
@@ -264,7 +310,7 @@ function Install-Supertag {
     try {
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
         $headers = @{ "User-Agent" = "supertag-cli-installer" }
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing -Headers $headers
+        Invoke-Download -Uri $downloadUrl -OutFile $zipFile -Headers $headers
     } catch {
         Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
         throw "Failed to download from $downloadUrl`: $($_.Exception.Message)"
@@ -527,11 +573,13 @@ function Write-HelpMessage {
     Write-Host "Options:"
     Write-Host "  -Version VERSION  Install specific version (default: latest)"
     Write-Host "  -NoMcp            Skip MCP auto-configuration"
+    Write-Host "  -Proxy URL        Use HTTP proxy for downloads (e.g. http://proxy:8080)"
     Write-Host "  -Help             Show this help message"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  irm https://raw.githubusercontent.com/$Script:GitHubRepo/main/install.ps1 | iex"
     Write-Host "  .\install.ps1 -Version 0.16.0"
+    Write-Host "  .\install.ps1 -Proxy http://your-proxy:8080"
     Write-Host ""
 }
 
@@ -543,6 +591,11 @@ function Main {
     if ($Help) {
         Write-HelpMessage
         return
+    }
+
+    # Store proxy at script scope for helper functions
+    if ($Proxy) {
+        $Script:Proxy = $Proxy
     }
 
     Write-Banner
