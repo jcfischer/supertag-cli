@@ -56,3 +56,6 @@ config.local.json
 .bun-build
 .claude-checkpoint.md
 homebrew-tap/
+
+# SpecFlow state
+.specflow/
