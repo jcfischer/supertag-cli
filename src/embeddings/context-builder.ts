@@ -99,11 +99,14 @@ export function enrichContextWithFields(
   return `${contextText}\n${fieldContext}`;
 }
 
+/** Max parameters per SQLite IN clause to stay under SQLITE_MAX_VARIABLE_NUMBER */
+const SQL_BATCH_SIZE = 500;
+
 /**
  * Batch enrich nodes with field values
  *
  * Efficiently enriches multiple nodes by querying field values
- * for all nodes in a single batch.
+ * in batches that respect SQLite's parameter limit.
  *
  * @param db - Database connection
  * @param nodes - Array of nodes with context text
@@ -117,34 +120,37 @@ export function batchEnrichWithFields(
     return [];
   }
 
-  // Build a map of nodeId -> field values for batch efficiency
-  const nodeIds = nodes.map((n) => n.nodeId);
-  const placeholders = nodeIds.map(() => "?").join(",");
-
-  const allFields = db
-    .query(
-      `
-      SELECT parent_id as parentId, field_name as fieldName, value_text as valueText
-      FROM field_values
-      WHERE parent_id IN (${placeholders})
-      ORDER BY parent_id, field_name, value_order
-    `
-    )
-    .all(...nodeIds) as Array<{
-    parentId: string;
-    fieldName: string;
-    valueText: string;
-  }>;
-
-  // Group by parent ID
+  // Build a map of nodeId -> field values, querying in batches
   const fieldsByNode = new Map<string, FieldValueForContext[]>();
-  for (const field of allFields) {
-    const existing = fieldsByNode.get(field.parentId) || [];
-    existing.push({
-      fieldName: field.fieldName,
-      valueText: field.valueText,
-    });
-    fieldsByNode.set(field.parentId, existing);
+  const nodeIds = nodes.map((n) => n.nodeId);
+
+  for (let i = 0; i < nodeIds.length; i += SQL_BATCH_SIZE) {
+    const chunk = nodeIds.slice(i, i + SQL_BATCH_SIZE);
+    const placeholders = chunk.map(() => "?").join(",");
+
+    const chunkFields = db
+      .query(
+        `
+        SELECT parent_id as parentId, field_name as fieldName, value_text as valueText
+        FROM field_values
+        WHERE parent_id IN (${placeholders})
+        ORDER BY parent_id, field_name, value_order
+      `
+      )
+      .all(...chunk) as Array<{
+      parentId: string;
+      fieldName: string;
+      valueText: string;
+    }>;
+
+    for (const field of chunkFields) {
+      const existing = fieldsByNode.get(field.parentId) || [];
+      existing.push({
+        fieldName: field.fieldName,
+        valueText: field.valueText,
+      });
+      fieldsByNode.set(field.parentId, existing);
+    }
   }
 
   // Enrich each node

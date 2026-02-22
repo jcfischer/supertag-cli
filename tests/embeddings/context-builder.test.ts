@@ -216,5 +216,40 @@ describe("Context Builder (T-7.1)", () => {
 
       expect(results[0].nodeId).toBe("node1");
     });
+
+    it("should handle node counts exceeding SQL_BATCH_SIZE (issue #44)", async () => {
+      const { batchEnrichWithFields } = await import(
+        "../../src/embeddings/context-builder"
+      );
+
+      // Create 1200 nodes — exceeds the 500 batch size, spans 3 chunks
+      const bulkNodes = Array.from({ length: 1200 }, (_, i) => ({
+        nodeId: `bulk-${i}`,
+        contextText: `Node ${i}`,
+      }));
+
+      // Add field values for nodes at batch boundaries (499, 500, 999, 1000)
+      const boundaryIds = [499, 500, 999, 1000];
+      for (const idx of boundaryIds) {
+        db.exec(`
+          INSERT INTO field_values (tuple_id, parent_id, field_def_id, field_name, value_node_id, value_text, value_order, created)
+          VALUES ('bulk-tuple-${idx}', 'bulk-${idx}', 'def-bulk', 'BatchField', 'val-bulk-${idx}', 'value-${idx}', 0, ${Date.now()})
+        `);
+      }
+
+      // This should NOT throw — previously crashed with "expected N values, received M"
+      const results = batchEnrichWithFields(db, bulkNodes);
+
+      expect(results.length).toBe(1200);
+
+      // Verify boundary nodes got enriched
+      for (const idx of boundaryIds) {
+        expect(results[idx].contextText).toContain(`[BatchField]: value-${idx}`);
+      }
+
+      // Verify non-boundary nodes are unchanged
+      expect(results[0].contextText).toBe("Node 0");
+      expect(results[1199].contextText).toBe("Node 1199");
+    });
   });
 });
