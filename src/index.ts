@@ -37,6 +37,7 @@ import { createQueryCommand } from './commands/query';
 import { createAggregateCommand } from './commands/aggregate';
 import { createTableCommand } from './commands/table';
 import { createRelatedCommand } from './commands/related';
+import { createResolveCommand } from './commands/resolve';
 import { createAttachmentsCommand } from './commands/attachments';
 import { createTimelineCommand, createRecentCommand } from './commands/timeline';
 import { createSimpleLogger, ensureAllDirs, getAllPaths, getDatabasePath, needsMigration, DATABASE_PATH, TANA_DATA_DIR } from './config/paths';
@@ -179,6 +180,7 @@ program.addCommand(createQueryCommand());      // supertag query "find task wher
 program.addCommand(createAggregateCommand());  // supertag aggregate --tag --group-by
 program.addCommand(createTableCommand());      // supertag table <supertag> --format csv/json/markdown
 program.addCommand(createRelatedCommand());    // supertag related <nodeId> [--direction] [--types]
+program.addCommand(createResolveCommand());    // supertag resolve <name> [--tag] [--threshold] [--exact]
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
 program.addCommand(createErrorsCommand());     // supertag errors [--last N] [--clear] [--export] [--json]

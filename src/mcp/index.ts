@@ -45,6 +45,7 @@ import { handleCreateTag } from './tools/tag-create.js';
 import { handleSetField, handleSetFieldOption } from './tools/set-field.js';
 import { handleTrashNode } from './tools/trash.js';
 import { handleDone, handleUndone } from './tools/done.js';
+import { resolve as resolveEntity } from './tools/resolve.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -304,6 +305,12 @@ const allTools = [
           'Mark a node as not done (unchecked). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.undoneSchema),
       },
+      {
+        name: 'tana_resolve',
+        description:
+          'Find-or-create: resolve a name to an existing node with confidence scoring. Uses exact match, fuzzy (Levenshtein), and semantic search. Returns matched node with confidence, ambiguous candidates, or no_match. Use tag parameter to scope search. Set createIfMissing=true to auto-create on no_match.',
+        inputSchema: schemas.zodToJsonSchema(schemas.resolveSchema),
+      },
 ];
 
 // List available tools (filtered by tool mode)
@@ -505,6 +512,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_undone': {
         const validated = schemas.undoneSchema.parse(args);
         result = await handleUndone(validated);
+        break;
+      }
+      case 'tana_resolve': {
+        const validated = schemas.resolveSchema.parse(args);
+        result = await resolveEntity(validated);
         break;
       }
       default:

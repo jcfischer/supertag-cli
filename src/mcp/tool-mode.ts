@@ -45,6 +45,9 @@ export const SLIM_MODE_TOOLS: Set<string> = new Set([
   'tana_done',
   'tana_undone',
 
+  // Entity resolution
+  'tana_resolve',
+
   // Sync & system
   'tana_sync',
   'tana_cache_clear',
@@ -81,6 +84,9 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
   'tana_transcript_list',
   'tana_transcript_show',
   'tana_transcript_search',
+
+  // Entity resolution (1)
+  'tana_resolve',
 
   // System (3)
   'tana_sync',

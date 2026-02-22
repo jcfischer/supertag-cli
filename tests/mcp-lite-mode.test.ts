@@ -42,8 +42,8 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 17 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(17);
+  it('has exactly 18 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(18);
   });
 
   it('contains expected query tools (8)', () => {
@@ -154,8 +154,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 17', () => {
-    expect(getLiteModeToolCount()).toBe(17);
+  it('returns 18', () => {
+    expect(getLiteModeToolCount()).toBe(18);
   });
 });
 
@@ -172,7 +172,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 17);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 18);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -236,10 +236,10 @@ describe('getCapabilities() with mode filtering', () => {
     expect(caps.mode).toBeUndefined();
   });
 
-  it('lite mode returns only 17 tools', () => {
+  it('lite mode returns only 18 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(17);
+    expect(totalTools).toBe(18);
     expect(caps.mode).toBe('lite');
   });
 

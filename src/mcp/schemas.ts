@@ -478,6 +478,34 @@ export const tableSchema = z.object({
 });
 export type TableInput = z.infer<typeof tableSchema>;
 
+// tana_resolve (F-100: Entity Resolution)
+export const resolveSchema = z.object({
+  name: z.string().min(1).describe('Name to resolve (find matching existing node)'),
+  tag: z.string().optional().describe('Filter to specific supertag (e.g., "person", "project")'),
+  threshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0.85)
+    .describe('Minimum confidence threshold for a match (0-1, default: 0.85)'),
+  limit: z
+    .number()
+    .min(1)
+    .max(20)
+    .default(5)
+    .describe('Maximum candidates to return (default: 5)'),
+  exact: z
+    .boolean()
+    .default(false)
+    .describe('Exact match only — no fuzzy or semantic matching'),
+  createIfMissing: z
+    .boolean()
+    .default(false)
+    .describe('Return create suggestion when no match found'),
+  workspace: workspaceSchema,
+});
+export type ResolveInput = z.infer<typeof resolveSchema>;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyZodType = z.ZodType<any, any, any>;
 
