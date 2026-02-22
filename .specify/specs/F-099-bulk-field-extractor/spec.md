@@ -20,7 +20,7 @@
 ## Users & Stakeholders
 
 **Primary User**: Users who want tabular exports of their Tana structured data
-- Expects: `supertag fields export --tag book` → table with all books and their fields
+- Expects: `supertag table book` → table with all books and their fields
 - Needs: resolved references, multiple output formats, complete field coverage
 
 **Secondary**:
@@ -34,7 +34,7 @@
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-1 | `supertag fields export --tag <supertag>` exports all instances with all field values | Must |
+| FR-1 | `supertag table <supertag>` exports all instances with all field values | Must |
 | FR-2 | Each row is one instance, each column is one field from the supertag schema | Must |
 | FR-3 | `--resolve-references` flag resolves instance field values from node IDs to node names (default: true) | Must |
 | FR-4 | Support `--format json`, `--format csv`, `--format markdown` output modes | Must |
@@ -43,7 +43,7 @@
 | FR-7 | `--where <field>=<value>` basic filtering on field values | Should |
 | FR-8 | `--limit <n>` and `--offset <n>` for pagination | Should |
 | FR-9 | `--sort <field>` and `--direction asc|desc` for ordering | Should |
-| FR-10 | MCP tool `tana_export` with same capabilities | Must |
+| FR-10 | MCP tool `tana_table` with same capabilities | Must |
 | FR-11 | Markdown table output renders clean tables suitable for embedding in notes | Must |
 | FR-12 | Handle multi-value fields (e.g., multiple assignees) as comma-separated in CSV, arrays in JSON | Must |
 
@@ -61,7 +61,7 @@
 ### Export Pipeline
 
 ```
-Input (--tag <supertag>)
+Input (<supertag>)
   → Schema: get_tag_schema → field definitions (names, types, IDs)
   → Instances: search by tag → all instance node IDs
   → Extract: for each instance, read all field values (batched)
@@ -100,8 +100,8 @@ This avoids N*M queries for N instances with M reference fields.
 ## Scope
 
 ### In Scope
-- `supertag fields export` CLI command
-- `tana_export` MCP tool
+- `supertag table` CLI command
+- `tana_table` MCP tool
 - JSON, CSV, and markdown table output formats
 - Reference resolution (ID → name)
 - Basic filtering, sorting, pagination
@@ -132,13 +132,13 @@ This avoids N*M queries for N instances with M reference fields.
 
 ## Success Criteria
 
-- [ ] `supertag fields export --tag book --format json` returns all books with all fields
-- [ ] `supertag fields export --tag person --format csv > people.csv` produces valid CSV
-- [ ] `supertag fields export --tag project --format markdown` renders a clean markdown table
+- [ ] `supertag table book --format json` returns all books with all fields
+- [ ] `supertag table person --format csv > people.csv` produces valid CSV
+- [ ] `supertag table project --format markdown` renders a clean markdown table
 - [ ] Instance fields show resolved names, not raw node IDs
 - [ ] `--fields "Author,Year"` limits output to those two columns
 - [ ] `--where "Status=Read"` filters to only matching instances
-- [ ] `tana_export` MCP tool returns identical content to CLI
+- [ ] `tana_table` MCP tool returns identical content to CLI
 - [ ] Multi-value fields render as comma-separated in CSV and arrays in JSON
 
 ## Dependencies
