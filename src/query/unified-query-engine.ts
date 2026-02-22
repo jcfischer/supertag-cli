@@ -65,7 +65,17 @@ export class UnifiedQueryEngine {
       return this.executeWithFields(ast, results, hasMore);
     }
 
-    // No select clause - return core fields only (backward compatible)
+    // Auto-hydrate fields when querying a specific tag (not wildcard)
+    // This ensures tana_query results always include field values
+    if (ast.find !== "*" && results.length > 0) {
+      return this.executeWithFields(
+        { ...ast, select: ["*"] },
+        results,
+        hasMore
+      );
+    }
+
+    // Wildcard query without select - return core fields only
     return {
       results,
       count: results.length,
@@ -86,8 +96,12 @@ export class UnifiedQueryEngine {
     // Determine which fields to include
     let fieldNames: string[];
     if (ast.select!.includes("*")) {
-      // Get all fields for this supertag
-      fieldNames = fieldResolver.getSupertagFields(ast.find);
+      // Get all fields for this supertag, fall back to wildcard if metadata unavailable
+      try {
+        fieldNames = fieldResolver.getSupertagFields(ast.find);
+      } catch {
+        fieldNames = [];
+      }
     } else {
       fieldNames = ast.select!;
     }
@@ -95,8 +109,20 @@ export class UnifiedQueryEngine {
     // Get node IDs
     const nodeIds = results.map((r) => r.id as string);
 
-    // Resolve field values
-    const fieldValuesMap = fieldResolver.resolveFields(nodeIds, fieldNames);
+    // Resolve field values — use wildcard if no specific fields determined
+    const resolveTarget = fieldNames.length > 0 ? fieldNames : ("*" as const);
+    const fieldValuesMap = fieldResolver.resolveFields(nodeIds, resolveTarget);
+
+    // Collect actual field names from resolved values
+    if (fieldNames.length === 0) {
+      const allFields = new Set<string>();
+      for (const fields of fieldValuesMap.values()) {
+        for (const key of Object.keys(fields)) {
+          allFields.add(key);
+        }
+      }
+      fieldNames = [...allFields];
+    }
 
     // Merge field values into results
     const resultsWithFields = results.map((r) => {
@@ -428,16 +454,20 @@ export class UnifiedQueryEngine {
 
     switch (operator) {
       case "=":
-        sql += " AND fv.value_text = ?";
-        params.push(String(value));
+        // Case-insensitive match, handling HTML-wrapped values (e.g., <span>DONE</span>)
+        // Match plain text OR text between HTML tags
+        sql += " AND (fv.value_text = ? COLLATE NOCASE OR fv.value_text LIKE '%>' || ? || '<%' COLLATE NOCASE)";
+        params.push(String(value), String(value));
         break;
       case "!=":
-        sql += " AND fv.value_text != ?";
-        params.push(String(value));
+        // Case-insensitive not-equal, handling HTML-wrapped values
+        sql += " AND fv.value_text != ? COLLATE NOCASE AND fv.value_text NOT LIKE '%>' || ? || '<%' COLLATE NOCASE";
+        params.push(String(value), String(value));
         break;
       case "~":
       case "contains":
-        sql += " AND fv.value_text LIKE ?";
+        // Contains match is already substring-based, just add COLLATE NOCASE
+        sql += " AND fv.value_text LIKE ? COLLATE NOCASE";
         params.push(`%${value}%`);
         break;
       case ">":

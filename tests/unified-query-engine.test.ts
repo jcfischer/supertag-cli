@@ -410,11 +410,99 @@ describe("Unified Query Engine", () => {
       expect(result.fieldNames!.length).toBeGreaterThan(0);
     });
 
-    it("should not include fields when select is not specified", async () => {
+    it("should auto-hydrate fields when querying by tag without select", async () => {
       const ast: QueryAST = { find: "task" };
       const result = await engine.execute(ast);
-      // fieldNames should be undefined or empty when no select
+      // Fields should be auto-hydrated when querying a specific tag
+      expect(result.fieldNames).toBeDefined();
+      const firstResult = result.results[0] as any;
+      expect(firstResult.fields).toBeDefined();
+    });
+
+    it("should not include fields for wildcard query without select", async () => {
+      const ast: QueryAST = { find: "*", limit: 1 };
+      const result = await engine.execute(ast);
+      // Wildcard queries should not auto-hydrate fields
       expect(result.fieldNames).toBeUndefined();
+    });
+  });
+
+  describe("HTML Field Filtering (Issue #42)", () => {
+    // Insert HTML-formatted field values (as Tana stores option fields)
+    beforeAll(() => {
+      db.run(
+        "INSERT INTO field_values (tuple_id, parent_id, field_name, value_text, created) VALUES (?, ?, ?, ?, ?)",
+        ["tuple_html1", "task1", "Task Status", '<span data-color="blue">DONE</span>', Date.now()]
+      );
+      db.run(
+        "INSERT INTO field_values (tuple_id, parent_id, field_name, value_text, created) VALUES (?, ?, ?, ?, ?)",
+        ["tuple_html2", "task2", "Task Status", '<span data-color="red">IN PROGRESS</span>', Date.now()]
+      );
+      db.run(
+        "INSERT INTO field_values (tuple_id, parent_id, field_name, value_text, created) VALUES (?, ?, ?, ?, ?)",
+        ["tuple_html3", "task3", "Task Status", '<span data-color="green">TODO</span>', Date.now()]
+      );
+    });
+
+    it("should match HTML-wrapped field value with plain text equality", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "Task Status", operator: "=", value: "DONE" }],
+      };
+      const result = await engine.execute(ast);
+      expect(result.count).toBe(1);
+      expect(result.results[0].name).toBe("Fix login bug");
+    });
+
+    it("should match case-insensitively on HTML-wrapped fields", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "Task Status", operator: "=", value: "Done" }],
+      };
+      const result = await engine.execute(ast);
+      expect(result.count).toBe(1);
+      expect(result.results[0].name).toBe("Fix login bug");
+    });
+
+    it("should match lowercase query on HTML-wrapped fields", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "Task Status", operator: "=", value: "done" }],
+      };
+      const result = await engine.execute(ast);
+      expect(result.count).toBe(1);
+    });
+
+    it("should match contains operator on HTML-wrapped fields", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "Task Status", operator: "~", value: "PROGRESS" }],
+      };
+      const result = await engine.execute(ast);
+      expect(result.count).toBe(1);
+      expect(result.results[0].name).toBe("Write tests");
+    });
+
+    it("should match not-equal on HTML-wrapped fields", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        where: [{ field: "Task Status", operator: "!=", value: "DONE" }],
+      };
+      const result = await engine.execute(ast);
+      // task2 (IN PROGRESS) and task3 (TODO) should match
+      expect(result.count).toBe(2);
+    });
+
+    it("should return HTML-stripped field values in results", async () => {
+      const ast: QueryAST = {
+        find: "task",
+        select: ["Task Status"],
+      };
+      const result = await engine.execute(ast);
+      const task1Result = result.results.find((r) => r.name === "Fix login bug") as any;
+      expect(task1Result.fields["Task Status"]).toBe("DONE");
+      // No HTML tags in the returned value
+      expect(task1Result.fields["Task Status"]).not.toContain("<");
     });
   });
 

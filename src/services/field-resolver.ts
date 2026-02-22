@@ -7,6 +7,7 @@
  */
 
 import { Database } from "bun:sqlite";
+import { stripHtml } from "../utils/html";
 
 /**
  * Field value map: field_name -> value (comma-joined if multiple)
@@ -150,15 +151,18 @@ export class FieldResolver {
     }[];
 
     // Group values by node and field, handling multi-value
+    // Strip HTML tags from values (e.g., option fields store <span data-color="blue">DONE</span>)
     for (const row of rows) {
       const nodeFields = result.get(row.parent_id);
       if (!nodeFields) continue;
 
+      const cleanValue = stripHtml(row.value_text);
+
       if (nodeFields[row.field_name]) {
         // Multi-value: comma-join
-        nodeFields[row.field_name] += ", " + row.value_text;
+        nodeFields[row.field_name] += ", " + cleanValue;
       } else {
-        nodeFields[row.field_name] = row.value_text;
+        nodeFields[row.field_name] = cleanValue;
       }
     }
 
