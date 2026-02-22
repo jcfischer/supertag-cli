@@ -117,34 +117,41 @@ export function batchEnrichWithFields(
     return [];
   }
 
-  // Build a map of nodeId -> field values for batch efficiency
+  // SQLite has a variable limit (SQLITE_MAX_VARIABLE_NUMBER).
+  // Chunk node IDs to stay well under the limit.
+  const CHUNK_SIZE = 900;
   const nodeIds = nodes.map((n) => n.nodeId);
-  const placeholders = nodeIds.map(() => "?").join(",");
 
-  const allFields = db
-    .query(
-      `
-      SELECT parent_id as parentId, field_name as fieldName, value_text as valueText
-      FROM field_values
-      WHERE parent_id IN (${placeholders})
-      ORDER BY parent_id, field_name, value_order
-    `
-    )
-    .all(...nodeIds) as Array<{
-    parentId: string;
-    fieldName: string;
-    valueText: string;
-  }>;
-
-  // Group by parent ID
+  // Group by parent ID across all chunks
   const fieldsByNode = new Map<string, FieldValueForContext[]>();
-  for (const field of allFields) {
-    const existing = fieldsByNode.get(field.parentId) || [];
-    existing.push({
-      fieldName: field.fieldName,
-      valueText: field.valueText,
-    });
-    fieldsByNode.set(field.parentId, existing);
+
+  for (let i = 0; i < nodeIds.length; i += CHUNK_SIZE) {
+    const chunk = nodeIds.slice(i, i + CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(",");
+
+    const chunkFields = db
+      .query(
+        `
+        SELECT parent_id as parentId, field_name as fieldName, value_text as valueText
+        FROM field_values
+        WHERE parent_id IN (${placeholders})
+        ORDER BY parent_id, field_name, value_order
+      `
+      )
+      .all(...chunk) as Array<{
+      parentId: string;
+      fieldName: string;
+      valueText: string;
+    }>;
+
+    for (const field of chunkFields) {
+      const existing = fieldsByNode.get(field.parentId) || [];
+      existing.push({
+        fieldName: field.fieldName,
+        valueText: field.valueText,
+      });
+      fieldsByNode.set(field.parentId, existing);
+    }
   }
 
   // Enrich each node

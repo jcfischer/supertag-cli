@@ -216,5 +216,38 @@ describe("Context Builder (T-7.1)", () => {
 
       expect(results[0].nodeId).toBe("node1");
     });
+
+    it("should handle more nodes than SQLite variable limit via chunking", async () => {
+      const { batchEnrichWithFields } = await import(
+        "../../src/embeddings/context-builder"
+      );
+
+      // Create 1500 nodes (exceeds the 900 chunk size)
+      const bulkNodes: Array<{ nodeId: string; contextText: string }> = [];
+      for (let i = 0; i < 1500; i++) {
+        bulkNodes.push({ nodeId: `bulk-${i}`, contextText: `Node ${i}` });
+      }
+
+      // Insert field values for a few of these nodes across chunk boundaries
+      db.exec(`
+        INSERT INTO field_values (tuple_id, parent_id, field_def_id, field_name, value_node_id, value_text, value_order, created) VALUES
+          ('bulk-t1', 'bulk-100', 'def1', 'Status', 'bv1', 'Active', 0, ${Date.now()}),
+          ('bulk-t2', 'bulk-950', 'def1', 'Status', 'bv2', 'Done', 0, ${Date.now()}),
+          ('bulk-t3', 'bulk-1400', 'def1', 'Priority', 'bv3', 'High', 0, ${Date.now()});
+      `);
+
+      // Should not throw (previously would crash with "expected N values, received M")
+      const results = batchEnrichWithFields(db, bulkNodes);
+
+      expect(results.length).toBe(1500);
+      // Node in first chunk (index 100)
+      expect(results[100].contextText).toContain("[Status]: Active");
+      // Node in second chunk (index 950, crosses the 900 boundary)
+      expect(results[950].contextText).toContain("[Status]: Done");
+      // Node in second chunk (index 1400)
+      expect(results[1400].contextText).toContain("[Priority]: High");
+      // Nodes without fields are unchanged
+      expect(results[0].contextText).toBe("Node 0");
+    });
   });
 });
