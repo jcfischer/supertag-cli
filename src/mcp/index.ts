@@ -28,6 +28,7 @@ import { create } from './tools/create.js';
 import { sync } from './tools/sync.js';
 import { semanticSearch } from './tools/semantic-search.js';
 import { fieldValues } from './tools/field-values.js';
+import { tableExport } from './tools/table.js';
 import { supertagInfo } from './tools/supertag-info.js';
 import { transcriptList, transcriptShow, transcriptSearch } from './tools/transcript.js';
 import { cacheClear } from './tools/cache.js';
@@ -388,6 +389,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_field_values': {
         const validated = schemas.fieldValuesSchema.parse(args);
         result = await fieldValues(validated);
+        break;
+      }
+      case 'tana_table': {
+        const validated = schemas.tableSchema.parse(args);
+        result = await tableExport(validated);
         break;
       }
       case 'tana_supertag_info': {

@@ -35,6 +35,7 @@ import { createTranscriptCommand } from './commands/transcript';
 import { createBatchCommand } from './commands/batch';
 import { createQueryCommand } from './commands/query';
 import { createAggregateCommand } from './commands/aggregate';
+import { createTableCommand } from './commands/table';
 import { createRelatedCommand } from './commands/related';
 import { createAttachmentsCommand } from './commands/attachments';
 import { createTimelineCommand, createRecentCommand } from './commands/timeline';
@@ -176,6 +177,7 @@ program.addCommand(createTranscriptCommand()); // supertag transcript list|show|
 program.addCommand(createBatchCommand());      // supertag batch get|create
 program.addCommand(createQueryCommand());      // supertag query "find task where..."
 program.addCommand(createAggregateCommand());  // supertag aggregate --tag --group-by
+program.addCommand(createTableCommand());      // supertag table <supertag> --format csv/json/markdown
 program.addCommand(createRelatedCommand());    // supertag related <nodeId> [--direction] [--types]
 program.addCommand(createCodegenCommand());    // supertag codegen generate -o <path>
 program.addCommand(createUpdateCommand());     // supertag update check|download|install
@@ -228,6 +230,12 @@ program.on('--help', () => {
   console.log('    supertag stats --db            Database stats only');
   console.log('    supertag stats --embed         Embedding stats only');
   console.log('    supertag stats --filter        Filter breakdown');
+  console.log('');
+  console.log('  TABLE:');
+  console.log('    supertag table <tag>           Export supertag instances as table');
+  console.log('    supertag table <tag> --format csv     CSV export');
+  console.log('    supertag table <tag> --format json    JSON with references');
+  console.log('    supertag table <tag> --format markdown Markdown table');
   console.log('');
   console.log('  FIELDS:');
   console.log('    supertag fields list           List all field names');

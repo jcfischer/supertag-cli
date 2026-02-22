@@ -440,6 +440,44 @@ export const batchCreateSchema = z.object({
 });
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
 
+// tana_table (F-099: Bulk Field Extractor)
+export const tableSchema = z.object({
+  supertag: z.string().min(1).describe('Supertag name to export as table (e.g., "book", "person", "project")'),
+  workspace: workspaceSchema,
+  fields: z
+    .array(z.string())
+    .optional()
+    .describe('Only include these fields in output (e.g., ["Author", "Year"])'),
+  where: z
+    .array(z.string())
+    .optional()
+    .describe('Filter rows by field=value conditions (e.g., ["Status=Read", "Year=2024"])'),
+  sort: z
+    .string()
+    .optional()
+    .describe('Sort by field name (e.g., "Author", "name", "id")'),
+  direction: z
+    .enum(['asc', 'desc'])
+    .default('asc')
+    .describe('Sort direction'),
+  limit: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(100)
+    .describe('Maximum rows to return (default: 100)'),
+  offset: z
+    .number()
+    .min(0)
+    .default(0)
+    .describe('Skip first N rows for pagination'),
+  resolveReferences: z
+    .boolean()
+    .default(true)
+    .describe('Resolve reference field IDs to human-readable names (default: true)'),
+});
+export type TableInput = z.infer<typeof tableSchema>;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyZodType = z.ZodType<any, any, any>;
 

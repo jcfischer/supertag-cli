@@ -70,6 +70,7 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
   'tana_timeline',
   'tana_recent',
   'tana_field_values',
+  'tana_table',
 
   // Explore (3)
   'tana_batch_get',

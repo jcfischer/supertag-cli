@@ -5,6 +5,20 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Bulk Field Export (F-099)** - Export all instances of a supertag as a resolved table with field values
+  - `supertag table <supertag>` CLI command with --fields, --where, --sort, --direction, --limit, --offset
+  - Output formats: table (default), json, csv, markdown
+  - Batched field extraction — O(1) queries for field values and reference resolution (no N+1)
+  - Reference fields automatically resolved to human-readable names
+  - `--where "Status=Done"` filtering, `--sort Name` sorting, pagination with --limit/--offset
+  - `--no-resolve` flag to show raw IDs instead of resolved names
+  - `tana_table` MCP tool with same capabilities for AI agent integration
+  - Available in lite mode (complements tana-local)
+
 ## [2.2.3] - 2026-02-06
 
 ### Fixed

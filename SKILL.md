@@ -32,7 +32,7 @@ Get a lightweight overview of available tools, categorized by function.
 | `category` | string | No | Filter to specific category (query, explore, transcript, mutate, system) |
 
 **Categories:**
-- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get, tana_query, tana_timeline, tana_recent
+- **query**: tana_search, tana_semantic_search, tana_tagged, tana_field_values, tana_batch_get, tana_query, tana_timeline, tana_recent, tana_table
 - **explore**: tana_node, tana_related, tana_stats, tana_supertags, tana_supertag_info
 - **transcript**: tana_transcript_list, tana_transcript_show, tana_transcript_search
 - **mutate**: tana_create, tana_batch_create, tana_update_node, tana_tag_add, tana_tag_remove, tana_create_tag, tana_set_field, tana_set_field_option, tana_trash_node, tana_done, tana_undone
@@ -603,6 +603,29 @@ Show recent meetings and tasks from this week
 }
 ```
 
+### tana_table
+Export all instances of a supertag as a table with resolved field values. Uses batched queries — O(1) for field extraction and reference resolution.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `supertag` | string | Yes | Supertag name to export (e.g., "book", "person") |
+| `workspace` | string | No | Workspace alias |
+| `fields` | array | No | Only include these fields (case-insensitive) |
+| `where` | array | No | Filter rows by "Field=value" conditions |
+| `sort` | string | No | Sort by field name |
+| `direction` | string | No | Sort direction: "asc" or "desc" (default: asc) |
+| `limit` | number | No | Max rows (1-1000, default: 100) |
+| `offset` | number | No | Skip first N rows |
+| `resolveReferences` | boolean | No | Resolve reference IDs to names (default: true) |
+
+**Example:**
+```
+Export all my books as a table with their fields
+Show me all contacts with Name, Email, and Company fields
+Export tasks where Status is Done, sorted by name
+```
+
 ## CLI Commands
 
 ### Search Commands
@@ -849,6 +872,30 @@ supertag sync status
 supertag sync cleanup --keep 5
 ```
 
+### Table Commands
+
+```bash
+# Export all instances of a supertag as a table
+supertag table book
+
+# Select specific columns
+supertag table person --fields "Name,Email,Company"
+
+# Filter rows
+supertag table task --where "Status=Done"
+
+# Sort and paginate
+supertag table project --sort Name --direction asc --limit 50
+
+# Export formats
+supertag table book --format csv > books.csv
+supertag table book --format json
+supertag table book --format markdown
+
+# Show raw IDs instead of resolved names
+supertag table contact --no-resolve
+```
+
 ### Field Commands
 
 ```bash
@@ -980,9 +1027,9 @@ Config file: `~/.config/supertag/config.json`
 
 | Mode | Tools | Use Case |
 |------|-------|----------|
-| `full` | 32 | Standalone use — all tools available |
+| `full` | 33 | Standalone use — all tools available |
 | `slim` | 14 | Context-optimized — fewer tools for AI agents that perform better with less choice |
-| `lite` | 16 | Complement tana-local — analytics, search, and offline tools that tana-local doesn't provide |
+| `lite` | 17 | Complement tana-local — analytics, search, and offline tools that tana-local doesn't provide |
 
 Set via `mcp.toolMode` in config or `TANA_MCP_TOOL_MODE` env var.
 
@@ -1013,7 +1060,7 @@ TANA_MCP_TOOL_MODE=lite supertag-mcp
 | `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API |
 | `TANA_LOCAL_API_URL` | Local API endpoint URL (default: `http://localhost:8262`) |
 | `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (default: 5, 0 disables) |
-| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (32 tools), `slim` (14 tools), or `lite` (16 tools) |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (33 tools), `slim` (14 tools), or `lite` (17 tools) |
 | `DEBUG` | Enable debug logging |
 
 ## Data Locations

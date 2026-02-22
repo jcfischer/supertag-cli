@@ -42,11 +42,11 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 16 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(16);
+  it('has exactly 17 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(17);
   });
 
-  it('contains expected query tools (7)', () => {
+  it('contains expected query tools (8)', () => {
     const queryTools = [
       'tana_search',
       'tana_semantic_search',
@@ -55,6 +55,7 @@ describe('LITE_MODE_TOOLS set', () => {
       'tana_timeline',
       'tana_recent',
       'tana_field_values',
+      'tana_table',
     ];
     for (const tool of queryTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
@@ -153,8 +154,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 16', () => {
-    expect(getLiteModeToolCount()).toBe(16);
+  it('returns 17', () => {
+    expect(getLiteModeToolCount()).toBe(17);
   });
 });
 
@@ -171,7 +172,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 16);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 17);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -235,19 +236,19 @@ describe('getCapabilities() with mode filtering', () => {
     expect(caps.mode).toBeUndefined();
   });
 
-  it('lite mode returns only 16 tools', () => {
+  it('lite mode returns only 17 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(16);
+    expect(totalTools).toBe(17);
     expect(caps.mode).toBe('lite');
   });
 
   // Note: category counts follow TOOL_METADATA assignments, not conceptual grouping.
   // tana_batch_get is in 'query', tana_sync is in 'mutate' per the registry.
-  it('lite mode: query category has 8 tools (includes batch_get)', () => {
+  it('lite mode: query category has 9 tools (includes batch_get, table)', () => {
     const caps = getCapabilities({ category: 'query', mode: 'lite' });
     const queryCategory = caps.categories.find((c) => c.name === 'query');
-    expect(queryCategory?.tools.length).toBe(8);
+    expect(queryCategory?.tools.length).toBe(9);
   });
 
   it('lite mode: explore category has 2 tools (stats, related)', () => {

@@ -15,6 +15,14 @@ import { stripHtml } from "../utils/html";
 export type FieldValues = Record<string, string>;
 
 /**
+ * Raw field value map: field_name -> array of values (preserves multi-value)
+ */
+export type RawFieldValues = Map<string, string[]>;
+
+/** Batch size for SQL IN clauses to avoid SQLite parameter limits */
+const BATCH_SIZE = 500;
+
+/**
  * FieldResolver handles:
  * 1. Looking up field definitions for a supertag (including inherited)
  * 2. Resolving field values for nodes
@@ -105,6 +113,7 @@ export class FieldResolver {
 
   /**
    * Resolve field values for a set of nodes.
+   * Returns comma-joined strings for multi-value fields.
    *
    * @param nodeIds - Array of node IDs to get fields for
    * @param fieldNames - Array of field names to retrieve, or "*" for all
@@ -114,55 +123,79 @@ export class FieldResolver {
     nodeIds: string[],
     fieldNames: string[] | "*"
   ): Map<string, FieldValues> {
+    const rawMap = this.resolveFieldsRaw(nodeIds, fieldNames);
     const result = new Map<string, FieldValues>();
 
-    if (nodeIds.length === 0) {
-      return result;
-    }
-
-    // Initialize empty objects for all requested nodes
     for (const nodeId of nodeIds) {
-      result.set(nodeId, {});
+      const rawFields = rawMap.get(nodeId);
+      const joined: FieldValues = {};
+      if (rawFields) {
+        for (const [fieldName, values] of rawFields) {
+          joined[fieldName] = values.join(", ");
+        }
+      }
+      result.set(nodeId, joined);
     }
 
-    // Build the query
-    const placeholders = nodeIds.map(() => "?").join(", ");
-    let sql = `
-      SELECT parent_id, field_name, value_text, value_order
-      FROM field_values
-      WHERE parent_id IN (${placeholders})
-    `;
-    const params: (string | number)[] = [...nodeIds];
+    return result;
+  }
 
-    // Filter by field names if not wildcard
-    if (fieldNames !== "*" && fieldNames.length > 0) {
-      const fieldPlaceholders = fieldNames.map(() => "?").join(", ");
-      sql += ` AND field_name IN (${fieldPlaceholders})`;
-      params.push(...fieldNames);
-    }
+  /**
+   * Resolve field values for a set of nodes, preserving multi-value as arrays.
+   * Processes in batches of 500 to avoid SQLite parameter limits.
+   *
+   * @param nodeIds - Array of node IDs to get fields for
+   * @param fieldNames - Array of field names to retrieve, or "*" for all
+   * @returns Map of nodeId -> Map of fieldName -> string[]
+   */
+  resolveFieldsRaw(
+    nodeIds: string[],
+    fieldNames: string[] | "*"
+  ): Map<string, RawFieldValues> {
+    const result = new Map<string, RawFieldValues>();
 
-    sql += " ORDER BY parent_id, field_name, value_order";
+    if (nodeIds.length === 0) return result;
 
-    const rows = this.db.query(sql).all(...params) as {
-      parent_id: string;
-      field_name: string;
-      value_text: string;
-      value_order: number;
-    }[];
+    for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
+      const batch = nodeIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => "?").join(", ");
 
-    // Group values by node and field, handling multi-value
-    // Strip HTML tags from values (e.g., option fields store <span data-color="blue">DONE</span>)
-    for (const row of rows) {
-      const nodeFields = result.get(row.parent_id);
-      if (!nodeFields) continue;
+      let sql = `
+        SELECT parent_id, field_name, value_text, value_order
+        FROM field_values
+        WHERE parent_id IN (${placeholders})
+      `;
+      const params: (string | number)[] = [...batch];
 
-      const cleanValue = stripHtml(row.value_text);
+      if (fieldNames !== "*" && fieldNames.length > 0) {
+        const fieldPlaceholders = fieldNames.map(() => "?").join(", ");
+        sql += ` AND field_name IN (${fieldPlaceholders})`;
+        params.push(...fieldNames);
+      }
 
-      if (nodeFields[row.field_name]) {
-        // Multi-value: comma-join
-        nodeFields[row.field_name] += ", " + cleanValue;
-      } else {
-        nodeFields[row.field_name] = cleanValue;
+      sql += " ORDER BY parent_id, field_name, value_order";
+
+      const rows = this.db.query(sql).all(...params) as {
+        parent_id: string;
+        field_name: string;
+        value_text: string;
+        value_order: number;
+      }[];
+
+      for (const row of rows) {
+        let nodeMap = result.get(row.parent_id);
+        if (!nodeMap) {
+          nodeMap = new Map();
+          result.set(row.parent_id, nodeMap);
+        }
+
+        let values = nodeMap.get(row.field_name);
+        if (!values) {
+          values = [];
+          nodeMap.set(row.field_name, values);
+        }
+
+        values.push(stripHtml(row.value_text));
       }
     }
 

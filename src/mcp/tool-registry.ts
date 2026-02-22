@@ -121,6 +121,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Last 24 hours: { period: "24h" }',
   },
+  {
+    name: 'tana_table',
+    description: 'Export all instances of a supertag as a table with resolved field values',
+    category: 'query',
+    example: 'Export all books: { supertag: "book" }',
+  },
 
   // Explore tools
   {
@@ -306,6 +312,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_trash_node: schemas.zodToJsonSchema(schemas.trashNodeSchema),
   tana_done: schemas.zodToJsonSchema(schemas.doneSchema),
   tana_undone: schemas.zodToJsonSchema(schemas.undoneSchema),
+  tana_table: schemas.zodToJsonSchema(schemas.tableSchema),
 };
 
 // =============================================================================

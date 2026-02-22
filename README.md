@@ -40,6 +40,7 @@ Tana has officially released their [Local API and MCP server](https://tana.inc),
   - [RELATED - Graph Traversal](#related---graph-traversal)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
+  - [TABLE - Bulk Field Export](#table---bulk-field-export)
   - [FIELDS - Query Field Values](#fields---query-field-values)
   - [TRANSCRIPTS - Meeting Recordings](#transcripts---meeting-recordings)
   - [ATTACHMENTS - Extract Attachments](#attachments---extract-attachments)
@@ -504,6 +505,41 @@ supertag embed maintain                  # LanceDB maintenance (compact, rebuild
 
 See [Embeddings Documentation](./docs/embeddings.md) for details.
 
+### TABLE - Bulk Field Export
+
+Export all instances of a supertag as a table with resolved field values. Uses batched queries for efficient extraction — O(1) for field values and reference resolution regardless of instance count.
+
+```bash
+# Export all books as a table
+supertag table book
+
+# Select specific columns
+supertag table person --fields "Name,Email,Company"
+
+# Filter rows by field value
+supertag table task --where "Status=Done"
+
+# Sort and paginate
+supertag table project --sort Name --direction asc --limit 50
+
+# Export formats
+supertag table book --format csv > books.csv
+supertag table book --format json
+supertag table book --format markdown
+
+# Show raw IDs instead of resolved names
+supertag table contact --no-resolve
+```
+
+**Features:**
+- All supertag fields extracted with types and values
+- Reference fields automatically resolved to human-readable names
+- Multi-value fields shown as comma-separated lists
+- Case-insensitive field name matching in --fields and --where
+- Pagination with --limit and --offset
+
+**Output formats:** `table` (default), `json` (includes raw + resolved values), `csv`, `markdown`
+
 ### FIELDS - Query Field Values
 
 Query structured field data from Tana nodes. Fields like "Summary", "Action Items", or custom fields store values in tuple children.
@@ -727,9 +763,9 @@ Integrate with Claude Desktop, ChatGPT, Cursor, VS Code, and other MCP-compatibl
 
 | Mode | Tools | Flag | Use Case |
 |------|-------|------|----------|
-| `full` | 32 | (default) | Standalone — all tools available |
+| `full` | 33 | (default) | Standalone — all tools available |
 | `slim` | 14 | `--slim` | Context-optimized — fewer tools for AI agents |
-| `lite` | 16 | `--lite` | Complement tana-local MCP — analytics & search only |
+| `lite` | 17 | `--lite` | Complement tana-local MCP — analytics & search only |
 
 ```bash
 # Lite mode: complement tana-local with analytics/search tools
