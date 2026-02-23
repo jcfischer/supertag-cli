@@ -16,6 +16,7 @@ import type {
 import { loadWorkspaceSchema } from './schema-audit-loader';
 import { runDetectors } from './schema-audit-registry';
 import { generateSchemaDocumentation } from './schema-audit-docs';
+import { annotateFixable } from './schema-audit-fixer';
 
 export interface AuditOptions {
   tag?: string;
@@ -46,6 +47,9 @@ export class SchemaAuditService {
     if (options?.severity) {
       findings = this.filterBySeverity(findings, options.severity);
     }
+
+    // Annotate fixable status for --fix mode
+    findings = annotateFixable(findings);
 
     // Add Tana Paste fix suggestions
     if (options?.includeFixes) {

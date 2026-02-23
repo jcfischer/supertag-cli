@@ -24,6 +24,27 @@ export interface SchemaFinding {
     instanceCount?: number;
   };
   tanaPaste?: string;
+  /** Whether this finding can be auto-fixed by --fix */
+  fixable?: boolean;
+  /** Why this finding cannot be auto-fixed */
+  skipReason?: string;
+}
+
+/** Result of applying a fix */
+export interface FixResult {
+  finding: SchemaFinding;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+/** Audit trail entry for logging applied fixes */
+export interface AuditTrailEntry {
+  timestamp: string;
+  workspace: string;
+  action: string;
+  detector: string;
+  details: Record<string, unknown>;
 }
 
 /** Detector interface — all 7 detectors implement this */
