@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Schema Analysis (F-101)** - Detect schema quality issues across supertag definitions
+  - `supertag schema audit` CLI command with --severity, --detector, --tag, --format
+  - 7 built-in detectors: orphan-tags, low-usage, duplicate-fields, type-mismatch, unused-fields, fill-rate, missing-inheritance
+  - Severity levels: critical, warning, info — filter with `--severity warning`
+  - `tana_schema_audit` MCP tool for AI-driven schema analysis
+  - Available in all modes (full, slim, lite)
+
+- **Entity Resolution (F-100)** - Resolve ambiguous names to specific Tana nodes
+  - `supertag resolve [name]` CLI command with --tag, --threshold, --exact, --create-if-missing, --batch
+  - Multi-strategy matching: exact, fuzzy (Levenshtein), semantic similarity
+  - Configurable confidence threshold (default 0.85)
+  - Batch mode for resolving multiple names at once
+  - `tana_resolve` MCP tool for AI-assisted entity disambiguation
+  - Available in all modes (full, slim, lite)
+
+- **Context Assembler (F-098)** - Assemble rich context about nodes for AI consumption
+  - `supertag context <query>` CLI command with --depth, --max-tokens, --include-fields, --lens, --format
+  - 5 predefined lenses: general, writing, project-management, research, meeting
+  - Token-budgeted output — respects `--max-tokens` (default 4000) for LLM context windows
+  - Resolves fields, gathers related nodes, and formats as structured context
+  - `tana_context` MCP tool for AI agents to get relevant workspace context
+  - Available in all modes (full, slim, lite)
+
 - **Bulk Field Export (F-099)** - Export all instances of a supertag as a resolved table with field values
   - `supertag table <supertag>` CLI command with --fields, --where, --sort, --direction, --limit, --offset
   - Output formats: table (default), json, csv, markdown

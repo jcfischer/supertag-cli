@@ -41,6 +41,8 @@ Tana has officially released their [Local API and MCP server](https://tana.inc),
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [TABLE - Bulk Field Export](#table---bulk-field-export)
+  - [CONTEXT - AI Context Assembly](#context---ai-context-assembly)
+  - [RESOLVE - Entity Resolution](#resolve---entity-resolution)
   - [FIELDS - Query Field Values](#fields---query-field-values)
   - [TRANSCRIPTS - Meeting Recordings](#transcripts---meeting-recordings)
   - [ATTACHMENTS - Extract Attachments](#attachments---extract-attachments)
@@ -540,6 +542,57 @@ supertag table contact --no-resolve
 
 **Output formats:** `table` (default), `json` (includes raw + resolved values), `csv`, `markdown`
 
+### CONTEXT - AI Context Assembly
+
+Assemble rich, token-budgeted context about nodes for AI consumption. Combines node content, fields, and related nodes into a structured format optimized for LLM context windows.
+
+```bash
+# Get context about a topic (default: general lens, 4000 tokens max)
+supertag context "quarterly planning"
+
+# Use a specific lens for focused context
+supertag context "sprint review" --lens project-management
+supertag context "research paper" --lens research
+supertag context "team standup" --lens meeting
+
+# Control depth and token budget
+supertag context "architecture" --depth 3 --max-tokens 8000
+
+# Include field values in context
+supertag context "client project" --include-fields
+
+# Output as JSON for programmatic use
+supertag context "onboarding" --format json
+```
+
+**Lenses:** `general` (default), `writing`, `project-management`, `research`, `meeting` — each lens prioritizes different aspects of the workspace data.
+
+### RESOLVE - Entity Resolution
+
+Resolve ambiguous names to specific Tana nodes using multi-strategy matching (exact, fuzzy, semantic).
+
+```bash
+# Resolve a name to a node
+supertag resolve "John Smith"
+
+# Resolve within a specific tag
+supertag resolve "Sprint 4" --tag project
+
+# Exact match only (no fuzzy/semantic)
+supertag resolve "Meeting Notes" --exact
+
+# Adjust confidence threshold (default: 0.85)
+supertag resolve "quarterly review" --threshold 0.7
+
+# Create node if no match found
+supertag resolve "New Client" --tag contact --create-if-missing
+
+# Batch resolve multiple names
+supertag resolve --batch "Alice,Bob,Charlie" --tag person
+```
+
+**Matching strategies:** Exact name match (fastest), fuzzy Levenshtein distance, semantic similarity via embeddings. Results ranked by confidence score.
+
 ### FIELDS - Query Field Values
 
 Query structured field data from Tana nodes. Fields like "Summary", "Action Items", or custom fields store values in tuple children.
@@ -763,9 +816,9 @@ Integrate with Claude Desktop, ChatGPT, Cursor, VS Code, and other MCP-compatibl
 
 | Mode | Tools | Flag | Use Case |
 |------|-------|------|----------|
-| `full` | 33 | (default) | Standalone — all tools available |
-| `slim` | 14 | `--slim` | Context-optimized — fewer tools for AI agents |
-| `lite` | 17 | `--lite` | Complement tana-local MCP — analytics & search only |
+| `full` | 36 | (default) | Standalone — all tools available |
+| `slim` | 17 | `--slim` | Context-optimized — fewer tools for AI agents |
+| `lite` | 20 | `--lite` | Complement tana-local MCP — analytics & search only |
 
 ```bash
 # Lite mode: complement tana-local with analytics/search tools
@@ -779,7 +832,7 @@ TANA_MCP_TOOL_MODE=lite supertag-mcp
 # { "mcp": { "toolMode": "lite" } }
 ```
 
-**Lite mode** is designed for two-layer MCP setups where Tana's official `tana-local` MCP handles live workspace CRUD (read, create, edit, tag, trash) and supertag-mcp provides the complementary analytics layer: semantic search, aggregation, timeline, field queries, transcripts, and graph traversal. Excluded tools return a message pointing to the equivalent tana-local tool.
+**Lite mode** is designed for two-layer MCP setups where Tana's official `tana-local` MCP handles live workspace CRUD (read, create, edit, tag, trash) and supertag-mcp provides the complementary analytics layer: semantic search, aggregation, timeline, field queries, transcripts, graph traversal, context assembly, entity resolution, and schema analysis. Excluded tools return a message pointing to the equivalent tana-local tool.
 
 **Slim mode** keeps semantic search, all mutation tools, sync, cache clear, capabilities, and tool schema. Removes read-only query tools that overlap with semantic search.
 
@@ -837,9 +890,18 @@ supertag schema show meeting
 # Search supertags by name
 supertag schema search "task"
 
+# Audit schema quality — detect issues across all supertags
+supertag schema audit
+supertag schema audit --severity warning     # Only warnings and above
+supertag schema audit --detector orphan-tags # Run specific detector
+supertag schema audit --tag project          # Audit a specific supertag
+supertag schema audit --format json          # Machine-readable output
+
 # Use specific workspace
 supertag schema list -w work
 ```
+
+**Audit detectors:** `orphan-tags`, `low-usage`, `duplicate-fields`, `type-mismatch`, `unused-fields`, `fill-rate`, `missing-inheritance`. Each produces findings with severity levels: `critical`, `warning`, `info`.
 
 **Output formats:** `--format table` (default), `--format json`, `--format names` (list command only)
 
@@ -924,7 +986,7 @@ export SUPERTAG_FORMAT=csv  # Default to CSV output
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TANA_DELTA_SYNC_INTERVAL` | Delta-sync polling interval in minutes (0 disables) | `5` |
-| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (32 tools), `slim` (14 tools), or `lite` (16 tools) | `full` |
+| `TANA_MCP_TOOL_MODE` | MCP tool mode: `full` (36 tools), `slim` (17 tools), or `lite` (20 tools) | `full` |
 | `TANA_LOCAL_API_TOKEN` | Bearer token for Tana Desktop Local API | |
 | `TANA_LOCAL_API_URL` | Local API endpoint URL | `http://localhost:8262` |
 
