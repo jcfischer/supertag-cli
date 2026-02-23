@@ -32,6 +32,9 @@ export const SLIM_MODE_TOOLS: Set<string> = new Set([
   // Semantic search
   'tana_semantic_search',
 
+  // Entity resolution (useful for dedup before create)
+  'tana_resolve',
+
   // Mutation tools
   'tana_create',
   'tana_batch_create',
@@ -62,7 +65,7 @@ export const SLIM_MODE_TOOLS: Set<string> = new Set([
  * - System: sync, cache, capabilities
  */
 export const LITE_MODE_TOOLS: Set<string> = new Set([
-  // Query (7)
+  // Query (9)
   'tana_search',
   'tana_semantic_search',
   'tana_query',
@@ -71,6 +74,7 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
   'tana_recent',
   'tana_field_values',
   'tana_table',
+  'tana_resolve',
 
   // Explore (3)
   'tana_batch_get',

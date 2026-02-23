@@ -45,6 +45,7 @@ import { handleCreateTag } from './tools/tag-create.js';
 import { handleSetField, handleSetFieldOption } from './tools/set-field.js';
 import { handleTrashNode } from './tools/trash.js';
 import { handleDone, handleUndone } from './tools/done.js';
+import { resolve } from './tools/resolve.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -248,6 +249,12 @@ const allTools = [
         description:
           'Recently created or updated items within a time period. Returns items ordered by most recent activity. Supports period formats: Nh (hours), Nd (days), Nw (weeks), Nm (months). Filter by types (supertags) or activity type (created vs updated). Example: { period: "7d", types: ["meeting", "task"] }',
         inputSchema: schemas.zodToJsonSchema(schemas.recentSchema),
+      },
+      {
+        name: 'tana_resolve',
+        description:
+          'Find existing nodes by name with confidence scoring (exact, fuzzy, semantic). Returns ranked candidates for find-or-create workflows. Use tag filter to narrow to a specific supertag. Use createIfMissing=true to get creation suggestions when no match found.',
+        inputSchema: schemas.zodToJsonSchema(schemas.resolveSchema),
       },
       // Mutation tools (F-094: Local API)
       {
@@ -505,6 +512,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_undone': {
         const validated = schemas.undoneSchema.parse(args);
         result = await handleUndone(validated);
+        break;
+      }
+      case 'tana_resolve': {
+        const validated = schemas.resolveSchema.parse(args);
+        result = await resolve(validated);
         break;
       }
       default:

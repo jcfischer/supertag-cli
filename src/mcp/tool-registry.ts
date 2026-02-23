@@ -127,6 +127,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Export all books: { supertag: "book" }',
   },
+  {
+    name: 'tana_resolve',
+    description: 'Find existing node by name with confidence scoring',
+    category: 'query',
+    example: 'Find #person named Daniel',
+  },
 
   // Explore tools
   {
@@ -313,6 +319,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_done: schemas.zodToJsonSchema(schemas.doneSchema),
   tana_undone: schemas.zodToJsonSchema(schemas.undoneSchema),
   tana_table: schemas.zodToJsonSchema(schemas.tableSchema),
+  tana_resolve: schemas.zodToJsonSchema(schemas.resolveSchema),
 };
 
 // =============================================================================

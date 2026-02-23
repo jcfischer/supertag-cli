@@ -45,6 +45,9 @@ const ALL_TOOL_DEFS = [
   // Semantic search (included in slim)
   { name: 'tana_semantic_search', description: 'Semantic search', inputSchema: {} },
 
+  // Entity resolution (included in slim)
+  { name: 'tana_resolve', description: 'Entity resolution', inputSchema: {} },
+
   // Mutation tools (included in slim)
   { name: 'tana_create', description: 'Create node', inputSchema: {} },
   { name: 'tana_batch_create', description: 'Batch create', inputSchema: {} },
@@ -252,13 +255,13 @@ describe('MCP Tool Mode Integration (T-5.2)', () => {
 
   describe('Tool count consistency', () => {
     it('ALL_TOOL_DEFS matches the real MCP server tool count', () => {
-      // The real server has 32 tools as of F-095
-      expect(ALL_TOOL_DEFS.length).toBe(32);
+      // The real server has 33 tools as of F-100
+      expect(ALL_TOOL_DEFS.length).toBe(33);
     });
 
-    it('slim mode returns 16 tools (from SLIM_MODE_TOOLS)', () => {
+    it('slim mode returns 17 tools (from SLIM_MODE_TOOLS)', () => {
       const filtered = filterToolsByMode(ALL_TOOL_DEFS, 'slim');
-      expect(filtered.length).toBe(16);
+      expect(filtered.length).toBe(17);
     });
 
     it('slim mode excludes 16 tools', () => {
