@@ -4,33 +4,33 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| T-1.1 | ☐ | Types |
-| T-1.2 | ☐ | Schema loader |
-| T-1.3 | ☐ | Loader tests |
-| T-1.4 | ☐ | Loader edge cases |
-| T-2.1 | ☐ | Detector interface + registry |
-| T-2.2 | ☐ | orphan-tags detector |
-| T-2.3 | ☐ | low-usage-tags detector |
-| T-2.4 | ☐ | duplicate-fields detector |
-| T-2.5 | ☐ | type-mismatch detector |
-| T-2.6 | ☐ | unused-fields detector |
-| T-2.7 | ☐ | fill-rate detector |
-| T-2.8 | ☐ | missing-inheritance detector |
-| T-2.9 | ☐ | Detector tests |
-| T-3.1 | ☐ | SchemaAuditService |
-| T-3.2 | ☐ | Service tests |
-| T-3.3 | ☐ | --tag filter |
-| T-3.4 | ☐ | --fix Tana Paste generation |
-| T-4.1 | ☐ | CLI command registration |
-| T-4.2 | ☐ | CLI output formatting |
-| T-4.3 | ☐ | CLI exit codes |
-| T-4.4 | ☐ | CLI E2E tests |
-| T-5.1 | ☐ | MCP tool definition |
-| T-5.2 | ☐ | MCP schema + registry |
-| T-5.3 | ☐ | MCP lite mode |
-| T-5.4 | ☐ | MCP tests |
-| T-6.1 | ☐ | Documentation generator |
-| T-6.2 | ☐ | Docs tests |
+| T-1.1 | ✅ | Types |
+| T-1.2 | ✅ | Schema loader |
+| T-1.3 | ✅ | Loader tests |
+| T-1.4 | ✅ | Loader edge cases |
+| T-2.1 | ✅ | Detector interface + registry |
+| T-2.2 | ✅ | orphan-tags detector |
+| T-2.3 | ✅ | low-usage-tags detector |
+| T-2.4 | ✅ | duplicate-fields detector |
+| T-2.5 | ✅ | type-mismatch detector |
+| T-2.6 | ✅ | unused-fields detector |
+| T-2.7 | ✅ | fill-rate detector |
+| T-2.8 | ✅ | missing-inheritance detector |
+| T-2.9 | ✅ | Detector tests |
+| T-3.1 | ✅ | SchemaAuditService |
+| T-3.2 | ✅ | Service tests |
+| T-3.3 | ✅ | --tag filter |
+| T-3.4 | ✅ | --fix Tana Paste generation |
+| T-4.1 | ✅ | CLI command registration |
+| T-4.2 | ✅ | CLI output formatting |
+| T-4.3 | ✅ | CLI exit codes |
+| T-4.4 | ✅ | CLI E2E tests |
+| T-5.1 | ✅ | MCP tool definition |
+| T-5.2 | ✅ | MCP schema + registry |
+| T-5.3 | ✅ | MCP lite mode |
+| T-5.4 | ✅ | MCP tests |
+| T-6.1 | ✅ | Documentation generator |
+| T-6.2 | ✅ | Docs tests |
 
 ## Group 1: Foundation — Types and Schema Loader
 

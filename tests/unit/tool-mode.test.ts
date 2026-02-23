@@ -50,6 +50,10 @@ const ALL_TOOL_NAMES = [
   'tana_cache_clear',
   'tana_capabilities',
   'tana_tool_schema',
+  'tana_resolve',
+  'tana_table',
+  'tana_context',
+  'tana_schema_audit',
 ];
 
 describe('MCP Tool Mode Filter (T-5.1)', () => {
@@ -58,6 +62,8 @@ describe('MCP Tool Mode Filter (T-5.1)', () => {
       const expectedTools = [
         // Semantic search
         'tana_semantic_search',
+        // Entity resolution
+        'tana_resolve',
         // Mutation tools
         'tana_create',
         'tana_batch_create',
@@ -199,8 +205,8 @@ describe('MCP Tool Mode Filter (T-5.1)', () => {
   describe('getSlimModeToolCount', () => {
     it('returns the correct count of slim mode tools', () => {
       const count = getSlimModeToolCount();
-      // 1 semantic + 11 mutation + 4 sync/system = 16
-      expect(count).toBe(16);
+      // 1 semantic + 1 resolve + 11 mutation + 4 sync/system = 17
+      expect(count).toBe(17);
     });
 
     it('matches the SLIM_MODE_TOOLS set size', () => {

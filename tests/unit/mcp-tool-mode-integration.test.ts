@@ -29,6 +29,7 @@ const ALL_TOOL_DEFS = [
   { name: 'tana_aggregate', description: 'Aggregate nodes', inputSchema: {} },
   { name: 'tana_timeline', description: 'Time-bucketed view', inputSchema: {} },
   { name: 'tana_recent', description: 'Recent items', inputSchema: {} },
+  { name: 'tana_table', description: 'Table export', inputSchema: {} },
 
   // Explore tools (excluded in slim)
   { name: 'tana_supertags', description: 'List supertags', inputSchema: {} },
@@ -36,6 +37,8 @@ const ALL_TOOL_DEFS = [
   { name: 'tana_supertag_info', description: 'Supertag info', inputSchema: {} },
   { name: 'tana_node', description: 'Show node', inputSchema: {} },
   { name: 'tana_related', description: 'Related nodes', inputSchema: {} },
+  { name: 'tana_context', description: 'Context assembler', inputSchema: {} },
+  { name: 'tana_schema_audit', description: 'Schema audit', inputSchema: {} },
 
   // Transcript tools (excluded in slim)
   { name: 'tana_transcript_list', description: 'List transcripts', inputSchema: {} },
@@ -44,6 +47,9 @@ const ALL_TOOL_DEFS = [
 
   // Semantic search (included in slim)
   { name: 'tana_semantic_search', description: 'Semantic search', inputSchema: {} },
+
+  // Entity resolution (included in slim)
+  { name: 'tana_resolve', description: 'Entity resolution', inputSchema: {} },
 
   // Mutation tools (included in slim)
   { name: 'tana_create', description: 'Create node', inputSchema: {} },
@@ -252,18 +258,18 @@ describe('MCP Tool Mode Integration (T-5.2)', () => {
 
   describe('Tool count consistency', () => {
     it('ALL_TOOL_DEFS matches the real MCP server tool count', () => {
-      // The real server has 32 tools as of F-095
-      expect(ALL_TOOL_DEFS.length).toBe(32);
+      // The real server has 36 tools as of F-101
+      expect(ALL_TOOL_DEFS.length).toBe(36);
     });
 
-    it('slim mode returns 16 tools (from SLIM_MODE_TOOLS)', () => {
+    it('slim mode returns 17 tools (from SLIM_MODE_TOOLS)', () => {
       const filtered = filterToolsByMode(ALL_TOOL_DEFS, 'slim');
-      expect(filtered.length).toBe(16);
+      expect(filtered.length).toBe(17);
     });
 
-    it('slim mode excludes 16 tools', () => {
+    it('slim mode excludes 19 tools', () => {
       const filtered = filterToolsByMode(ALL_TOOL_DEFS, 'slim');
-      expect(ALL_TOOL_DEFS.length - filtered.length).toBe(16);
+      expect(ALL_TOOL_DEFS.length - filtered.length).toBe(19);
     });
   });
 });

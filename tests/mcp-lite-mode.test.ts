@@ -42,11 +42,11 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 18 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(18);
+  it('has exactly 20 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(20);
   });
 
-  it('contains expected query tools (8)', () => {
+  it('contains expected query tools (10)', () => {
     const queryTools = [
       'tana_search',
       'tana_semantic_search',
@@ -56,6 +56,8 @@ describe('LITE_MODE_TOOLS set', () => {
       'tana_recent',
       'tana_field_values',
       'tana_table',
+      'tana_resolve',
+      'tana_context',
     ];
     for (const tool of queryTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
@@ -121,6 +123,7 @@ describe('isToolEnabled() for lite mode', () => {
     expect(isToolEnabled('tana_aggregate', 'lite')).toBe(true);
     expect(isToolEnabled('tana_transcript_search', 'lite')).toBe(true);
     expect(isToolEnabled('tana_capabilities', 'lite')).toBe(true);
+    expect(isToolEnabled('tana_resolve', 'lite')).toBe(true);
   });
 
   it('returns false for excluded tools', () => {
@@ -145,6 +148,7 @@ describe('isToolEnabled() regression (slim mode)', () => {
     expect(isToolEnabled('tana_semantic_search', 'slim')).toBe(true);
     expect(isToolEnabled('tana_create', 'slim')).toBe(true);
     expect(isToolEnabled('tana_sync', 'slim')).toBe(true);
+    expect(isToolEnabled('tana_resolve', 'slim')).toBe(true);
   });
 
   it('returns false for excluded slim tools', () => {
@@ -154,8 +158,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 18', () => {
-    expect(getLiteModeToolCount()).toBe(18);
+  it('returns 20', () => {
+    expect(getLiteModeToolCount()).toBe(20);
   });
 });
 
@@ -172,7 +176,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 17);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 20);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -236,25 +240,25 @@ describe('getCapabilities() with mode filtering', () => {
     expect(caps.mode).toBeUndefined();
   });
 
-  it('lite mode returns only 17 tools', () => {
+  it('lite mode returns only 20 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(17);
+    expect(totalTools).toBe(20);
     expect(caps.mode).toBe('lite');
   });
 
   // Note: category counts follow TOOL_METADATA assignments, not conceptual grouping.
   // tana_batch_get is in 'query', tana_sync is in 'mutate' per the registry.
-  it('lite mode: query category has 9 tools (includes batch_get, table)', () => {
+  it('lite mode: query category has 10 tools (includes batch_get, table, resolve)', () => {
     const caps = getCapabilities({ category: 'query', mode: 'lite' });
     const queryCategory = caps.categories.find((c) => c.name === 'query');
-    expect(queryCategory?.tools.length).toBe(9);
+    expect(queryCategory?.tools.length).toBe(10);
   });
 
-  it('lite mode: explore category has 2 tools (stats, related)', () => {
+  it('lite mode: explore category has 4 tools (stats, related, context, schema_audit)', () => {
     const caps = getCapabilities({ category: 'explore', mode: 'lite' });
     const exploreCategory = caps.categories.find((c) => c.name === 'explore');
-    expect(exploreCategory?.tools.length).toBe(2);
+    expect(exploreCategory?.tools.length).toBe(4);
   });
 
   it('lite mode: transcript category has 3 tools', () => {

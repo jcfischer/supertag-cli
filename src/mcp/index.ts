@@ -46,6 +46,7 @@ import { handleSetField, handleSetFieldOption } from './tools/set-field.js';
 import { handleTrashNode } from './tools/trash.js';
 import { handleDone, handleUndone } from './tools/done.js';
 import { schemaAudit } from './tools/schema-audit.js';
+import { resolve } from './tools/resolve.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -250,6 +251,12 @@ const allTools = [
           'Recently created or updated items within a time period. Returns items ordered by most recent activity. Supports period formats: Nh (hours), Nd (days), Nw (weeks), Nm (months). Filter by types (supertags) or activity type (created vs updated). Example: { period: "7d", types: ["meeting", "task"] }',
         inputSchema: schemas.zodToJsonSchema(schemas.recentSchema),
       },
+      {
+        name: 'tana_resolve',
+        description:
+          'Find existing nodes by name with confidence scoring (exact, fuzzy, semantic). Returns ranked candidates for find-or-create workflows. Use tag filter to narrow to a specific supertag. Use createIfMissing=true to get creation suggestions when no match found.',
+        inputSchema: schemas.zodToJsonSchema(schemas.resolveSchema),
+      },
       // Mutation tools (F-094: Local API)
       {
         name: 'tana_update_node',
@@ -310,6 +317,12 @@ const allTools = [
         description:
           'Analyze supertag schema health: detect orphan tags, duplicate fields, type mismatches, missing inheritance, unused fields, and low fill rates. Returns findings with severity levels and fix suggestions. Read-only.',
         inputSchema: schemas.zodToJsonSchema(schemas.schemaAuditSchema),
+      },
+      {
+        name: 'tana_context',
+        description:
+          'Assemble structured AI context from the Tana knowledge graph. Resolves a topic or node ID, walks the graph, scores by relevance, and returns a token-budgeted context document. Supports graph lenses (general, writing, coding, planning, meeting-prep) for task-specific traversal patterns.',
+        inputSchema: schemas.zodToJsonSchema(schemas.contextSchema),
       },
 ];
 
@@ -518,6 +531,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validated = schemas.schemaAuditSchema.parse(args);
         result = await schemaAudit(validated);
         break;
+      }
+      case 'tana_resolve': {
+        const validated = schemas.resolveSchema.parse(args);
+        result = await resolve(validated);
+        break;
+      }
+      case 'tana_context': {
+        const validated = schemas.contextSchema.parse(args);
+        const { contextTool } = await import('./tools/context');
+        const contextOutput = await contextTool(validated);
+        // Context tool returns formatted string directly — return as text content
+        return {
+          content: [{ type: 'text' as const, text: contextOutput }],
+        };
       }
       default:
         throw new Error(`Unknown tool: ${name}`);

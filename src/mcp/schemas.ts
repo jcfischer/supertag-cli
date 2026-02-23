@@ -478,6 +478,38 @@ export const tableSchema = z.object({
 });
 export type TableInput = z.infer<typeof tableSchema>;
 
+// tana_context (F-098: Context Assembler)
+export const contextSchema = z.object({
+  query: z.string().min(1).describe('Topic to search for or node ID to start from'),
+  depth: z
+    .number()
+    .min(1)
+    .max(5)
+    .default(2)
+    .describe('Traversal depth (1-5, default: 2)'),
+  maxTokens: z
+    .number()
+    .min(100)
+    .default(4000)
+    .describe('Token budget for output (default: 4000)'),
+  lens: z
+    .enum(['general', 'writing', 'coding', 'planning', 'meeting-prep'])
+    .default('general')
+    .describe('Traversal lens: general, writing, coding, planning, meeting-prep'),
+  includeFields: z
+    .boolean()
+    .default(true)
+    .describe('Include field values in context (default: true)'),
+  format: z
+    .enum(['markdown', 'json'])
+    .default('markdown')
+    .describe('Output format: markdown or json'),
+  workspace: z
+    .string()
+    .optional()
+    .describe('Workspace alias (default: main)'),
+});
+export type ContextInput = z.infer<typeof contextSchema>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyZodType = z.ZodType<any, any, any>;
 
@@ -890,3 +922,37 @@ export const schemaAuditSchema = z.object({
     .describe('Generate schema documentation instead of audit'),
 });
 export type SchemaAuditInput = z.infer<typeof schemaAuditSchema>;
+
+// =============================================================================
+// tana_resolve (F-100: Entity Resolution)
+// =============================================================================
+
+export const resolveSchema = z.object({
+  name: z.string().min(1).describe('Name to resolve (find matching existing node)'),
+  tag: z
+    .string()
+    .optional()
+    .describe('Filter to specific supertag (e.g., "person", "project")'),
+  threshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0.85)
+    .describe('Minimum confidence threshold (0-1, default: 0.85)'),
+  limit: z
+    .number()
+    .min(1)
+    .max(20)
+    .default(5)
+    .describe('Maximum number of candidates to return'),
+  exact: z
+    .boolean()
+    .default(false)
+    .describe('Exact match only — no fuzzy or semantic matching'),
+  createIfMissing: z
+    .boolean()
+    .default(false)
+    .describe('Return creation suggestion if no match found (requires tag)'),
+  workspace: workspaceSchema,
+});
+export type ResolveInput = z.infer<typeof resolveSchema>;

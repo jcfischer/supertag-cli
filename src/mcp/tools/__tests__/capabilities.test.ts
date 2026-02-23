@@ -43,9 +43,9 @@ describe('Token Budget Validation', () => {
     const jsonStr = JSON.stringify(result, null, 2);
     // Rough token estimate: ~4 chars per token for JSON
     // Target: much smaller than full tool schemas (~2000 tokens)
-    // Budget increased to 1600 to accommodate mutation tools (F-094/F-095: 9 new tools)
+    // Budget increased to 1800 to accommodate mutation tools (F-094/F-095) + F-098/F-100/F-101 tools
     const estimatedTokens = Math.ceil(jsonStr.length / 4);
-    expect(estimatedTokens).toBeLessThan(1600);
+    expect(estimatedTokens).toBeLessThan(1800);
   });
 
   it('should have filtered response much smaller', async () => {

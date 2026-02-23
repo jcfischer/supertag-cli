@@ -25,6 +25,8 @@ import { registerSyncCommands } from './commands/sync';
 import { registerServerCommands } from './commands/server';
 import { createWorkspaceCommand } from './commands/workspace';
 import { createEmbedCommand } from './commands/embed';
+// F-100: Entity Resolution
+import { createResolveCommand } from './commands/resolve';
 // Harmonized commands (CLI Harmonization Phase 1)
 import { createSearchCommand } from './commands/search';
 import { createNodesCommand } from './commands/nodes';
@@ -51,6 +53,7 @@ import { createTagCommand } from './commands/tag';
 import { createSetFieldCommand } from './commands/set-field';
 import { createTrashCommand } from './commands/trash';
 import { createDoneCommand, createUndoneCommand } from './commands/done';
+import { createContextCommand } from './commands/context';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
 import { setDebugMode, formatDebugError } from './utils/debug';
@@ -168,6 +171,7 @@ program.addCommand(createEmbedCommand());     // supertag embed config|generate|
  * Harmonized commands (CLI Harmonization Phase 1)
  * Object-action pattern for consistent CLI experience.
  */
+program.addCommand(createResolveCommand());    // supertag resolve <name> [--tag] [--threshold]
 program.addCommand(createSearchCommand());     // supertag search <query> [--semantic] [--tag]
 program.addCommand(createNodesCommand());      // supertag nodes show|refs|recent
 program.addCommand(createTagsCommand());       // supertag tags list|top|show
@@ -193,6 +197,7 @@ program.addCommand(createSetFieldCommand());   // supertag set-field <nodeId> <f
 program.addCommand(createTrashCommand());      // supertag trash <nodeId>
 program.addCommand(createDoneCommand());       // supertag done <nodeId>
 program.addCommand(createUndoneCommand());     // supertag undone <nodeId>
+program.addCommand(createContextCommand());    // supertag context <query> [--depth] [--max-tokens] [--lens]
 
 /**
  * Help text with examples
