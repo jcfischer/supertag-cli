@@ -42,11 +42,11 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 17 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(17);
+  it('has exactly 18 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(18);
   });
 
-  it('contains expected query tools (8)', () => {
+  it('contains expected query tools (9)', () => {
     const queryTools = [
       'tana_search',
       'tana_semantic_search',
@@ -56,6 +56,7 @@ describe('LITE_MODE_TOOLS set', () => {
       'tana_recent',
       'tana_field_values',
       'tana_table',
+      'tana_context',
     ];
     for (const tool of queryTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
@@ -154,8 +155,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 17', () => {
-    expect(getLiteModeToolCount()).toBe(17);
+  it('returns 18', () => {
+    expect(getLiteModeToolCount()).toBe(18);
   });
 });
 

@@ -304,6 +304,12 @@ const allTools = [
           'Mark a node as not done (unchecked). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.undoneSchema),
       },
+      {
+        name: 'tana_context',
+        description:
+          'Assemble structured AI context from the Tana knowledge graph. Resolves a topic or node ID, walks the graph, scores by relevance, and returns a token-budgeted context document. Supports graph lenses (general, writing, coding, planning, meeting-prep) for task-specific traversal patterns.',
+        inputSchema: schemas.zodToJsonSchema(schemas.contextSchema),
+      },
 ];
 
 // List available tools (filtered by tool mode)
@@ -506,6 +512,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validated = schemas.undoneSchema.parse(args);
         result = await handleUndone(validated);
         break;
+      }
+      case 'tana_context': {
+        const validated = schemas.contextSchema.parse(args);
+        const { contextTool } = await import('./tools/context');
+        const contextOutput = await contextTool(validated);
+        // Context tool returns formatted string directly — return as text content
+        return {
+          content: [{ type: 'text' as const, text: contextOutput }],
+        };
       }
       default:
         throw new Error(`Unknown tool: ${name}`);
