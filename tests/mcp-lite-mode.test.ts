@@ -42,8 +42,8 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 19 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(19);
+  it('has exactly 20 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(20);
   });
 
   it('contains expected query tools (10)', () => {
@@ -64,8 +64,8 @@ describe('LITE_MODE_TOOLS set', () => {
     }
   });
 
-  it('contains expected explore tools (3)', () => {
-    const exploreTools = ['tana_batch_get', 'tana_related', 'tana_stats'];
+  it('contains expected explore tools (4)', () => {
+    const exploreTools = ['tana_batch_get', 'tana_related', 'tana_stats', 'tana_schema_audit'];
     for (const tool of exploreTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
     }
@@ -158,8 +158,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 19', () => {
-    expect(getLiteModeToolCount()).toBe(19);
+  it('returns 20', () => {
+    expect(getLiteModeToolCount()).toBe(20);
   });
 });
 
@@ -176,7 +176,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 19);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 20);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -240,10 +240,10 @@ describe('getCapabilities() with mode filtering', () => {
     expect(caps.mode).toBeUndefined();
   });
 
-  it('lite mode returns only 19 tools', () => {
+  it('lite mode returns only 20 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(19);
+    expect(totalTools).toBe(20);
     expect(caps.mode).toBe('lite');
   });
 
@@ -255,10 +255,10 @@ describe('getCapabilities() with mode filtering', () => {
     expect(queryCategory?.tools.length).toBe(10);
   });
 
-  it('lite mode: explore category has 3 tools (stats, related, context)', () => {
+  it('lite mode: explore category has 4 tools (stats, related, context, schema_audit)', () => {
     const caps = getCapabilities({ category: 'explore', mode: 'lite' });
     const exploreCategory = caps.categories.find((c) => c.name === 'explore');
-    expect(exploreCategory?.tools.length).toBe(3);
+    expect(exploreCategory?.tools.length).toBe(4);
   });
 
   it('lite mode: transcript category has 3 tools', () => {

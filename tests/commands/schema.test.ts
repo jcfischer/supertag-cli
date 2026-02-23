@@ -63,7 +63,7 @@ describe('Schema Command - Commander Subcommands', () => {
 
       const schemaCmd = program.commands.find(c => c.name() === 'schema');
       expect(schemaCmd).toBeDefined();
-      expect(schemaCmd?.commands.length).toBe(4); // sync, list, show, search
+      expect(schemaCmd?.commands.length).toBe(5); // sync, list, show, search, audit
     });
   });
 

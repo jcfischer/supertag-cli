@@ -171,6 +171,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'explore',
     example: 'Get AI-ready context: { query: "project X", lens: "coding", maxTokens: 8000 }',
   },
+  {
+    name: 'tana_schema_audit',
+    description: 'Analyze supertag schema health: detect issues and suggest improvements',
+    category: 'explore',
+    example: 'Find orphan tags and type mismatches: { severity: "warning" }',
+  },
 
   // Transcript tools
   {
@@ -327,6 +333,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_undone: schemas.zodToJsonSchema(schemas.undoneSchema),
   tana_table: schemas.zodToJsonSchema(schemas.tableSchema),
   tana_resolve: schemas.zodToJsonSchema(schemas.resolveSchema),
+  tana_schema_audit: schemas.zodToJsonSchema(schemas.schemaAuditSchema),
 };
 
 // =============================================================================

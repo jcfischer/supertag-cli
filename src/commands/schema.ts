@@ -12,6 +12,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { Database } from 'bun:sqlite';
 import { SchemaRegistry } from '../schema';
 import { UnifiedSchemaService } from '../services/unified-schema-service';
+import { SchemaAuditService } from '../services/schema-audit-service';
+import type { SchemaFindingSeverity } from '../types/schema-audit';
 import {
   DEFAULT_EXPORT_DIR,
   TANA_CACHE_DIR,
@@ -469,5 +471,151 @@ export function createSchemaCommand(): Command {
       });
     });
 
+  // schema audit
+  schema
+    .command('audit')
+    .description('Analyze supertag schema health: detect redundancy, inconsistencies, and suggest improvements')
+    .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
+    .option('--format <fmt>', 'Output format: table, json, markdown', 'table')
+    .option('-t, --tag <name>', 'Audit single supertag and its hierarchy')
+    .option('--fix', 'Include Tana Paste fix suggestions')
+    .option('--docs', 'Generate schema documentation instead of audit')
+    .option('--severity <level>', 'Minimum severity: error, warning, info')
+    .action(async (opts: {
+      workspace?: string;
+      format?: 'table' | 'json' | 'markdown';
+      tag?: string;
+      fix?: boolean;
+      docs?: boolean;
+      severity?: string;
+    }) => {
+      await auditCommand(opts);
+    });
+
   return schema;
+}
+
+/**
+ * Audit subcommand
+ */
+async function auditCommand(opts: {
+  workspace?: string;
+  format?: 'table' | 'json' | 'markdown';
+  tag?: string;
+  fix?: boolean;
+  docs?: boolean;
+  severity?: string;
+}): Promise<void> {
+  const ws = resolveWorkspaceContext({ workspace: opts.workspace });
+
+  if (!existsSync(ws.dbPath)) {
+    console.error(`❌ Database not found: ${ws.dbPath}`);
+    console.error(`   Run 'supertag sync index --workspace ${ws.alias}' first`);
+    process.exit(1);
+  }
+
+  const db = new Database(ws.dbPath, { readonly: true });
+  try {
+    const service = new SchemaAuditService(db);
+
+    // Documentation mode
+    if (opts.docs) {
+      const docs = service.generateDocs();
+      console.log(docs);
+      return;
+    }
+
+    // Audit mode
+    const severity = opts.severity as SchemaFindingSeverity | undefined;
+    const report = service.audit({
+      tag: opts.tag,
+      includeFixes: opts.fix,
+      severity,
+    });
+
+    report.workspace = ws.alias;
+
+    switch (opts.format) {
+      case 'json':
+        console.log(JSON.stringify(report, null, 2));
+        break;
+
+      case 'markdown':
+        printMarkdownReport(report);
+        break;
+
+      default:
+        printTableReport(report);
+        break;
+    }
+
+    // Exit code 1 if errors found
+    if (report.summary.findingsCount.error > 0) {
+      process.exit(1);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+function printTableReport(report: import('../types/schema-audit').SchemaAuditReport): void {
+  const { summary, findings } = report;
+
+  console.log(`\nSchema Audit Report — ${report.workspace}`);
+  console.log(`Supertags: ${summary.totalSupertags} | Fields: ${summary.totalFields}`);
+  console.log(`Findings: ${summary.findingsCount.error} errors, ${summary.findingsCount.warning} warnings, ${summary.findingsCount.info} info\n`);
+
+  if (findings.length === 0) {
+    console.log('✅ No issues found');
+    return;
+  }
+
+  const severityIcon: Record<string, string> = {
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️',
+  };
+
+  for (const finding of findings) {
+    const icon = severityIcon[finding.severity] || '•';
+    console.log(`${icon} [${finding.severity.toUpperCase()}] ${finding.message}`);
+    if (finding.details.suggestion) {
+      console.log(`  → ${finding.details.suggestion}`);
+    }
+    if (finding.tanaPaste) {
+      console.log(`  📋 Fix: ${finding.tanaPaste}`);
+    }
+  }
+}
+
+function printMarkdownReport(report: import('../types/schema-audit').SchemaAuditReport): void {
+  const { summary, findings } = report;
+
+  console.log(`# Schema Audit Report — ${report.workspace}\n`);
+  console.log(`| Metric | Count |`);
+  console.log(`|--------|-------|`);
+  console.log(`| Supertags | ${summary.totalSupertags} |`);
+  console.log(`| Fields | ${summary.totalFields} |`);
+  console.log(`| Errors | ${summary.findingsCount.error} |`);
+  console.log(`| Warnings | ${summary.findingsCount.warning} |`);
+  console.log(`| Info | ${summary.findingsCount.info} |`);
+  console.log('');
+
+  if (findings.length === 0) {
+    console.log('No issues found.');
+    return;
+  }
+
+  console.log('## Findings\n');
+  for (const finding of findings) {
+    console.log(`### ${finding.severity.toUpperCase()}: ${finding.message}`);
+    console.log(`- Detector: ${finding.detector}`);
+    if (finding.details.suggestion) {
+      console.log(`- Suggestion: ${finding.details.suggestion}`);
+    }
+    if (finding.tanaPaste) {
+      console.log(`- Fix: \`${finding.tanaPaste}\``);
+    }
+    console.log('');
+  }
 }

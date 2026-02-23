@@ -51,6 +51,9 @@ const ALL_TOOL_NAMES = [
   'tana_capabilities',
   'tana_tool_schema',
   'tana_resolve',
+  'tana_table',
+  'tana_context',
+  'tana_schema_audit',
 ];
 
 describe('MCP Tool Mode Filter (T-5.1)', () => {
