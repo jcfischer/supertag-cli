@@ -15,6 +15,7 @@ import { getLensConfig } from './lens-config';
 import { getFieldValuesForNode } from '../embeddings/context-builder';
 import { resolveWorkspaceContext } from '../config/workspace-resolver';
 import { isDebugMode } from '../utils/debug';
+import { existsSync } from 'fs';
 import type {
   ContextDocument,
   ContextNode,
@@ -73,7 +74,7 @@ export async function assembleContext(
   const { sourceNodes, resolvedQuery } = await resolveStartingNodes(backend, query);
 
   if (sourceNodes.length === 0) {
-    return buildEmptyContext(query, ws.alias, lens, maxTokens, backend.type);
+    return buildEmptyContext(query, ws.alias, lens, maxTokens, backend.type, ws.dbPath);
   }
 
   // Phase 2: Traverse — walk graph from each source node
@@ -119,7 +120,7 @@ export async function assembleContext(
     } catch (err) {
       // Node not found or traversal error — continue with what we have
       if (isDebugMode()) {
-        console.error(`[context-assembler] Graph traversal failed for ${id}:`, err);
+        console.error(`[context-assembler] Graph traversal failed for ${source.id}:`, err);
       }
     }
   }
@@ -195,14 +196,38 @@ export async function assembleContext(
   }
 
   // Phase 4: Score — rank by relevance
+  // Check if embeddings are available (LanceDB directory exists)
+  const embeddingsPath = ws.dbPath.replace(/\.db$/, '.lance');
+  let embeddingsAvailable = existsSync(embeddingsPath);
+
+  // If embeddings exist, attempt semantic search for similarity scores
+  const semanticScores = new Map<string, number>();
+  if (embeddingsAvailable) {
+    try {
+      const { TanaEmbeddingService } = await import('../embeddings/tana-embedding-service');
+      const service = new TanaEmbeddingService(embeddingsPath);
+      const results = await service.search(resolvedQuery, contextNodes.length);
+      for (const result of results) {
+        semanticScores.set(result.nodeId, result.similarity);
+      }
+    } catch {
+      // Ollama offline or search failed — fall back to non-semantic scoring
+      if (isDebugMode()) {
+        console.error('[context-assembler] Semantic search failed, falling back to distance + recency');
+      }
+      embeddingsAvailable = false;
+    }
+  }
+
   const scoringOptions: ScoringOptions = {
     sourceNodeId: sourceNodes[0].id,
     queryText: resolvedQuery,
-    embeddingsAvailable: false, // TODO: integrate with semantic search when available
+    embeddingsAvailable,
   };
 
   for (const node of contextNodes) {
-    const score = scoreNode(node.distance, undefined, node.created, scoringOptions);
+    const semanticSim = semanticScores.get(node.id);
+    const score = scoreNode(node.distance, semanticSim, node.created, scoringOptions);
     node.score = score.total;
   }
 
@@ -227,7 +252,7 @@ export async function assembleContext(
       tokens: usage,
       assembledAt: new Date().toISOString(),
       backend: backend.type,
-      embeddingsAvailable: false,
+      embeddingsAvailable,
     },
     nodes: included,
     overflow,
@@ -279,7 +304,9 @@ function buildEmptyContext(
   lens: 'general' | 'writing' | 'coding' | 'planning' | 'meeting-prep',
   maxTokens: number,
   backendType: 'local-api' | 'sqlite',
+  dbPath?: string,
 ): ContextDocument {
+  const hasEmbeddings = dbPath ? existsSync(dbPath.replace(/\.db$/, '.lance')) : false;
   return {
     meta: {
       query,
@@ -288,7 +315,7 @@ function buildEmptyContext(
       tokens: { budget: maxTokens, used: 0, utilization: 0, nodesIncluded: 0, nodesSummarized: 0 },
       assembledAt: new Date().toISOString(),
       backend: backendType,
-      embeddingsAvailable: false,
+      embeddingsAvailable: hasEmbeddings,
     },
     nodes: [],
     overflow: [],
