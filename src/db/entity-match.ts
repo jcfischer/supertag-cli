@@ -23,8 +23,19 @@ import {
   escapeFTS5Query,
   DEFAULTS,
 } from '../lib/entity-resolution';
+import { existsSync } from 'fs';
 import { isEntityById } from './entity';
 import { withDbRetrySync } from './retry';
+import { resolveWorkspaceContext } from '../config/workspace-resolver';
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Escape SQL LIKE wildcards (% and _) so they match literally. */
+function escapeLikeWildcards(s: string): string {
+  return s.replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
 
 // =============================================================================
 // Types
@@ -162,10 +173,10 @@ export function findFuzzyMatches(
           .query(
             `SELECT id, name, 0 as rank
              FROM nodes
-             WHERE name IS NOT NULL AND LOWER(name) LIKE ?
+             WHERE name IS NOT NULL AND LOWER(name) LIKE ? ESCAPE '\\'
              LIMIT ?`
           )
-          .all(`%${word}%`, ftsLimit) as FtsRow[],
+          .all(`%${escapeLikeWildcards(word)}%`, ftsLimit) as FtsRow[],
       'findFuzzyMatches-like'
     );
     for (const row of likeRows) {
@@ -176,8 +187,10 @@ export function findFuzzyMatches(
     }
   }
 
-  // Score each candidate with Levenshtein
-  const candidates: ResolvedCandidate[] = [];
+  // Pre-score candidates with Levenshtein (without entity check) and take top-N,
+  // then refine with isEntityById only for the top candidates to avoid N+1 queries.
+  const topN = options.limit ?? 20;
+  const presorted: Array<{ row: FtsRow; tags: string[]; sameTag: boolean; dist: number }> = [];
 
   for (const row of rows) {
     if (!row.name) continue;
@@ -187,12 +200,23 @@ export function findFuzzyMatches(
       ? tags.some((t) => t.toLowerCase() === options.tag!.toLowerCase())
       : false;
 
-    // If tag filter is set and node doesn't have it, skip
     if (options.tag && !sameTag) continue;
 
+    const dist = levenshtein(normalized, row.name.toLowerCase());
+    presorted.push({ row, tags, sameTag, dist });
+  }
+
+  // Sort by Levenshtein distance (ascending = closer match first), take top-N
+  presorted.sort((a, b) => a.dist - b.dist);
+  const topCandidates = presorted.slice(0, topN);
+
+  // Now check isEntityById only for the top-N candidates
+  const candidates: ResolvedCandidate[] = [];
+
+  for (const { row, tags, sameTag, dist } of topCandidates) {
     const isEnt = isEntityById(db, row.id);
 
-    const confidence = calculateFuzzyConfidence(normalized, row.name, {
+    const confidence = calculateFuzzyConfidence(normalized, row.name!, {
       sameTag,
       isEntity: isEnt,
     });
@@ -200,15 +224,12 @@ export function findFuzzyMatches(
     if (confidence > 0) {
       candidates.push({
         id: row.id,
-        name: row.name,
+        name: row.name!,
         tags,
         confidence,
         matchType: 'fuzzy',
         matchDetails: {
-          levenshteinDistance: levenshtein(
-            normalized,
-            row.name.toLowerCase()
-          ),
+          levenshteinDistance: dist,
           ftsRank: row.rank,
         },
       });
@@ -235,15 +256,11 @@ export async function findSemanticMatches(
     const { TanaEmbeddingService } = await import(
       '../embeddings/tana-embedding-service'
     );
-    const { resolveWorkspaceContext } = await import(
-      '../config/workspace-resolver'
-    );
 
     const ws = resolveWorkspaceContext({ workspace: options.workspace });
 
     // Check if embeddings DB exists
     const embeddingsPath = ws.dbPath.replace('tana-index.db', 'embeddings');
-    const { existsSync } = await import('fs');
     if (!existsSync(embeddingsPath)) {
       return { candidates: [], available: false };
     }

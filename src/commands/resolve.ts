@@ -12,7 +12,7 @@ import { resolveWorkspaceContext } from '../config/workspace-resolver';
 import { withDatabase } from '../db/with-database';
 import { resolveEntity } from '../db/entity-match';
 import { resolveOutputOptions, resolveOutputFormat } from '../utils/output-options';
-import { createFormatter, type OutputFormat } from '../utils/output-formatter';
+import type { OutputFormat } from '../utils/output-formatter';
 import { addStandardOptions } from './helpers';
 import { DEFAULTS } from '../lib/entity-resolution';
 import type { StandardOptions } from '../types';
