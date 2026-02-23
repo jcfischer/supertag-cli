@@ -510,7 +510,6 @@ export const contextSchema = z.object({
     .describe('Workspace alias (default: main)'),
 });
 export type ContextInput = z.infer<typeof contextSchema>;
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyZodType = z.ZodType<any, any, any>;
 

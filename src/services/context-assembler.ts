@@ -11,9 +11,10 @@ import type { TanaReadBackend, ReadSearchResult, ReadNodeContent } from '../api/
 import { GraphTraversalService } from './graph-traversal';
 import { scoreNode } from './relevance-scorer';
 import { pruneToFitBudget, DEFAULT_BUDGET } from './token-budgeter';
-import { getLensConfig, applyLensBoosts } from './lens-config';
+import { getLensConfig } from './lens-config';
 import { getFieldValuesForNode } from '../embeddings/context-builder';
 import { resolveWorkspaceContext } from '../config/workspace-resolver';
+import { isDebugMode } from '../utils/debug';
 import type {
   ContextDocument,
   ContextNode,
@@ -115,8 +116,11 @@ export async function assembleContext(
           });
         }
       }
-    } catch {
+    } catch (err) {
       // Node not found or traversal error — continue with what we have
+      if (isDebugMode()) {
+        console.error(`[context-assembler] Graph traversal failed for ${id}:`, err);
+      }
     }
   }
 
@@ -202,11 +206,8 @@ export async function assembleContext(
     node.score = score.total;
   }
 
-  // Apply lens-specific boosts
-  const boostedNodes = applyLensBoosts(contextNodes, lens);
-
-  // Sort by score descending
-  boostedNodes.sort((a, b) => b.score - a.score);
+  // Sort by score descending (lens boosts already applied in scoreNode via scoringOptions)
+  contextNodes.sort((a, b) => b.score - a.score);
 
   // Phase 5: Budget — prune to fit token limit
   const budget: TokenBudget = {
@@ -215,7 +216,7 @@ export async function assembleContext(
     minPerNode: DEFAULT_BUDGET.minPerNode,
   };
 
-  const { included, overflow, usage } = await pruneToFitBudget(boostedNodes, budget);
+  const { included, overflow, usage } = await pruneToFitBudget(contextNodes, budget);
 
   // Phase 6: Build ContextDocument
   return {
