@@ -8,6 +8,15 @@
 /** Severity levels for schema findings */
 export type SchemaFindingSeverity = 'error' | 'warning' | 'info';
 
+/** A usage location showing where a tag/field is used */
+export interface UsageLocation {
+  tagId: string;
+  tagName: string;
+  fieldId?: string;
+  fieldName?: string;
+  dataType?: string;
+}
+
 /** A single finding from a schema detector */
 export interface SchemaFinding {
   detector: string;
@@ -22,6 +31,7 @@ export interface SchemaFinding {
     relatedIds?: string[];
     fillRate?: number;
     instanceCount?: number;
+    usageLocations?: UsageLocation[];
   };
   tanaPaste?: string;
   /** Whether this finding can be auto-fixed by --fix */

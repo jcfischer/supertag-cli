@@ -8,6 +8,7 @@
 import type {
   SchemaDetector,
   SchemaFinding,
+  UsageLocation,
   WorkspaceSchema,
   InheritanceRelation,
 } from '../types/schema-audit';
@@ -81,6 +82,7 @@ export const orphanTagsDetector: SchemaDetector = {
           tagName: s.name,
           instanceCount: 0,
           suggestion: `Consider removing "${s.name}" if no longer needed`,
+          usageLocations: [{ tagId: s.id, tagName: s.name }],
         },
       }));
   },
@@ -103,6 +105,7 @@ export const lowUsageTagsDetector: SchemaDetector = {
           tagName: s.name,
           instanceCount: s.instanceCount,
           suggestion: `Consider merging "${s.name}" into a more general supertag`,
+          usageLocations: [{ tagId: s.id, tagName: s.name }],
         },
       }));
   },
@@ -149,6 +152,17 @@ export const duplicateFieldsDetector: SchemaDetector = {
           .map(id => fields.find(f => f.tagId === id)?.tagName || id)
           .join(', ');
 
+        const usageLocations: UsageLocation[] = unrelatedTags.map(tagId => {
+          const field = fields.find(f => f.tagId === tagId);
+          return {
+            tagId,
+            tagName: field?.tagName || tagId,
+            fieldId: field?.fieldLabelId,
+            fieldName,
+            dataType: field?.inferredDataType || undefined,
+          };
+        });
+
         findings.push({
           detector: 'duplicate-fields',
           severity: 'warning',
@@ -157,6 +171,7 @@ export const duplicateFieldsDetector: SchemaDetector = {
             fieldName,
             relatedIds: unrelatedTags,
             suggestion: `Consider creating a shared parent supertag with "${fieldName}" field`,
+            usageLocations,
           },
         });
       }
@@ -192,6 +207,14 @@ export const typeMismatchDetector: SchemaDetector = {
         .map(f => `${f.tagName}:${f.inferredDataType}`)
         .join(', ');
 
+      const usageLocations: UsageLocation[] = fields.map(f => ({
+        tagId: f.tagId,
+        tagName: f.tagName,
+        fieldId: f.fieldLabelId,
+        fieldName: f.fieldName,
+        dataType: f.inferredDataType || undefined,
+      }));
+
       findings.push({
         detector: 'type-mismatch',
         severity: 'error',
@@ -200,6 +223,7 @@ export const typeMismatchDetector: SchemaDetector = {
           fieldName,
           relatedIds: fields.map(f => f.tagId),
           suggestion: `Standardize "${fieldName}" to a single type (used as: ${examples})`,
+          usageLocations,
         },
       });
     }
@@ -243,6 +267,12 @@ export const unusedFieldsDetector: SchemaDetector = {
             tagName: field.tagName,
             fillRate: 0,
             suggestion: `Consider removing "${field.fieldName}" from "${field.tagName}" if not needed`,
+            usageLocations: [{
+              tagId: field.tagId,
+              tagName: field.tagName,
+              fieldId: field.fieldLabelId,
+              fieldName: field.fieldName,
+            }],
           },
         });
       }
@@ -272,8 +302,15 @@ export const fillRateDetector: SchemaDetector = {
             fieldName: fv.fieldName,
             tagId: fv.tagId,
             tagName: field?.tagName,
+            fieldId: field?.fieldLabelId,
             fillRate: fv.fillRate,
             suggestion: `Review if "${fv.fieldName}" is still useful (${fv.populatedCount}/${fv.totalInstances} populated)`,
+            usageLocations: [{
+              tagId: fv.tagId,
+              tagName: field?.tagName || fv.tagId,
+              fieldId: field?.fieldLabelId,
+              fieldName: fv.fieldName,
+            }],
           },
         };
       });
@@ -333,6 +370,10 @@ export const missingInheritanceDetector: SchemaDetector = {
             details: {
               relatedIds: [tagA, tagB],
               suggestion: `Consider creating a parent supertag with shared fields: ${shared.join(', ')}`,
+              usageLocations: [
+                { tagId: tagA, tagName: tagNameA },
+                { tagId: tagB, tagName: tagNameB },
+              ],
             },
           });
         }
