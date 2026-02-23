@@ -245,7 +245,7 @@ export function validateShortQuery(
  */
 export function escapeFTS5Query(query: string): string {
   // If query contains special FTS5 characters, wrap in double quotes
-  const specialChars = /["\*\^\(\):]/;
+  const specialChars = /["\*\^\(\):\-\+]/;
   if (specialChars.test(query)) {
     // Escape internal double quotes by doubling them
     const escaped = query.replace(/"/g, '""');
