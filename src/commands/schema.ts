@@ -15,6 +15,7 @@ import { SchemaRegistry } from '../schema';
 import { UnifiedSchemaService } from '../services/unified-schema-service';
 import { SchemaAuditService } from '../services/schema-audit-service';
 import { applyFix, writeAuditTrail } from '../services/schema-audit-fixer';
+import { DETECTOR_REGISTRY } from '../services/schema-audit-registry';
 import type { SchemaFinding, SchemaFindingSeverity, FixResult } from '../types/schema-audit';
 import {
   DEFAULT_EXPORT_DIR,
@@ -480,6 +481,7 @@ export function createSchemaCommand(): Command {
     .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
     .option('--format <fmt>', 'Output format: table, json, markdown', 'table')
     .option('-t, --tag <name>', 'Audit single supertag and its hierarchy')
+    .option('-d, --detector <names>', 'Run specific detector(s), comma-separated')
     .option('--fix', 'Auto-fix safe issues (interactive confirmation per finding)')
     .option('--yes', 'Apply all safe fixes without prompting (use with --fix)')
     .option('--docs', 'Generate schema documentation instead of audit')
@@ -488,6 +490,7 @@ export function createSchemaCommand(): Command {
       workspace?: string;
       format?: 'table' | 'json' | 'markdown';
       tag?: string;
+      detector?: string;
       fix?: boolean;
       yes?: boolean;
       docs?: boolean;
@@ -506,6 +509,7 @@ async function auditCommand(opts: {
   workspace?: string;
   format?: 'table' | 'json' | 'markdown';
   tag?: string;
+  detector?: string;
   fix?: boolean;
   yes?: boolean;
   docs?: boolean;
@@ -517,6 +521,19 @@ async function auditCommand(opts: {
     console.error(`❌ Database not found: ${ws.dbPath}`);
     console.error(`   Run 'supertag sync index --workspace ${ws.alias}' first`);
     process.exit(1);
+  }
+
+  // Validate --detector names
+  let detectors: string[] | undefined;
+  if (opts.detector) {
+    detectors = opts.detector.split(',').map(d => d.trim());
+    const validNames = DETECTOR_REGISTRY.map(d => d.name);
+    const invalid = detectors.filter(d => !validNames.includes(d));
+    if (invalid.length > 0) {
+      console.error(`❌ Unknown detector(s): ${invalid.join(', ')}`);
+      console.error(`   Available: ${validNames.join(', ')}`);
+      process.exit(1);
+    }
   }
 
   // Open read-write only when --fix is present
@@ -535,6 +552,7 @@ async function auditCommand(opts: {
     const severity = opts.severity as SchemaFindingSeverity | undefined;
     const report = service.audit({
       tag: opts.tag,
+      detectors,
       includeFixes: opts.fix,
       severity,
     });
