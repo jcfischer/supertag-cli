@@ -165,6 +165,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'explore',
     example: 'Find all nodes connected to a project',
   },
+  {
+    name: 'tana_context',
+    description: 'Assemble structured context from the knowledge graph for a topic or node',
+    category: 'explore',
+    example: 'Get AI-ready context: { query: "project X", lens: "coding", maxTokens: 8000 }',
+  },
 
   // Transcript tools
   {
@@ -297,6 +303,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_supertag_info: schemas.zodToJsonSchema(schemas.supertagInfoSchema),
   tana_node: schemas.zodToJsonSchema(schemas.nodeSchema),
   tana_related: schemas.zodToJsonSchema(schemas.relatedSchema),
+  tana_context: schemas.zodToJsonSchema(schemas.contextSchema),
   tana_transcript_list: schemas.zodToJsonSchema(schemas.transcriptListSchema),
   tana_transcript_show: schemas.zodToJsonSchema(schemas.transcriptShowSchema),
   tana_transcript_search: schemas.zodToJsonSchema(schemas.transcriptSearchSchema),
