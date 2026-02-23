@@ -58,4 +58,4 @@ config.local.json
 homebrew-tap/
 
 # SpecFlow state
-.specflow/
+.specflow
