@@ -259,8 +259,8 @@ export async function findSemanticMatches(
 
     const ws = resolveWorkspaceContext({ workspace: options.workspace });
 
-    // Check if embeddings DB exists
-    const embeddingsPath = ws.dbPath.replace('tana-index.db', 'embeddings');
+    // Check if LanceDB embeddings directory exists
+    const embeddingsPath = ws.dbPath.replace(/\.db$/, '.lance');
     if (!existsSync(embeddingsPath)) {
       return { candidates: [], available: false };
     }
