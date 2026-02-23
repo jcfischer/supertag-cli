@@ -413,4 +413,13 @@ describe('escapeFTS5Query', () => {
   it('handles parentheses', () => {
     expect(escapeFTS5Query('hello(world)')).toBe('"hello(world)"');
   });
+
+  it('handles hyphens (Issue #51: prevents SQL minus operator interpretation)', () => {
+    expect(escapeFTS5Query('Jens-Christian Fischer')).toBe('"Jens-Christian Fischer"');
+    expect(escapeFTS5Query('well-known')).toBe('"well-known"');
+  });
+
+  it('handles plus signs', () => {
+    expect(escapeFTS5Query('C++')).toBe('"C++"');
+  });
 });
