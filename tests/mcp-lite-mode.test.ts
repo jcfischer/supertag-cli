@@ -42,8 +42,8 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 17 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(17);
+  it('has exactly 18 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(18);
   });
 
   it('contains expected query tools (8)', () => {
@@ -62,8 +62,8 @@ describe('LITE_MODE_TOOLS set', () => {
     }
   });
 
-  it('contains expected explore tools (3)', () => {
-    const exploreTools = ['tana_batch_get', 'tana_related', 'tana_stats'];
+  it('contains expected explore tools (4)', () => {
+    const exploreTools = ['tana_batch_get', 'tana_related', 'tana_stats', 'tana_schema_audit'];
     for (const tool of exploreTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
     }
@@ -154,8 +154,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 17', () => {
-    expect(getLiteModeToolCount()).toBe(17);
+  it('returns 18', () => {
+    expect(getLiteModeToolCount()).toBe(18);
   });
 });
 

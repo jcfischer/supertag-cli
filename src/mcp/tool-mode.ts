@@ -86,6 +86,9 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
   'tana_sync',
   'tana_cache_clear',
   'tana_capabilities',
+
+  // Schema Analysis (1)
+  'tana_schema_audit',
 ]);
 
 /**

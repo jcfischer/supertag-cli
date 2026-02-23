@@ -868,3 +868,25 @@ export function parseDateRange(input: {
 
   return result;
 }
+
+// tana_schema_audit (F-101)
+export const schemaAuditSchema = z.object({
+  workspace: workspaceSchema,
+  tag: z
+    .string()
+    .optional()
+    .describe('Audit a single supertag and its hierarchy'),
+  severity: z
+    .enum(['error', 'warning', 'info'])
+    .optional()
+    .describe('Minimum severity level to include'),
+  includeFixes: z
+    .boolean()
+    .default(false)
+    .describe('Include Tana Paste fix suggestions'),
+  generateDocs: z
+    .boolean()
+    .default(false)
+    .describe('Generate schema documentation instead of audit'),
+});
+export type SchemaAuditInput = z.infer<typeof schemaAuditSchema>;

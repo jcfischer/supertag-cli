@@ -45,6 +45,7 @@ import { handleCreateTag } from './tools/tag-create.js';
 import { handleSetField, handleSetFieldOption } from './tools/set-field.js';
 import { handleTrashNode } from './tools/trash.js';
 import { handleDone, handleUndone } from './tools/done.js';
+import { schemaAudit } from './tools/schema-audit.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -304,6 +305,12 @@ const allTools = [
           'Mark a node as not done (unchecked). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.undoneSchema),
       },
+      {
+        name: 'tana_schema_audit',
+        description:
+          'Analyze supertag schema health: detect orphan tags, duplicate fields, type mismatches, missing inheritance, unused fields, and low fill rates. Returns findings with severity levels and fix suggestions. Read-only.',
+        inputSchema: schemas.zodToJsonSchema(schemas.schemaAuditSchema),
+      },
 ];
 
 // List available tools (filtered by tool mode)
@@ -505,6 +512,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_undone': {
         const validated = schemas.undoneSchema.parse(args);
         result = await handleUndone(validated);
+        break;
+      }
+      case 'tana_schema_audit': {
+        const validated = schemas.schemaAuditSchema.parse(args);
+        result = await schemaAudit(validated);
         break;
       }
       default:
