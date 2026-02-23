@@ -10,10 +10,12 @@ import { Command } from 'commander';
 import { join, dirname } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { Database } from 'bun:sqlite';
+import * as readline from 'readline';
 import { SchemaRegistry } from '../schema';
 import { UnifiedSchemaService } from '../services/unified-schema-service';
 import { SchemaAuditService } from '../services/schema-audit-service';
-import type { SchemaFindingSeverity } from '../types/schema-audit';
+import { applyFix, writeAuditTrail } from '../services/schema-audit-fixer';
+import type { SchemaFinding, SchemaFindingSeverity, FixResult } from '../types/schema-audit';
 import {
   DEFAULT_EXPORT_DIR,
   TANA_CACHE_DIR,
@@ -478,7 +480,8 @@ export function createSchemaCommand(): Command {
     .option('-w, --workspace <alias>', 'Workspace alias or nodeid')
     .option('--format <fmt>', 'Output format: table, json, markdown', 'table')
     .option('-t, --tag <name>', 'Audit single supertag and its hierarchy')
-    .option('--fix', 'Include Tana Paste fix suggestions')
+    .option('--fix', 'Auto-fix safe issues (interactive confirmation per finding)')
+    .option('--yes', 'Apply all safe fixes without prompting (use with --fix)')
     .option('--docs', 'Generate schema documentation instead of audit')
     .option('--severity <level>', 'Minimum severity: error, warning, info')
     .action(async (opts: {
@@ -486,6 +489,7 @@ export function createSchemaCommand(): Command {
       format?: 'table' | 'json' | 'markdown';
       tag?: string;
       fix?: boolean;
+      yes?: boolean;
       docs?: boolean;
       severity?: string;
     }) => {
@@ -503,6 +507,7 @@ async function auditCommand(opts: {
   format?: 'table' | 'json' | 'markdown';
   tag?: string;
   fix?: boolean;
+  yes?: boolean;
   docs?: boolean;
   severity?: string;
 }): Promise<void> {
@@ -514,7 +519,8 @@ async function auditCommand(opts: {
     process.exit(1);
   }
 
-  const db = new Database(ws.dbPath, { readonly: true });
+  // Open read-write only when --fix is present
+  const db = new Database(ws.dbPath, { readonly: !opts.fix });
   try {
     const service = new SchemaAuditService(db);
 
@@ -535,9 +541,12 @@ async function auditCommand(opts: {
 
     report.workspace = ws.alias;
 
+    // Print the audit report first
     switch (opts.format) {
       case 'json':
-        console.log(JSON.stringify(report, null, 2));
+        if (!opts.fix) {
+          console.log(JSON.stringify(report, null, 2));
+        }
         break;
 
       case 'markdown':
@@ -549,12 +558,150 @@ async function auditCommand(opts: {
         break;
     }
 
-    // Exit code 1 if errors found
-    if (report.summary.findingsCount.error > 0) {
+    // Fix mode: apply safe fixes
+    if (opts.fix && report.findings.length > 0) {
+      const results = await applyFixes(db, report.findings, ws.alias, opts.yes ?? false);
+
+      // Print fix summary
+      printFixSummary(results);
+
+      // Write audit trail
+      const logDir = join(dirname(ws.dbPath), 'audit-trail');
+      const logFile = writeAuditTrail(ws.alias, results, logDir);
+      if (logFile) {
+        console.error(`\n📝 Audit trail: ${logFile}`);
+      }
+
+      // JSON output includes fix results
+      if (opts.format === 'json') {
+        console.log(JSON.stringify({ ...report, fixResults: results }, null, 2));
+      }
+    }
+
+    // Exit code 1 if errors found (and not fixed)
+    if (report.summary.findingsCount.error > 0 && !opts.fix) {
       process.exit(1);
     }
   } finally {
     db.close();
+  }
+}
+
+/**
+ * Apply fixes for fixable findings, with optional interactive confirmation.
+ */
+async function applyFixes(
+  db: Database,
+  findings: SchemaFinding[],
+  workspace: string,
+  autoConfirm: boolean,
+): Promise<FixResult[]> {
+  const fixableFindings = findings.filter(f => f.fixable);
+  const nonFixableFindings = findings.filter(f => !f.fixable);
+
+  if (fixableFindings.length === 0) {
+    console.error('\nℹ️  No auto-fixable issues found.');
+    if (nonFixableFindings.length > 0) {
+      console.error(`   ${nonFixableFindings.length} finding(s) require manual resolution.`);
+    }
+    return [];
+  }
+
+  console.error(`\n🔧 Found ${fixableFindings.length} fixable issue(s):`);
+
+  // Show non-fixable findings with skip reasons
+  if (nonFixableFindings.length > 0) {
+    console.error(`\n⏭️  Skipping ${nonFixableFindings.length} non-fixable finding(s):`);
+    for (const f of nonFixableFindings) {
+      console.error(`   • ${f.message}`);
+      if (f.skipReason) {
+        console.error(`     ↳ ${f.skipReason}`);
+      }
+    }
+  }
+
+  const results: FixResult[] = [];
+
+  if (autoConfirm) {
+    // --yes mode: apply all fixes without prompting
+    console.error('\n⚡ Applying all safe fixes (--yes mode)...\n');
+    for (const finding of fixableFindings) {
+      const result = applyFix(db, finding);
+      results.push(result);
+      if (result.success) {
+        console.error(`  ✅ ${result.action}`);
+      } else {
+        console.error(`  ❌ ${finding.message}: ${result.error}`);
+      }
+    }
+  } else {
+    // Interactive mode: confirm each fix
+    console.error('');
+    for (const finding of fixableFindings) {
+      const confirmed = await confirmFix(finding);
+      if (confirmed) {
+        const result = applyFix(db, finding);
+        results.push(result);
+        if (result.success) {
+          console.error(`  ✅ ${result.action}`);
+        } else {
+          console.error(`  ❌ ${finding.message}: ${result.error}`);
+        }
+      } else {
+        results.push({ finding, action: 'skipped by user', success: false });
+        console.error(`  ⏭️  Skipped`);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Ask user for confirmation to apply a fix (interactive mode).
+ */
+async function confirmFix(finding: SchemaFinding): Promise<boolean> {
+  const severityIcon: Record<string, string> = {
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️',
+  };
+  const icon = severityIcon[finding.severity] || '•';
+
+  console.error(`\n${icon} ${finding.message}`);
+  if (finding.details.suggestion) {
+    console.error(`  → ${finding.details.suggestion}`);
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  return new Promise<boolean>((resolve) => {
+    rl.question('  Fix this? [y/N] ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+}
+
+/**
+ * Print summary of applied fixes.
+ */
+function printFixSummary(results: FixResult[]): void {
+  const applied = results.filter(r => r.success);
+  const skipped = results.filter(r => !r.success);
+
+  console.error(`\n📊 Fix Summary:`);
+  console.error(`   Applied: ${applied.length}`);
+  console.error(`   Skipped: ${skipped.length}`);
+
+  if (applied.length > 0) {
+    console.error('\n   Applied fixes:');
+    for (const r of applied) {
+      console.error(`   • ${r.action}`);
+    }
   }
 }
 
