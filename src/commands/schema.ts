@@ -579,6 +579,15 @@ function printTableReport(report: import('../types/schema-audit').SchemaAuditRep
   for (const finding of findings) {
     const icon = severityIcon[finding.severity] || '•';
     console.log(`${icon} [${finding.severity.toUpperCase()}] ${finding.message}`);
+    if (finding.details.usageLocations && finding.details.usageLocations.length > 0) {
+      for (const loc of finding.details.usageLocations) {
+        const fieldPart = loc.fieldId
+          ? ` → ${loc.fieldName || '?'} (${loc.fieldId})`
+          : '';
+        const typePart = loc.dataType ? `: ${loc.dataType}` : '';
+        console.log(`  → ${loc.tagName}#${loc.tagId}${fieldPart}${typePart}`);
+      }
+    }
     if (finding.details.suggestion) {
       console.log(`  → ${finding.details.suggestion}`);
     }
@@ -610,6 +619,16 @@ function printMarkdownReport(report: import('../types/schema-audit').SchemaAudit
   for (const finding of findings) {
     console.log(`### ${finding.severity.toUpperCase()}: ${finding.message}`);
     console.log(`- Detector: ${finding.detector}`);
+    if (finding.details.usageLocations && finding.details.usageLocations.length > 0) {
+      console.log('- Locations:');
+      for (const loc of finding.details.usageLocations) {
+        const fieldPart = loc.fieldId
+          ? ` → ${loc.fieldName || '?'} (\`${loc.fieldId}\`)`
+          : '';
+        const typePart = loc.dataType ? `: ${loc.dataType}` : '';
+        console.log(`  - \`${loc.tagName}\`#\`${loc.tagId}\`${fieldPart}${typePart}`);
+      }
+    }
     if (finding.details.suggestion) {
       console.log(`- Suggestion: ${finding.details.suggestion}`);
     }
