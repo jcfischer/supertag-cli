@@ -69,6 +69,7 @@ interface SearchOptions extends StandardOptions {
   header?: boolean;
   includeDescendants?: boolean;
   minScore?: string;
+  typeHint?: string;
 }
 
 /**
@@ -162,7 +163,8 @@ export function createSearchCommand(): Command {
     .option("--created-before <date>", "Filter nodes created before date (YYYY-MM-DD)")
     .option("--updated-after <date>", "Filter nodes updated after date (YYYY-MM-DD)")
     .option("--updated-before <date>", "Filter nodes updated before date (YYYY-MM-DD)")
-    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., id,name,rank)");
+    .option("--select <fields>", "Select specific fields to output (comma-separated, e.g., id,name,rank)")
+    .option("--type-hint <tag>", "Enrich semantic search query with type prefix (e.g., --type-hint project)");
 
   // Add standard options with show and depth
   addStandardOptions(search, {
@@ -482,10 +484,15 @@ async function handleSemanticSearch(
       console.log("");
     }
 
+    // Enrich query with type hint if provided (F-104 graph-aware embeddings)
+    const effectiveQuery = options.typeHint
+      ? `[Type: #${options.typeHint}] ${query}`
+      : query;
+
     // Over-fetch for filtering (more aggressive if tag filter is specified)
     const baseOverfetch = getOverfetchLimit(limit);
     const overfetchLimit = options.tag ? baseOverfetch * 3 : baseOverfetch;
-    const rawResults = await embeddingService.search(query, overfetchLimit);
+    const rawResults = await embeddingService.search(effectiveQuery, overfetchLimit);
 
     await withDatabase({ dbPath, readonly: true }, async (ctx) => {
       const { db } = ctx;

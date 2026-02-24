@@ -148,6 +148,39 @@ When generating embeddings, content is filtered to focus on meaningful nodes:
 - `--include-system` - Include system docTypes
 - `-t, --tag <tag>` - Only embed nodes with specific supertag
 
+### Graph-Aware Embeddings (F-104)
+
+Embedding generation enriches node text with supertag type and field values before embedding, improving semantic search for typed queries like "find meetings about X".
+
+**Enriched text format:** `[Type: #meeting] [Date: 2026-02-20] [Attendees: Daniel, Sarah] Weekly sync`
+
+**CLI options for `embed generate`:**
+- `--graph-aware` (default: enabled) - Enrich text with type/field prefixes
+- `--no-graph-aware` - Use legacy ancestor-based contextualization
+- `--enrichment-preview <nodeId>` - Preview enriched text for a single node without generating embeddings
+
+**Search query enrichment:**
+- CLI: `supertag search --semantic --type-hint meeting "weekly sync"`
+- MCP: `tana_semantic_search` with `typeHint: "meeting"` parameter
+
+**Per-supertag config:** `~/.config/supertag/embed-enrichment.json`
+```json
+{
+  "supertags": {
+    "meeting": { "enabled": true, "fields": ["date", "attendees"] },
+    "person": { "enabled": true, "fields": ["email", "company"] }
+  }
+}
+```
+When no config file exists, all tags are enriched with all their fields (default behavior).
+
+**Key files:**
+- `src/types/enrichment.ts` - Type definitions and defaults
+- `src/embeddings/graph-enricher.ts` - Single-node and batch enrichment
+- `src/embeddings/enrichment-config.ts` - Config loader
+- `src/embeddings/enrichment-truncator.ts` - Token-aware truncation (512 token limit)
+- `tests/embeddings/enrichment-*.test.ts` - 25 unit tests
+
 ### Workspace Database Paths
 - **Workspace DB**: `~/.local/share/supertag/workspaces/{alias}/tana-index.db`
 - **Default workspace**: `main`

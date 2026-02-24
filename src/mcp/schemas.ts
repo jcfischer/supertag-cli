@@ -280,6 +280,10 @@ export const semanticSearchSchema = z.object({
     .boolean()
     .default(true)
     .describe('Include nearest ancestor with supertag for context. When a match is a nested fragment, shows the containing project/meeting/etc.'),
+  typeHint: z
+    .string()
+    .optional()
+    .describe('Enrich query with supertag type prefix for better typed results (e.g., "project" prepends [Type: #project] to query)'),
 });
 export type SemanticSearchInput = z.infer<typeof semanticSearchSchema>;
 

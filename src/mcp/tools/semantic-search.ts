@@ -158,8 +158,13 @@ export async function semanticSearch(
     const overfetchLimit = getOverfetchLimit(requestedLimit);
     const minSimilarity = input.minSimilarity;
 
+    // Enrich query with type hint if provided (F-104 graph-aware embeddings)
+    const effectiveQuery = input.typeHint
+      ? `[Type: #${input.typeHint}] ${input.query}`
+      : input.query;
+
     // Search using TanaEmbeddingService
-    const searchResults = await embeddingService.search(input.query, overfetchLimit);
+    const searchResults = await embeddingService.search(effectiveQuery, overfetchLimit);
 
     // Apply minSimilarity filter (TanaEmbeddingService doesn't support threshold natively)
     const thresholdedResults = minSimilarity !== undefined

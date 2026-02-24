@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Graph-Aware Embeddings (F-104)** - Enrich embeddings with supertag type and field context
+  - `embed generate --graph-aware` (default: enabled) prepends `[Type: #tag] [Field: value]` to node text before embedding
+  - `embed generate --no-graph-aware` to use legacy ancestor-based contextualization
+  - `embed generate --enrichment-preview <nodeId>` to preview enriched text for a single node
+  - `search --semantic --type-hint <tag>` enriches queries with type prefix for better typed results
+  - `tana_semantic_search` MCP tool gains `typeHint` parameter
+  - Token-aware truncation keeps enriched text within BGE-M3's 512 token limit
+  - Per-supertag customization via `~/.config/supertag/embed-enrichment.json`
+  - Backward compatible: existing embeddings work, re-generate to benefit from enrichment
+
 - **Schema Analysis (F-101)** - Detect schema quality issues across supertag definitions
   - `supertag schema audit` CLI command with --severity, --detector, --tag, --format
   - 7 built-in detectors: orphan-tags, low-usage, duplicate-fields, type-mismatch, unused-fields, fill-rate, missing-inheritance
