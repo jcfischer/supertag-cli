@@ -220,7 +220,7 @@ class Parser {
 
     // Parse field name
     const fieldToken = this.current();
-    if (!fieldToken || fieldToken.type !== TokenType.IDENTIFIER) {
+    if (!fieldToken || (fieldToken.type !== TokenType.IDENTIFIER && fieldToken.type !== TokenType.STRING)) {
       throw new ParseError("Expected field name in where clause");
     }
     this.advance();
@@ -317,7 +317,7 @@ class Parser {
     this.expect(TokenType.KEYWORD, "by");
 
     const fieldToken = this.current();
-    if (!fieldToken || fieldToken.type !== TokenType.IDENTIFIER) {
+    if (!fieldToken || (fieldToken.type !== TokenType.IDENTIFIER && fieldToken.type !== TokenType.STRING)) {
       throw new ParseError("Expected field name after 'order by'");
     }
     this.advance();
