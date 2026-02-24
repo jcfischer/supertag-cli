@@ -1,8 +1,9 @@
 /**
- * Tests for calendar/day page smart depth defaults (Issue #37)
+ * Tests for calendar/day page smart depth defaults (Issue #37, #65)
  *
- * Day pages (journalPart) default to depth 1 when --depth is not explicitly set,
- * so section children are visible without requiring the user to specify --depth.
+ * Day pages (journalPart) default to depth 2 when --depth is not explicitly set,
+ * so section children (Todos, Notes, Collected) AND their child nodes are visible
+ * without requiring the user to specify --depth.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
@@ -255,8 +256,8 @@ describe("resolveEffectiveDepth", () => {
     }
   });
 
-  it("auto-expands day page to depth 1 when depth not explicitly set", () => {
-    expect(resolveEffectiveDepth(db, "day-page", 0, false)).toBe(1);
+  it("auto-expands day page to depth 2 when depth not explicitly set", () => {
+    expect(resolveEffectiveDepth(db, "day-page", 0, false)).toBe(2);
   });
 
   it("keeps depth 0 for regular nodes when not explicitly set", () => {
