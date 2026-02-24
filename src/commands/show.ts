@@ -21,6 +21,9 @@ const DEFAULT_DB_PATH = getDatabasePath();
 /** Tana docTypes that represent calendar/day page nodes with nested section structure */
 const CALENDAR_DOC_TYPES = new Set(["journalPart", "journal"]);
 
+/** Default depth for calendar nodes — depth 2 surfaces children of section headers (Todos, Notes, etc.) */
+const CALENDAR_DEFAULT_DEPTH = 2;
+
 /**
  * Check if a node is a calendar/day page node by examining its _docType.
  * Calendar nodes (journalPart = day/week pages, journal = calendar root)
@@ -50,7 +53,7 @@ export function resolveEffectiveDepth(
     return requestedDepth;
   }
   if (requestedDepth === 0 && isCalendarNode(db, nodeId)) {
-    return 1;
+    return CALENDAR_DEFAULT_DEPTH;
   }
   return requestedDepth;
 }

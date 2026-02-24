@@ -96,9 +96,10 @@ export function createNodesCommand(): Command {
 
     const readBackend = await resolveReadBackendFromOptions(options);
 
-    // Smart depth: calendar/day pages auto-expand to depth 1 (SQLite backend only)
+    // Smart depth: calendar/day pages auto-expand to depth 2 (Issue #65)
+    // Applies to both live and SQLite backends — uses SQLite DB to detect calendar nodes
     let depth = requestedDepth;
-    if (!readBackend.isLive() && !depthExplicitlySet) {
+    if (!depthExplicitlySet) {
       try {
         const dbPath = resolveDbPath(options);
         const db = new Database(dbPath, { readonly: true });
