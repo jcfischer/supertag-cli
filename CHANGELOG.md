@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Embedding Maintenance & Diagnostics (F-106)** - Tools for managing embedding health at scale
+  - `embed maintain compact` — merge fragmented LanceDB storage for faster queries
+  - `embed maintain stale` — detect and remove orphaned embeddings for deleted nodes
+  - `embed maintain rebuild` — full reindex from scratch
+  - `embed stats` — detailed embedding statistics (count, staleness, fragmentation, model info)
+  - `embed stats --format json` for machine-readable diagnostics
+  - Integrated into `embed maintain` umbrella command for one-step maintenance
+
 - **Graph-Aware Embeddings (F-104)** - Enrich embeddings with supertag type and field context
   - `embed generate --graph-aware` (default: enabled) prepends `[Type: #tag] [Field: value]` to node text before embedding
   - `embed generate --no-graph-aware` to use legacy ancestor-based contextualization
@@ -51,6 +59,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--no-resolve` flag to show raw IDs instead of resolved names
   - `tana_table` MCP tool with same capabilities for AI agent integration
   - Available in lite mode (complements tana-local)
+
+### Changed
+
+- **Graph-aware enrichment refactored** — extracted shared `buildEnrichedText()` helper, eliminating ~60 lines of duplication between single-node and batch enrichment paths
+- **Type guard for enriched nodes** — replaced unsafe `"enriched" in node` + `as` cast with proper `isEnrichedNode()` type guard
+- **FieldType-based filtering** — `defaults.includeFields` in enrichment config now correctly filters by field type (options, date, instance), fixing spec deviation
+
+### Fixed
+
+- **Single-quoted field names in queries** — `where` and `order by` clauses now accept single-quoted field names (#69)
+- **Day page children not returned** — `nodes show` on day pages now resolves effective children including inline items (#65)
+- **Schema audit --detector flag** — the `--detector` flag is now properly recognized (#56)
+- **Resolve command: hyphenated names** — names with hyphens no longer cause SQLiteError from unescaped SQL (#51)
+- **Context command: false "embeddings unavailable"** — correctly detects existing embeddings (#52)
+- **Embeddings: brute-force scan** — creates ANN index to avoid scanning 1M+ vectors (#53)
+- **Resolve command: false "semantic unavailable"** — correctly reports semantic search availability (#54)
+- **Schema audit: show IDs and usage locations** — audit results now include field/tag IDs and where they're used (#55)
+- **Schema audit: --fix flag** — auto-resolve simple schema issues like orphan tags (#57)
+- CLAUDE.md enrichment config example now matches actual `GraphAwareEnrichmentConfig` schema
 
 ## [2.2.3] - 2026-02-06
 

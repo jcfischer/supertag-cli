@@ -496,13 +496,18 @@ supertag sync cleanup --dry-run   # Preview what would be deleted
 
 ```bash
 supertag embed config --model bge-m3    # Configure
-supertag embed generate                  # Generate embeddings
-supertag embed generate --include-fields # Include field values in context
+supertag embed generate                  # Generate embeddings (graph-aware by default)
+supertag embed generate --no-graph-aware # Legacy ancestor-based contextualization
+supertag embed generate --enrichment-preview <nodeId>  # Preview enriched text
 supertag search "ideas" --semantic       # Search by meaning
+supertag search "meetings" --semantic --type-hint meeting  # Type-aware search
 
 # Maintenance and diagnostics
+supertag embed stats                     # Embedding health: count, staleness, fragmentation
+supertag embed maintain compact          # Merge fragmented LanceDB storage
+supertag embed maintain stale            # Remove orphaned embeddings for deleted nodes
+supertag embed maintain rebuild          # Full reindex from scratch
 supertag embed filter-stats              # Show content filter breakdown
-supertag embed maintain                  # LanceDB maintenance (compact, rebuild)
 ```
 
 See [Embeddings Documentation](./docs/embeddings.md) for details.
