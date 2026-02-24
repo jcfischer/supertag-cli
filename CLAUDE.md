@@ -166,13 +166,19 @@ Embedding generation enriches node text with supertag type and field values befo
 **Per-supertag config:** `~/.config/supertag/embed-enrichment.json`
 ```json
 {
-  "supertags": {
-    "meeting": { "enabled": true, "fields": ["date", "attendees"] },
-    "person": { "enabled": true, "fields": ["email", "company"] }
+  "defaults": {
+    "includeTagName": true,
+    "includeFields": ["options", "date", "instance"],
+    "maxFieldsPerTag": 5
+  },
+  "overrides": {
+    "meeting": { "includeFields": ["Date", "Attendees"], "maxFieldsPerTag": 3 },
+    "person": { "includeFields": ["Email", "Company"] },
+    "internal": { "disabled": true }
   }
 }
 ```
-When no config file exists, all tags are enriched with all their fields (default behavior).
+When no config file exists, all tags are enriched with fields matching the default field types (default behavior).
 
 **Key files:**
 - `src/types/enrichment.ts` - Type definitions and defaults

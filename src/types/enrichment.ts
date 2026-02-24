@@ -74,3 +74,13 @@ export interface EnrichedContextualizedNode extends ContextualizedNode {
  * Bump when enrichment template changes to trigger re-generation.
  */
 export const ENRICHMENT_VERSION = 1;
+
+/**
+ * Type guard for EnrichedContextualizedNode.
+ * Use instead of `"enriched" in node` + `as` cast.
+ */
+export function isEnrichedNode(
+  node: ContextualizedNode
+): node is EnrichedContextualizedNode {
+  return "enriched" in node && "enrichmentVersion" in node;
+}

@@ -16,7 +16,9 @@ import {
 import {
   DEFAULT_ENRICHMENT_CONFIG,
   type GraphAwareEnrichmentConfig,
+  isEnrichedNode,
 } from "../../src/types/enrichment";
+import type { ContextualizedNode } from "../../src/embeddings/contextualize";
 
 const TEST_DIR = join(tmpdir(), `supertag-graph-enricher-test-${Date.now()}`);
 const TEST_DB = join(TEST_DIR, "tana-index.db");
@@ -55,6 +57,18 @@ describe("Graph Enricher (F-104)", () => {
         created INTEGER
       );
 
+      CREATE TABLE IF NOT EXISTS supertag_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_id TEXT NOT NULL,
+        tag_name TEXT NOT NULL,
+        field_name TEXT NOT NULL,
+        field_label_id TEXT NOT NULL,
+        field_order INTEGER DEFAULT 0,
+        normalized_name TEXT,
+        description TEXT,
+        inferred_data_type TEXT
+      );
+
       CREATE INDEX IF NOT EXISTS idx_field_values_parent ON field_values(parent_id);
     `);
 
@@ -80,6 +94,13 @@ describe("Graph Enricher (F-104)", () => {
         ('t3', 'node1', 'fd3', 'Status', 'v3', 'completed', 0),
         ('t4', 'node2', 'fd4', 'Category', 'v4', 'Machine Learning', 0),
         ('t5', 'node5', 'fd5', 'Abstract', 'v5', '${'A'.repeat(100)}', 0);
+
+      INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order, inferred_data_type) VALUES
+        ('tag1', 'meeting', 'Date', 'fl1', 0, 'date'),
+        ('tag1', 'meeting', 'Attendees', 'fl2', 1, 'text'),
+        ('tag1', 'meeting', 'Status', 'fl3', 2, 'options'),
+        ('tag2', 'project', 'Category', 'fl4', 0, 'options'),
+        ('tag5', 'article', 'Abstract', 'fl5', 0, 'text');
     `);
   });
 
@@ -135,14 +156,24 @@ describe("Graph Enricher (F-104)", () => {
     });
 
     it("truncates long field values to 50 chars", () => {
+      // Include "text" field type so the Abstract field isn't filtered out
+      const config: GraphAwareEnrichmentConfig = {
+        ...DEFAULT_ENRICHMENT_CONFIG,
+        defaults: {
+          ...DEFAULT_ENRICHMENT_CONFIG.defaults,
+          includeFields: ["options", "date", "instance", "text"],
+        },
+      };
+
       const result = enrichNodeWithGraphContext(
         db,
         "node5",
         "Node with long field",
-        DEFAULT_ENRICHMENT_CONFIG
+        config
       );
 
       expect(result.enriched).toBe(true);
+      expect(result.enrichmentFields.length).toBeGreaterThan(0);
       // The field value should be truncated
       for (const field of result.enrichmentFields) {
         expect(field.value.length).toBeLessThanOrEqual(51); // 50 + ellipsis char
@@ -185,6 +216,46 @@ describe("Graph Enricher (F-104)", () => {
 
       expect(result.enriched).toBe(false);
       expect(result.contextText).toBe("Weekly sync meeting");
+    });
+
+    it("filters fields by type when no per-tag override exists", () => {
+      // Default includeFields is ["options", "date", "instance"]
+      // node1 has: Date (date), Attendees (text), Status (options)
+      // "text" type is NOT in defaults, so Attendees should be excluded
+      const result = enrichNodeWithGraphContext(
+        db,
+        "node1",
+        "Weekly sync meeting",
+        DEFAULT_ENRICHMENT_CONFIG
+      );
+
+      expect(result.enriched).toBe(true);
+      const fieldNames = result.enrichmentFields.map((f) => f.name);
+      expect(fieldNames).toContain("Date"); // date type - included
+      expect(fieldNames).toContain("Status"); // options type - included
+      expect(fieldNames).not.toContain("Attendees"); // text type - excluded
+    });
+
+    it("includes text fields when defaults.includeFields includes text", () => {
+      const config: GraphAwareEnrichmentConfig = {
+        ...DEFAULT_ENRICHMENT_CONFIG,
+        defaults: {
+          ...DEFAULT_ENRICHMENT_CONFIG.defaults,
+          includeFields: ["options", "date", "instance", "text"],
+        },
+      };
+
+      const result = enrichNodeWithGraphContext(
+        db,
+        "node1",
+        "Weekly sync meeting",
+        config
+      );
+
+      const fieldNames = result.enrichmentFields.map((f) => f.name);
+      expect(fieldNames).toContain("Date");
+      expect(fieldNames).toContain("Attendees"); // text type - now included
+      expect(fieldNames).toContain("Status");
     });
 
     it("filters fields when override specifies includeFields", () => {
@@ -262,6 +333,30 @@ describe("Graph Enricher (F-104)", () => {
         DEFAULT_ENRICHMENT_CONFIG
       );
       expect(results).toEqual([]);
+    });
+  });
+
+  describe("isEnrichedNode type guard", () => {
+    it("returns true for enriched nodes", () => {
+      const result = enrichNodeWithGraphContext(
+        db,
+        "node1",
+        "Weekly sync meeting",
+        DEFAULT_ENRICHMENT_CONFIG
+      );
+      expect(isEnrichedNode(result)).toBe(true);
+    });
+
+    it("returns false for plain ContextualizedNode", () => {
+      const plainNode: ContextualizedNode = {
+        nodeId: "test",
+        nodeName: "Test",
+        ancestorId: null,
+        ancestorName: null,
+        ancestorTags: [],
+        contextText: "Test",
+      };
+      expect(isEnrichedNode(plainNode)).toBe(false);
     });
   });
 });
