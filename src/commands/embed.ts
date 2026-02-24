@@ -48,6 +48,7 @@ import { findMeaningfulAncestor } from "../embeddings/ancestor-resolution";
 import { batchContextualizeNodes, contextualizeNodesWithFields } from "../embeddings/contextualize";
 import { filterAndDeduplicateResults, getOverfetchLimit } from "../embeddings/search-filter";
 import { existsSync } from "node:fs";
+import { formatBytes } from "../utils/format";
 
 /**
  * Get workspace context for display
@@ -606,7 +607,7 @@ export function createEmbedCommand(): Command {
     .option("--skip-compact", "Skip fragment compaction")
     .option("--skip-index", "Skip index rebuild")
     .option("--skip-cleanup", "Skip old version cleanup")
-    .option("--stale", "Run only stale embedding cleanup")
+    .option("--stale", "Run stale embedding cleanup only, skip resona maintenance")
     .option("--dry-run", "Report what would be done without making changes")
     .option("--retention-days <n>", "Days to retain old versions (default: 7)", "7")
     .option("-v, --verbose", "Verbose output")
@@ -752,8 +753,7 @@ export function createEmbedCommand(): Command {
           // Show savings
           const savedBytes = beforeDiskSize.bytes - afterDiskSize.bytes;
           if (savedBytes > 0) {
-            const { formatBytes: fmtBytes } = await import("../embeddings/tana-embedding-service");
-            console.log(`  Saved:       ${fmtBytes(savedBytes)}`);
+            console.log(`  Saved:       ${formatBytes(savedBytes)}`);
           }
         }
 

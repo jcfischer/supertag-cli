@@ -21,6 +21,7 @@ import {
 } from "resona";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { formatBytes } from "../utils/format";
 
 export type { DatabaseDiagnostics, MaintenanceOptions, MaintenanceResult };
 import type { ContextualizedNode } from "./contextualize";
@@ -236,13 +237,5 @@ export class TanaEmbeddingService {
   }
 }
 
-/**
- * Format bytes into human-readable string (KB, MB, GB)
- */
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const value = bytes / Math.pow(1024, i);
-  return `${value.toFixed(1)} ${units[i]}`;
-}
+// Re-export formatBytes from shared utility for backwards compatibility
+export { formatBytes };

@@ -70,19 +70,19 @@ describe("update check command", () => {
 
 describe("formatBytes utility", () => {
   it("should format bytes correctly", async () => {
-    const { formatBytes } = await import("../src/commands/update");
+    const { formatBytes } = await import("../src/utils/format");
 
     expect(formatBytes(0)).toBe("0 B");
-    expect(formatBytes(1024)).toBe("1.00 KB");
-    expect(formatBytes(1024 * 1024)).toBe("1.00 MB");
-    expect(formatBytes(1024 * 1024 * 1024)).toBe("1.00 GB");
+    expect(formatBytes(1024)).toBe("1.0 KB");
+    expect(formatBytes(1024 * 1024)).toBe("1.0 MB");
+    expect(formatBytes(1024 * 1024 * 1024)).toBe("1.0 GB");
   });
 
-  it("should handle decimal places", async () => {
-    const { formatBytes } = await import("../src/commands/update");
+  it("should handle custom decimal places", async () => {
+    const { formatBytes } = await import("../src/utils/format");
 
-    expect(formatBytes(1536)).toBe("1.50 KB");
-    expect(formatBytes(2560000)).toBe("2.44 MB");
+    expect(formatBytes(1536, 2)).toBe("1.50 KB");
+    expect(formatBytes(2560000, 2)).toBe("2.44 MB");
   });
 });
 

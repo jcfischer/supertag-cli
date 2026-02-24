@@ -302,6 +302,28 @@ export function table(
 }
 
 // ============================================================================
+// Byte formatting
+// ============================================================================
+
+/**
+ * Format bytes into human-readable string (KB, MB, GB, TB)
+ *
+ * @param bytes - Number of bytes to format
+ * @param decimals - Number of decimal places (default: 1)
+ * @example
+ * formatBytes(0) // => '0 B'
+ * formatBytes(1024) // => '1.0 KB'
+ * formatBytes(1024, 2) // => '1.00 KB'
+ */
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(decimals)} ${units[i]}`;
+}
+
+// ============================================================================
 // Internal helpers
 // ============================================================================
 

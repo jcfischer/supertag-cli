@@ -22,7 +22,7 @@ import type { Attachment, AttachmentOptions, OrganizeBy } from "../types/attachm
 import type { StandardOptions } from "../types";
 import { resolveOutputFormat } from "../utils/output-options";
 import { createFormatter, type OutputFormat } from "../utils/output-formatter";
-import { EMOJI, formatNumber, header, table, tsv } from "../utils/format";
+import { EMOJI, formatBytes, formatNumber, header, table, tsv } from "../utils/format";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -337,10 +337,3 @@ function formatAttachmentList(
 /**
  * Format bytes to human readable
  */
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
