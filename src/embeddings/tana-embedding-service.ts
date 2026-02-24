@@ -25,6 +25,7 @@ import { formatBytes } from "../utils/format";
 
 export type { DatabaseDiagnostics, MaintenanceOptions, MaintenanceResult };
 import type { ContextualizedNode } from "./contextualize";
+import { isEnrichedNode } from "../types/enrichment";
 
 /**
  * Tana-specific search result with nodeId field
@@ -106,10 +107,9 @@ export class TanaEmbeddingService {
       };
 
       // Add enrichment metadata if present (F-104 graph-aware embeddings)
-      if ("enriched" in node) {
-        const enriched = node as ContextualizedNode & { enriched: boolean; enrichmentVersion: number };
-        metadata.enriched = enriched.enriched;
-        metadata.enrichmentVersion = enriched.enrichmentVersion;
+      if (isEnrichedNode(node)) {
+        metadata.enriched = node.enriched;
+        metadata.enrichmentVersion = node.enrichmentVersion;
       }
 
       return {

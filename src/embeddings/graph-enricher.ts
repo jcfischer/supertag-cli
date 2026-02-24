@@ -13,7 +13,9 @@ import type { Database } from "bun:sqlite";
 import type {
   GraphAwareEnrichmentConfig,
   EnrichedContextualizedNode,
+  FieldType,
 } from "../types/enrichment";
+import type { SupertagEnrichmentConfig } from "../types/enrichment";
 import { ENRICHMENT_VERSION } from "../types/enrichment";
 import { getConfigForTag } from "./enrichment-config";
 
@@ -22,6 +24,118 @@ const MAX_FIELD_VALUE_LENGTH = 50;
 
 /** SQLite variable limit — batch queries in chunks of this size */
 const SQLITE_CHUNK_SIZE = 900;
+
+/**
+ * Maps FieldType (enrichment config) to inferred_data_type values (supertag_fields table).
+ * Used when filtering fields by type from defaults.includeFields.
+ */
+const FIELD_TYPE_TO_DATA_TYPES: Record<FieldType, string[]> = {
+  options: ["options", "reference"],
+  date: ["date"],
+  instance: ["reference"],
+  text: ["text"],
+};
+
+/**
+ * Lookup field types from supertag_fields table for a given set of fields.
+ * Returns a map of field_name -> inferred_data_type.
+ */
+function lookupFieldTypes(
+  db: Database,
+  fieldNames: string[]
+): Map<string, string> {
+  if (fieldNames.length === 0) return new Map();
+  const placeholders = fieldNames.map(() => "?").join(",");
+  const rows = db
+    .query(
+      `SELECT DISTINCT field_name, inferred_data_type FROM supertag_fields
+       WHERE field_name IN (${placeholders}) AND inferred_data_type IS NOT NULL`
+    )
+    .all(...fieldNames) as Array<{ field_name: string; inferred_data_type: string }>;
+  const result = new Map<string, string>();
+  for (const row of rows) {
+    result.set(row.field_name, row.inferred_data_type);
+  }
+  return result;
+}
+
+/**
+ * Resolve the set of allowed data types from defaults.includeFields FieldType list.
+ */
+function resolveAllowedDataTypes(includeFieldTypes: FieldType[]): Set<string> {
+  const allowed = new Set<string>();
+  for (const ft of includeFieldTypes) {
+    const dataTypes = FIELD_TYPE_TO_DATA_TYPES[ft];
+    if (dataTypes) {
+      for (const dt of dataTypes) allowed.add(dt);
+    }
+  }
+  return allowed;
+}
+
+/**
+ * Shared helper: filter fields, truncate values, and build enriched text.
+ *
+ * Used by both single-node enrichment and batch enrichment to avoid
+ * duplicating the field filtering + text construction logic.
+ */
+export function buildEnrichedText(
+  tags: string[],
+  fields: Array<{ field_name: string; value_text: string }>,
+  nodeName: string,
+  config: GraphAwareEnrichmentConfig,
+  tagConfig: SupertagEnrichmentConfig,
+  fieldTypeMap?: Map<string, string>
+): { enrichedText: string; fieldsIncluded: Array<{ name: string; value: string }> } {
+  const maxFields = tagConfig.maxFieldsPerTag ?? config.defaults.maxFieldsPerTag;
+
+  // Resolve allowed data types from defaults.includeFields for type-based filtering
+  const allowedDataTypes = resolveAllowedDataTypes(config.defaults.includeFields);
+
+  // Filter and truncate fields
+  const fieldsIncluded: Array<{ name: string; value: string }> = [];
+  for (const field of fields) {
+    if (fieldsIncluded.length >= maxFields) break;
+
+    // Per-tag override specifies field names — those take priority
+    if (tagConfig.includeFields && tagConfig.includeFields.length > 0) {
+      const fieldNameLower = field.field_name.toLowerCase();
+      const included = tagConfig.includeFields.some(
+        (f) => f.toLowerCase() === fieldNameLower
+      );
+      if (!included) continue;
+    } else if (fieldTypeMap) {
+      // No per-tag override — filter by field type using defaults.includeFields
+      const dataType = fieldTypeMap.get(field.field_name);
+      if (dataType && !allowedDataTypes.has(dataType)) continue;
+      // If dataType is unknown (not in supertag_fields), include the field
+    }
+
+    // Truncate long field values
+    const value =
+      field.value_text.length > MAX_FIELD_VALUE_LENGTH
+        ? field.value_text.slice(0, MAX_FIELD_VALUE_LENGTH) + "…"
+        : field.value_text;
+
+    fieldsIncluded.push({ name: field.field_name, value });
+  }
+
+  // Build enriched text
+  const parts: string[] = [];
+
+  if (config.defaults.includeTagName) {
+    const typeStr = tags.map((t) => `#${t}`).join(", ");
+    parts.push(`[Type: ${typeStr}]`);
+  }
+
+  for (const field of fieldsIncluded) {
+    parts.push(`[${field.name}: ${field.value}]`);
+  }
+
+  parts.push(nodeName);
+
+  return { enrichedText: parts.join(" "), fieldsIncluded };
+}
 
 /**
  * Enrich a single node with graph context.
@@ -49,19 +163,11 @@ export function enrichNodeWithGraphContext(
 
   const tagNames = tags.map((t) => t.tag_name);
 
-  // 2. Determine which fields to include based on config
-  const fieldsToInclude: Array<{ name: string; value: string }> = [];
-  let maxFields = config.defaults.maxFieldsPerTag;
-
-  // Use first tag's config for enrichment decisions
+  // 2. Get config for primary tag
   const primaryTagConfig = getConfigForTag(config, tagNames[0]);
   if (primaryTagConfig === null) {
     // Enrichment disabled for primary tag
     return buildUnenrichedNode(nodeId, nodeName);
-  }
-
-  if (primaryTagConfig.maxFieldsPerTag !== undefined) {
-    maxFields = primaryTagConfig.maxFieldsPerTag;
   }
 
   // 3. Query field values for this node
@@ -73,46 +179,21 @@ export function enrichNodeWithGraphContext(
     )
     .all(nodeId) as Array<{ field_name: string; value_text: string }>;
 
-  // 4. Filter fields based on config
-  for (const row of fieldRows) {
-    if (fieldsToInclude.length >= maxFields) break;
+  // 4. Lookup field types for type-based filtering (Finding 4)
+  const fieldTypeMap = lookupFieldTypes(
+    db,
+    fieldRows.map((r) => r.field_name)
+  );
 
-    // If override specifies field names, only include those
-    if (primaryTagConfig.includeFields && primaryTagConfig.includeFields.length > 0) {
-      const fieldNameLower = row.field_name.toLowerCase();
-      const included = primaryTagConfig.includeFields.some(
-        (f) => f.toLowerCase() === fieldNameLower
-      );
-      if (!included) continue;
-    }
-
-    // Truncate long field values
-    const value =
-      row.value_text.length > MAX_FIELD_VALUE_LENGTH
-        ? row.value_text.slice(0, MAX_FIELD_VALUE_LENGTH) + "…"
-        : row.value_text;
-
-    fieldsToInclude.push({ name: row.field_name, value });
-  }
-
-  // 5. Build enriched text
-  const parts: string[] = [];
-
-  // Type prefix
-  if (config.defaults.includeTagName) {
-    const typeStr = tagNames.map((t) => `#${t}`).join(", ");
-    parts.push(`[Type: ${typeStr}]`);
-  }
-
-  // Field prefixes
-  for (const field of fieldsToInclude) {
-    parts.push(`[${field.name}: ${field.value}]`);
-  }
-
-  // Node name
-  parts.push(nodeName);
-
-  const enrichedText = parts.join(" ");
+  // 5. Build enriched text using shared helper
+  const { enrichedText, fieldsIncluded } = buildEnrichedText(
+    tagNames,
+    fieldRows,
+    nodeName,
+    config,
+    primaryTagConfig,
+    fieldTypeMap
+  );
 
   return {
     nodeId,
@@ -125,7 +206,7 @@ export function enrichNodeWithGraphContext(
     enrichmentVersion: ENRICHMENT_VERSION,
     enrichedTextRaw: enrichedText,
     enrichmentTags: tagNames,
-    enrichmentFields: fieldsToInclude,
+    enrichmentFields: fieldsIncluded,
   };
 }
 
@@ -214,6 +295,13 @@ function batchEnrichChunk(
     fieldsByNode.set(row.parent_id, existing);
   }
 
+  // Batch lookup field types for type-based filtering (Finding 4)
+  const allFieldNames = new Set<string>();
+  for (const row of fieldRows) {
+    allFieldNames.add(row.field_name);
+  }
+  const fieldTypeMap = lookupFieldTypes(db, [...allFieldNames]);
+
   // Cache tag configs
   const tagConfigCache = new Map<
     string,
@@ -244,49 +332,17 @@ function batchEnrichChunk(
       continue;
     }
 
-    const maxFields =
-      tagConfig.maxFieldsPerTag ?? config.defaults.maxFieldsPerTag;
     const nodeFields = fieldsByNode.get(node.id) || [];
 
-    // Filter and truncate fields
-    const fieldsToInclude: Array<{ name: string; value: string }> = [];
-    for (const field of nodeFields) {
-      if (fieldsToInclude.length >= maxFields) break;
-
-      if (
-        tagConfig.includeFields &&
-        tagConfig.includeFields.length > 0
-      ) {
-        const fieldNameLower = field.field_name.toLowerCase();
-        const included = tagConfig.includeFields.some(
-          (f) => f.toLowerCase() === fieldNameLower
-        );
-        if (!included) continue;
-      }
-
-      const value =
-        field.value_text.length > MAX_FIELD_VALUE_LENGTH
-          ? field.value_text.slice(0, MAX_FIELD_VALUE_LENGTH) + "…"
-          : field.value_text;
-
-      fieldsToInclude.push({ name: field.field_name, value });
-    }
-
-    // Build enriched text
-    const parts: string[] = [];
-
-    if (config.defaults.includeTagName) {
-      const typeStr = tags.map((t) => `#${t}`).join(", ");
-      parts.push(`[Type: ${typeStr}]`);
-    }
-
-    for (const field of fieldsToInclude) {
-      parts.push(`[${field.name}: ${field.value}]`);
-    }
-
-    parts.push(nodeName);
-
-    const enrichedText = parts.join(" ");
+    // Use shared helper for field filtering + text construction
+    const { enrichedText, fieldsIncluded } = buildEnrichedText(
+      tags,
+      nodeFields,
+      nodeName,
+      config,
+      tagConfig,
+      fieldTypeMap
+    );
 
     results.push({
       nodeId: node.id,
@@ -299,7 +355,7 @@ function batchEnrichChunk(
       enrichmentVersion: ENRICHMENT_VERSION,
       enrichedTextRaw: enrichedText,
       enrichmentTags: tags,
-      enrichmentFields: fieldsToInclude,
+      enrichmentFields: fieldsIncluded,
     });
   }
 
