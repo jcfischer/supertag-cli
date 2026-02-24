@@ -98,16 +98,27 @@ export class TanaEmbeddingService {
     options: BatchEmbedOptions = {}
   ): Promise<BatchEmbedResult> {
     // Map ContextualizedNode[] to ItemToEmbed[]
-    const items = nodes.map((node) => ({
-      id: node.nodeId,
-      text: node.nodeName,
-      contextText: node.contextText,
-      metadata: {
+    const items = nodes.map((node) => {
+      const metadata: Record<string, unknown> = {
         ancestorId: node.ancestorId,
         ancestorName: node.ancestorName,
         ancestorTags: node.ancestorTags,
-      },
-    }));
+      };
+
+      // Add enrichment metadata if present (F-104 graph-aware embeddings)
+      if ("enriched" in node) {
+        const enriched = node as ContextualizedNode & { enriched: boolean; enrichmentVersion: number };
+        metadata.enriched = enriched.enriched;
+        metadata.enrichmentVersion = enriched.enrichmentVersion;
+      }
+
+      return {
+        id: node.nodeId,
+        text: node.nodeName,
+        contextText: node.contextText,
+        metadata,
+      };
+    });
 
     // Delegate to resona
     return this.service.embedBatch(items, options);

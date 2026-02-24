@@ -47,6 +47,9 @@ import {
 import { findMeaningfulAncestor } from "../embeddings/ancestor-resolution";
 import { batchContextualizeNodes, contextualizeNodesWithFields } from "../embeddings/contextualize";
 import { filterAndDeduplicateResults, getOverfetchLimit } from "../embeddings/search-filter";
+import { batchEnrichNodesWithGraphContext } from "../embeddings/graph-enricher";
+import { loadEnrichmentConfig } from "../embeddings/enrichment-config";
+import { truncateEnrichedText } from "../embeddings/enrichment-truncator";
 import { existsSync } from "node:fs";
 import { formatBytes } from "../utils/format";
 
@@ -173,9 +176,18 @@ export function createEmbedCommand(): Command {
     .option("--include-system", "Include system docTypes (tuple, metanode, etc.)")
     .option("--include-transcripts", "Include transcript content (90K+ lines, normally excluded)")
     .option("--include-fields", "Include field values in embedding context")
+    .option("--graph-aware", "Enable graph-aware enrichment (default: true)")
+    .option("--no-graph-aware", "Disable graph-aware enrichment")
+    .option("--enrichment-preview <id>", "Preview enriched text for a specific node (no embedding)")
     .option("-v, --verbose", "Verbose output")
     .option("--lance-batch-size <n>", "LanceDB write batch size (default: 5000)")
     .action(async (options) => {
+      // Handle --enrichment-preview (show enriched text for a single node)
+      if (options.enrichmentPreview) {
+        await handleEnrichmentPreview(options.enrichmentPreview, options.workspace);
+        return;
+      }
+
       // Handle --all-workspaces
       if (options.allWorkspaces) {
         const batchResult = await processWorkspaces(
@@ -320,22 +332,49 @@ export function createEmbedCommand(): Command {
       console.log(`📊 Processing ${nodes.length.toLocaleString()} nodes...`);
       console.log("");
 
-      // Contextualize nodes - add ancestor context for better embeddings
-      console.log("   Contextualizing nodes...");
-      const contextualized = options.includeFields
-        ? contextualizeNodesWithFields(ctx.db, nodes, { includeFields: true })
-        : batchContextualizeNodes(ctx.db, nodes);
+      // Determine enrichment mode
+      const graphAware = options.graphAware !== false; // Default: true
 
-      // Count how many have ancestor context
-      const withAncestor = contextualized.filter(n => n.ancestorId !== null).length;
-      const withOwnTag = contextualized.filter(n => n.ancestorId === null && n.ancestorTags.length > 0).length;
-      console.log(`   With ancestor context: ${withAncestor.toLocaleString()}`);
-      console.log(`   With own tag: ${withOwnTag.toLocaleString()}`);
-      console.log(`   No context: ${(nodes.length - withAncestor - withOwnTag).toLocaleString()}`);
-      if (options.includeFields) {
-        console.log(`   Field enrichment: enabled`);
+      let contextualized;
+
+      if (graphAware) {
+        // Graph-aware enrichment (F-104)
+        console.log("   Graph-aware enrichment: enabled");
+        const enrichConfig = loadEnrichmentConfig();
+
+        const enriched = batchEnrichNodesWithGraphContext(ctx.db, nodes, enrichConfig);
+
+        // Apply truncation to enriched nodes
+        for (const node of enriched) {
+          if (node.enriched) {
+            node.contextText = truncateEnrichedText(node.contextText);
+          }
+        }
+
+        const enrichedCount = enriched.filter(n => n.enriched).length;
+        const unenrichedCount = enriched.length - enrichedCount;
+        console.log(`   Enriched (with tags): ${enrichedCount.toLocaleString()}`);
+        console.log(`   Plain text (no tags): ${unenrichedCount.toLocaleString()}`);
+        console.log("");
+
+        contextualized = enriched;
+      } else {
+        // Legacy mode: ancestor-based contextualization
+        console.log("   Contextualizing nodes...");
+        contextualized = options.includeFields
+          ? contextualizeNodesWithFields(ctx.db, nodes, { includeFields: true })
+          : batchContextualizeNodes(ctx.db, nodes);
+
+        const withAncestor = contextualized.filter(n => n.ancestorId !== null).length;
+        const withOwnTag = contextualized.filter(n => n.ancestorId === null && n.ancestorTags.length > 0).length;
+        console.log(`   With ancestor context: ${withAncestor.toLocaleString()}`);
+        console.log(`   With own tag: ${withOwnTag.toLocaleString()}`);
+        console.log(`   No context: ${(nodes.length - withAncestor - withOwnTag).toLocaleString()}`);
+        if (options.includeFields) {
+          console.log(`   Field enrichment: enabled`);
+        }
+        console.log("");
       }
-      console.log("");
 
       return contextualized;
     });
@@ -763,6 +802,57 @@ export function createEmbedCommand(): Command {
         embeddingService.close();
       }
     });
+
+  /**
+   * Handle --enrichment-preview: show enriched text for a single node
+   */
+  async function handleEnrichmentPreview(nodeId: string, workspace?: string) {
+    const wsContext = getWorkspaceContext(workspace);
+
+    if (!existsSync(wsContext.dbPath)) {
+      console.log(`❌ Database not found: ${wsContext.dbPath}`);
+      return;
+    }
+
+    const { enrichNodeWithGraphContext } = await import("../embeddings/graph-enricher");
+    const { estimateTokenCount } = await import("../embeddings/enrichment-truncator");
+
+    const config = loadEnrichmentConfig();
+
+    await withDatabase({ dbPath: wsContext.dbPath, readonly: true }, (ctx) => {
+      const node = ctx.db
+        .query("SELECT id, name FROM nodes WHERE id = ?")
+        .get(nodeId) as { id: string; name: string } | null;
+
+      if (!node) {
+        console.log(`❌ Node not found: ${nodeId}`);
+        return;
+      }
+
+      const enriched = enrichNodeWithGraphContext(ctx.db, node.id, node.name, config);
+
+      console.log(`📋 Enrichment Preview [${wsContext.alias}]`);
+      console.log("");
+      console.log(`   Node ID:        ${node.id}`);
+      console.log(`   Original name:  ${node.name}`);
+      console.log(`   Supertags:      ${enriched.enrichmentTags.length > 0 ? enriched.enrichmentTags.map(t => `#${t}`).join(", ") : "(none)"}`);
+      console.log(`   Fields:         ${enriched.enrichmentFields.length > 0 ? enriched.enrichmentFields.map(f => `${f.name}: ${f.value}`).join(", ") : "(none)"}`);
+      console.log(`   Enriched:       ${enriched.enriched ? "yes" : "no (no supertag)"}`);
+      console.log("");
+      console.log(`   Enriched text (raw):`);
+      console.log(`   ${enriched.enrichedTextRaw}`);
+
+      const truncated = truncateEnrichedText(enriched.enrichedTextRaw);
+      if (truncated !== enriched.enrichedTextRaw) {
+        console.log("");
+        console.log(`   Enriched text (truncated):`);
+        console.log(`   ${truncated}`);
+      }
+
+      console.log("");
+      console.log(`   Est. tokens:    ${estimateTokenCount(truncated)}/512`);
+    });
+  }
 
   return embed;
 }
