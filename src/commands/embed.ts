@@ -515,15 +515,18 @@ export function createEmbedCommand(): Command {
         console.log(`  Entities + filters: ${dbStats.filterStats.entitiesWithFilters.toLocaleString()}`);
 
         // Show database diagnostics
+        const diskSize = embeddingService.getDiskSize();
+        const fragmentCount = embeddingService.getFragmentCount();
+
         console.log("");
         console.log("Database Health:");
-        console.log(`  Version:       ${diagnostics.version}`);
         console.log(`  Rows:          ${diagnostics.totalRows.toLocaleString()}`);
+        console.log(`  Disk Size:     ${diskSize.formatted}`);
+        console.log(`  Version:       ${diagnostics.version}`);
+        console.log(`  Fragments:     ${fragmentCount.toLocaleString()}`);
         if (diagnostics.index) {
           const indexHealth = diagnostics.index.needsRebuild ? "⚠️  needs rebuild" : "✓ healthy";
-          console.log(`  Index:         ${indexHealth}`);
-          console.log(`    Indexed:     ${diagnostics.index.numIndexedRows.toLocaleString()}`);
-          console.log(`    Unindexed:   ${diagnostics.index.numUnindexedRows.toLocaleString()} (${diagnostics.index.stalePercent.toFixed(1)}%)`);
+          console.log(`  Index:         ${indexHealth} (${diagnostics.index.numIndexedRows.toLocaleString()} indexed, ${diagnostics.index.numUnindexedRows.toLocaleString()} unindexed)`);
         } else {
           console.log(`  Index:         not created`);
         }
@@ -598,11 +601,13 @@ export function createEmbedCommand(): Command {
    */
   embed
     .command("maintain")
-    .description("Run LanceDB maintenance (compaction, index rebuild, cleanup)")
+    .description("Run LanceDB maintenance (compaction, index rebuild, stale cleanup)")
     .option("-w, --workspace <alias>", "Workspace to maintain (default: default workspace)")
     .option("--skip-compact", "Skip fragment compaction")
     .option("--skip-index", "Skip index rebuild")
     .option("--skip-cleanup", "Skip old version cleanup")
+    .option("--stale", "Run only stale embedding cleanup")
+    .option("--dry-run", "Report what would be done without making changes")
     .option("--retention-days <n>", "Days to retain old versions (default: 7)", "7")
     .option("-v, --verbose", "Verbose output")
     .action(async (options) => {
@@ -612,7 +617,10 @@ export function createEmbedCommand(): Command {
       const configManager = ConfigManager.getInstance();
       const embeddingConfig = configManager.getEmbeddingConfig();
 
-      console.log(`🔧 Running maintenance [${wsContext.alias}]`);
+      const dryRun = !!options.dryRun;
+      const staleOnly = !!options.stale;
+
+      console.log(`🔧 ${dryRun ? "[DRY RUN] " : ""}Running maintenance [${wsContext.alias}]`);
       console.log("");
 
       // Check if LanceDB exists
@@ -632,63 +640,125 @@ export function createEmbedCommand(): Command {
       });
 
       try {
-        // Show diagnostics before maintenance
-        if (options.verbose) {
-          const beforeDiag = await embeddingService.getDiagnostics();
-          console.log("Before maintenance:");
-          console.log(`  Rows: ${beforeDiag.totalRows.toLocaleString()}`);
-          console.log(`  Version: ${beforeDiag.version}`);
-          if (beforeDiag.index) {
-            console.log(`  Index: ${beforeDiag.index.numIndexedRows} indexed, ${beforeDiag.index.numUnindexedRows} unindexed (${beforeDiag.index.stalePercent.toFixed(1)}%)`);
-          }
-          console.log("");
-        }
+        // Capture before metrics
+        const beforeDiag = await embeddingService.getDiagnostics();
+        const beforeDiskSize = embeddingService.getDiskSize();
+        const beforeFragments = embeddingService.getFragmentCount();
 
-        // Run maintenance with progress reporting
-        const result = await embeddingService.maintain({
-          skipCompaction: options.skipCompact,
-          skipIndex: options.skipIndex,
-          skipCleanup: options.skipCleanup,
-          retentionDays: parseInt(options.retentionDays),
-          onProgress: (step: string, details?: string) => {
-            if (details) {
-              console.log(`   ${step} (${details})`);
-            } else {
-              console.log(`   ${step}`);
-            }
-          },
-        });
+        console.log("Before:");
+        console.log(`  Rows:        ${beforeDiag.totalRows.toLocaleString()}`);
+        console.log(`  Disk Size:   ${beforeDiskSize.formatted}`);
+        console.log(`  Fragments:   ${beforeFragments.toLocaleString()}`);
+
+        // Compute stale count (needed for before metrics and stale cleanup)
+        let staleCount = 0;
+        let validNodeIds: Set<string> | null = null;
+
+        if (existsSync(wsContext.dbPath)) {
+          const embeddedIds = await embeddingService.getEmbeddedIds();
+          validNodeIds = await withDatabase({ dbPath: wsContext.dbPath, readonly: true }, (ctx) => {
+            const rows = ctx.db.query("SELECT id FROM nodes WHERE name IS NOT NULL").all() as { id: string }[];
+            return new Set(rows.map(r => r.id));
+          });
+          staleCount = embeddedIds.filter(id => !validNodeIds!.has(id)).length;
+          const stalePercent = beforeDiag.totalRows > 0
+            ? ((staleCount / beforeDiag.totalRows) * 100).toFixed(1)
+            : "0.0";
+          console.log(`  Stale:       ${staleCount.toLocaleString()} (${stalePercent}%)`);
+        }
 
         console.log("");
-        console.log("✅ Maintenance complete");
-        console.log(`   Duration: ${(result.durationMs / 1000).toFixed(2)}s`);
 
-        if (result.compaction) {
-          console.log(`   Compaction: ${result.compaction.fragmentsRemoved} fragments merged, ${result.compaction.filesCreated} files created`);
+        // --- Stale embedding cleanup ---
+        let staleRemoved = 0;
+        if (validNodeIds && staleCount > 0) {
+          if (dryRun) {
+            console.log(`   Would remove ${staleCount.toLocaleString()} stale embeddings`);
+          } else {
+            console.log(`   Removing stale embeddings... (${staleCount.toLocaleString()} to remove)`);
+            staleRemoved = await embeddingService.cleanup([...validNodeIds]);
+            console.log(`   ✓ Removed ${staleRemoved.toLocaleString()} stale embeddings`);
+          }
+        } else if (validNodeIds) {
+          console.log("   No stale embeddings found");
         }
 
-        if (result.indexRebuilt) {
-          console.log("   Index: rebuilt");
-        } else if (result.indexStats) {
-          console.log(`   Index: healthy (${result.indexStats.numIndexedRows} indexed)`);
-        }
+        // If --stale flag, skip resona maintenance operations
+        if (!staleOnly) {
+          // --- Resona maintenance (compaction, index, version cleanup) ---
+          if (dryRun) {
+            if (!options.skipCompact) {
+              console.log(`   Would compact ${beforeFragments.toLocaleString()} fragments`);
+            }
+            if (!options.skipIndex) {
+              if (beforeDiag.index) {
+                console.log(`   Would rebuild index (${beforeDiag.index.stalePercent.toFixed(1)}% stale)`);
+              } else {
+                console.log("   Would create ANN index");
+              }
+            }
+            if (!options.skipCleanup) {
+              console.log(`   Would clean old versions (retention: ${options.retentionDays} days)`);
+            }
+          } else {
+            const result = await embeddingService.maintain({
+              skipCompaction: options.skipCompact,
+              skipIndex: options.skipIndex,
+              skipCleanup: options.skipCleanup,
+              retentionDays: parseInt(options.retentionDays),
+              onProgress: (step: string, details?: string) => {
+                if (details) {
+                  console.log(`   ${step} (${details})`);
+                } else {
+                  console.log(`   ${step}`);
+                }
+              },
+            });
 
-        if (result.cleanup) {
-          const kb = (result.cleanup.bytesRemoved / 1024).toFixed(1);
-          console.log(`   Cleanup: ${result.cleanup.versionsRemoved} old versions, ${kb} KB freed`);
-        }
-
-        // Show diagnostics after maintenance
-        if (options.verbose) {
-          console.log("");
-          const afterDiag = await embeddingService.getDiagnostics();
-          console.log("After maintenance:");
-          console.log(`  Rows: ${afterDiag.totalRows.toLocaleString()}`);
-          console.log(`  Version: ${afterDiag.version}`);
-          if (afterDiag.index) {
-            console.log(`  Index: ${afterDiag.index.numIndexedRows} indexed, ${afterDiag.index.numUnindexedRows} unindexed (${afterDiag.index.stalePercent.toFixed(1)}%)`);
+            if (result.compaction) {
+              console.log(`   ✓ Compaction complete (${result.compaction.fragmentsRemoved} fragments merged)`);
+            }
+            if (result.indexRebuilt) {
+              console.log(`   ✓ Index rebuilt (${result.indexStats?.numIndexedRows.toLocaleString() ?? "?"} rows indexed)`);
+            } else if (result.indexStats) {
+              console.log(`   ✓ Index healthy (${result.indexStats.numIndexedRows.toLocaleString()} indexed)`);
+            }
+            if (result.cleanup) {
+              console.log(`   ✓ Cleanup complete (${result.cleanup.versionsRemoved} versions removed)`);
+            }
           }
         }
+
+        // --- After metrics ---
+        console.log("");
+        if (!dryRun) {
+          const afterDiag = await embeddingService.getDiagnostics();
+          const afterDiskSize = embeddingService.getDiskSize();
+          const afterFragments = embeddingService.getFragmentCount();
+
+          // Recompute stale count after cleanup
+          let afterStaleCount = 0;
+          if (validNodeIds) {
+            const afterEmbeddedIds = await embeddingService.getEmbeddedIds();
+            afterStaleCount = afterEmbeddedIds.filter(id => !validNodeIds!.has(id)).length;
+          }
+
+          console.log("After:");
+          console.log(`  Rows:        ${afterDiag.totalRows.toLocaleString()}`);
+          console.log(`  Disk Size:   ${afterDiskSize.formatted}`);
+          console.log(`  Fragments:   ${afterFragments.toLocaleString()}`);
+          console.log(`  Stale:       ${afterStaleCount.toLocaleString()}`);
+
+          // Show savings
+          const savedBytes = beforeDiskSize.bytes - afterDiskSize.bytes;
+          if (savedBytes > 0) {
+            const { formatBytes: fmtBytes } = await import("../embeddings/tana-embedding-service");
+            console.log(`  Saved:       ${fmtBytes(savedBytes)}`);
+          }
+        }
+
+        console.log("");
+        console.log(`✅ ${dryRun ? "[DRY RUN] " : ""}Maintenance complete`);
       } finally {
         embeddingService.close();
       }
