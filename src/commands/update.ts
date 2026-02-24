@@ -19,19 +19,7 @@ import {
 import { TANA_CACHE_DIR } from "../config/paths";
 import { getConfig } from "../config/manager";
 import { version } from "../../package.json";
-
-/**
- * Format bytes to human-readable string
- */
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB"];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
-}
+import { formatBytes } from "../utils/format";
 
 /**
  * Check command - check for available updates
@@ -82,7 +70,7 @@ async function checkCommand(options: { force?: boolean; json?: boolean }): Promi
       console.log("");
     }
 
-    console.log(`  Download size: ${formatBytes(result.downloadSize)}`);
+    console.log(`  Download size: ${formatBytes(result.downloadSize, 2)}`);
     console.log(`  Released: ${result.releaseDate.toLocaleDateString()}`);
     console.log("");
     console.log("  Run 'supertag update download' to download the update");
@@ -122,7 +110,7 @@ async function downloadCommand(options: { output?: string }): Promise<void> {
 
   console.log("");
   console.log(`  Downloading v${result.latestVersion}...`);
-  console.log(`  Size: ${formatBytes(result.downloadSize)}`);
+  console.log(`  Size: ${formatBytes(result.downloadSize, 2)}`);
   console.log("");
 
   let lastPercent = 0;

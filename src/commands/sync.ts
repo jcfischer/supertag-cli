@@ -30,8 +30,8 @@ import { ConfigManager } from "../config/manager";
 import {
   cleanupExports,
   getExportFiles,
-  formatBytes,
 } from "../cleanup/cleanup";
+import { formatBytes } from "../utils/format";
 import { syncSchemaToPath, getSchemaRegistryFromDatabase } from "./schema";
 import { DeltaSyncService } from "../services/delta-sync";
 import { LocalApiClient } from "../api/local-api-client";
