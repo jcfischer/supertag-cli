@@ -288,6 +288,44 @@ describe("Query Parser", () => {
     });
   });
 
+  describe("Quoted Field Names (#69)", () => {
+    it("should parse single-quoted field name in where clause", () => {
+      const ast = parseQuery("find Task where 'Task Status' = Waiting");
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("Task Status");
+      expect(clause.operator).toBe("=");
+      expect(clause.value).toBe("Waiting");
+    });
+
+    it("should parse double-quoted field name in where clause", () => {
+      const ast = parseQuery('find Task where "Task Status" = Done');
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("Task Status");
+      expect(clause.value).toBe("Done");
+    });
+
+    it("should parse single-quoted field name in order by clause", () => {
+      const ast = parseQuery("find Task order by 'Due Date'");
+      expect(ast.orderBy?.field).toBe("Due Date");
+      expect(ast.orderBy?.desc).toBe(false);
+    });
+
+    it("should parse quoted field with operator in where", () => {
+      const ast = parseQuery("find Task where 'Due Date' > 2025-01-01");
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("Due Date");
+      expect(clause.operator).toBe(">");
+      expect(clause.value).toBe("2025-01-01");
+    });
+
+    it("should parse quoted field with quoted string value", () => {
+      const ast = parseQuery(`find Task where 'Task Status' = 'In Progress'`);
+      const clause = ast.where![0] as WhereClause;
+      expect(clause.field).toBe("Task Status");
+      expect(clause.value).toBe("In Progress");
+    });
+  });
+
   describe("Error Handling", () => {
     it("should throw on missing find keyword", () => {
       expect(() => parseQuery("task")).toThrow(ParseError);
