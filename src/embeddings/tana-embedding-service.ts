@@ -19,6 +19,8 @@ import {
   type MaintenanceOptions,
   type MaintenanceResult,
 } from "resona";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 export type { DatabaseDiagnostics, MaintenanceOptions, MaintenanceResult };
 import type { ContextualizedNode } from "./contextualize";
@@ -179,9 +181,68 @@ export class TanaEmbeddingService {
   }
 
   /**
+   * Get total disk size of the LanceDB database directory
+   *
+   * @returns Object with raw bytes and human-readable formatted string
+   */
+  getDiskSize(): { bytes: number; formatted: string } {
+    const bytes = this.getDirectorySize(this.dbPath);
+    return { bytes, formatted: formatBytes(bytes) };
+  }
+
+  /**
+   * Get the number of data fragments in the LanceDB table
+   *
+   * Fragments are subdirectories in the data/ directory of the embeddings table.
+   *
+   * @returns Number of data fragments
+   */
+  getFragmentCount(): number {
+    const dataDir = join(this.dbPath, "embeddings.lance", "data");
+    try {
+      const entries = readdirSync(dataDir, { withFileTypes: true });
+      return entries.filter((e) => e.isDirectory()).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Recursively sum file sizes in a directory
+   */
+  private getDirectorySize(dirPath: string): number {
+    let totalSize = 0;
+    try {
+      const entries = readdirSync(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          totalSize += this.getDirectorySize(fullPath);
+        } else if (entry.isFile()) {
+          totalSize += statSync(fullPath).size;
+        }
+      }
+    } catch {
+      // Directory doesn't exist or not readable
+    }
+    return totalSize;
+  }
+
+  /**
    * Close the database connection
    */
   close(): void {
     this.service.close();
   }
+}
+
+/**
+ * Format bytes into human-readable string (KB, MB, GB)
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(1)} ${units[i]}`;
 }
