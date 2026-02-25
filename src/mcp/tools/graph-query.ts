@@ -22,6 +22,7 @@ export async function graphQuery(input: GraphQueryInput) {
       dbPath: wsContext.dbPath,
       limit: input.limit,
       explain: input.explain,
+      workspace: wsContext.alias,
     });
 
     const response: Record<string, unknown> = {

@@ -17,6 +17,7 @@ export interface GraphQueryOptions {
   dbPath: string;
   limit?: number;
   explain?: boolean;
+  workspace?: string;
 }
 
 export interface GraphQuerySuccess {
@@ -37,10 +38,8 @@ export async function executeGraphQuery(
   // Parse the query string
   const ast = parseGraphQuery(options.query);
 
-  // Apply limit override if query doesn't specify one
-  if (options.limit && ast.limit === undefined) {
-    ast.limit = options.limit;
-  }
+  // Resolve effective limit without mutating the AST
+  const effectiveLimit = ast.limit ?? options.limit ?? 100;
 
   const db = new Database(options.dbPath, { readonly: true });
 
@@ -55,11 +54,10 @@ export async function executeGraphQuery(
     }
 
     // Execute the query
-    const executor = new GraphQueryExecutor(db, options.dbPath);
-    const limit = ast.limit ?? options.limit ?? 100;
+    const executor = new GraphQueryExecutor(db, options.dbPath, options.workspace ?? "main");
 
     try {
-      const results = await executor.execute(plan, ast, limit);
+      const results = await executor.execute(plan, ast, effectiveLimit);
       return { results };
     } finally {
       executor.close();

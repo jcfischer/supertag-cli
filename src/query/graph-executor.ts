@@ -42,11 +42,13 @@ export class GraphQueryExecutor {
   private queryEngine: UnifiedQueryEngine;
   private traversalService: GraphTraversalService;
   private fieldResolver: FieldResolver;
+  private workspace: string;
 
-  constructor(private db: Database, private dbPath: string) {
+  constructor(private db: Database, private dbPath: string, workspace = "main") {
     this.queryEngine = new UnifiedQueryEngine(db);
     this.traversalService = new GraphTraversalService(dbPath);
     this.fieldResolver = new FieldResolver(db);
+    this.workspace = workspace;
   }
 
   /**
@@ -158,7 +160,7 @@ export class GraphQueryExecutor {
             depth,
             limit: Math.min(limit * 2, 100),
           },
-          "main"
+          this.workspace
         );
 
         for (const related of traversalResult.related) {

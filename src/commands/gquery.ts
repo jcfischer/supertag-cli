@@ -61,6 +61,7 @@ export function createGQueryCommand(): Command {
         dbPath: wsContext.dbPath,
         limit: options.limit ? parseInt(String(options.limit)) : undefined,
         explain: options.explain,
+        workspace: wsContext.alias,
       });
 
       // --explain: show plan and exit
