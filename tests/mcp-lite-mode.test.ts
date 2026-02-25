@@ -42,11 +42,11 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 20 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(20);
+  it('has exactly 21 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(21);
   });
 
-  it('contains expected query tools (10)', () => {
+  it('contains expected query tools (11)', () => {
     const queryTools = [
       'tana_search',
       'tana_semantic_search',
@@ -58,6 +58,7 @@ describe('LITE_MODE_TOOLS set', () => {
       'tana_table',
       'tana_resolve',
       'tana_context',
+      'tana_graph_query',
     ];
     for (const tool of queryTools) {
       expect(LITE_MODE_TOOLS.has(tool)).toBe(true);
@@ -158,8 +159,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 20', () => {
-    expect(getLiteModeToolCount()).toBe(20);
+  it('returns 21', () => {
+    expect(getLiteModeToolCount()).toBe(21);
   });
 });
 
@@ -176,7 +177,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 20);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 21);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -240,19 +241,19 @@ describe('getCapabilities() with mode filtering', () => {
     expect(caps.mode).toBeUndefined();
   });
 
-  it('lite mode returns only 20 tools', () => {
+  it('lite mode returns only 21 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(20);
+    expect(totalTools).toBe(21);
     expect(caps.mode).toBe('lite');
   });
 
   // Note: category counts follow TOOL_METADATA assignments, not conceptual grouping.
   // tana_batch_get is in 'query', tana_sync is in 'mutate' per the registry.
-  it('lite mode: query category has 10 tools (includes batch_get, table, resolve)', () => {
+  it('lite mode: query category has 11 tools (includes batch_get, table, resolve, graph_query)', () => {
     const caps = getCapabilities({ category: 'query', mode: 'lite' });
     const queryCategory = caps.categories.find((c) => c.name === 'query');
-    expect(queryCategory?.tools.length).toBe(10);
+    expect(queryCategory?.tools.length).toBe(11);
   });
 
   it('lite mode: explore category has 4 tools (stats, related, context, schema_audit)', () => {

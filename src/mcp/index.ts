@@ -47,6 +47,7 @@ import { handleTrashNode } from './tools/trash.js';
 import { handleDone, handleUndone } from './tools/done.js';
 import { schemaAudit } from './tools/schema-audit.js';
 import { resolve } from './tools/resolve.js';
+import { graphQuery } from './tools/graph-query.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -256,6 +257,12 @@ const allTools = [
         description:
           'Find existing nodes by name with confidence scoring (exact, fuzzy, semantic). Returns ranked candidates for find-or-create workflows. Use tag filter to narrow to a specific supertag. Use createIfMissing=true to get creation suggestions when no match found.',
         inputSchema: schemas.zodToJsonSchema(schemas.resolveSchema),
+      },
+      {
+        name: 'tana_graph_query',
+        description:
+          'Graph-aware query with relationship traversal. Uses a DSL: FIND <tag> [WHERE <conditions>] [CONNECTED TO <tag> [VIA <field>]]* [DEPTH <n>] RETURN <fields>. Supports dot-notation for related fields (e.g., project.name). Use explain=true to see the execution plan without running.',
+        inputSchema: schemas.zodToJsonSchema(schemas.graphQuerySchema),
       },
       // Mutation tools (F-094: Local API)
       {
@@ -535,6 +542,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'tana_resolve': {
         const validated = schemas.resolveSchema.parse(args);
         result = await resolve(validated);
+        break;
+      }
+      case 'tana_graph_query': {
+        const validated = schemas.graphQuerySchema.parse(args);
+        result = await graphQuery(validated);
         break;
       }
       case 'tana_context': {

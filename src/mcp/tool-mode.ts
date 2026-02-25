@@ -65,7 +65,7 @@ export const SLIM_MODE_TOOLS: Set<string> = new Set([
  * - System: sync, cache, capabilities
  */
 export const LITE_MODE_TOOLS: Set<string> = new Set([
-  // Query (10)
+  // Query (11)
   'tana_search',
   'tana_semantic_search',
   'tana_query',
@@ -76,6 +76,7 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
   'tana_table',
   'tana_resolve',
   'tana_context',
+  'tana_graph_query',
 
   // Explore (3)
   'tana_batch_get',
