@@ -960,3 +960,26 @@ export const resolveSchema = z.object({
   workspace: workspaceSchema,
 });
 export type ResolveInput = z.infer<typeof resolveSchema>;
+
+// =============================================================================
+// tana_graph_query (F-102: Graph Query DSL)
+// =============================================================================
+
+export const graphQuerySchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .describe('Graph query string using DSL syntax. Example: "FIND person WHERE name ~ John CONNECTED TO project RETURN name, project.name"'),
+  workspace: workspaceSchema,
+  limit: z
+    .number()
+    .min(1)
+    .max(1000)
+    .optional()
+    .describe('Maximum results to return (default: 100). Overridden by LIMIT in query if present.'),
+  explain: z
+    .boolean()
+    .default(false)
+    .describe('Return execution plan instead of results. Useful for debugging complex queries.'),
+});
+export type GraphQueryInput = z.infer<typeof graphQuerySchema>;

@@ -133,6 +133,12 @@ export const TOOL_METADATA: ToolMetadata[] = [
     category: 'query',
     example: 'Find #person named Daniel',
   },
+  {
+    name: 'tana_graph_query',
+    description: 'Graph-aware query with relationship traversal (FIND/CONNECTED TO/RETURN)',
+    category: 'query',
+    example: 'FIND person CONNECTED TO project RETURN name, project.name',
+  },
 
   // Explore tools
   {
@@ -334,6 +340,7 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_table: schemas.zodToJsonSchema(schemas.tableSchema),
   tana_resolve: schemas.zodToJsonSchema(schemas.resolveSchema),
   tana_schema_audit: schemas.zodToJsonSchema(schemas.schemaAuditSchema),
+  tana_graph_query: schemas.zodToJsonSchema(schemas.graphQuerySchema),
 };
 
 // =============================================================================
