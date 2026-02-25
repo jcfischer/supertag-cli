@@ -10,10 +10,9 @@
  */
 
 import { Command } from "commander";
-import { Database } from "bun:sqlite";
-import { parseGraphQuery, GraphParseError } from "../query/graph-parser";
-import { GraphQueryPlanner, GraphPlanError } from "../query/graph-planner";
-import { GraphQueryExecutor } from "../query/graph-executor";
+import { GraphParseError } from "../query/graph-parser";
+import { GraphPlanError } from "../query/graph-planner";
+import { executeGraphQuery } from "../query/graph-query-service";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import { resolveOutputOptions, resolveOutputFormat } from "../utils/output-options";
 import { createFormatter, type OutputFormat } from "../utils/output-formatter";
@@ -47,24 +46,7 @@ export function createGQueryCommand(): Command {
     const format = resolveOutputFormat(options);
     const outputOpts = resolveOutputOptions(options);
 
-    // Parse the query string
-    let ast;
-    try {
-      ast = parseGraphQuery(queryStr);
-    } catch (error) {
-      if (error instanceof GraphParseError) {
-        console.error(`❌ Query syntax error: ${error.message}`);
-        process.exit(1);
-      }
-      throw error;
-    }
-
-    // Override limit from CLI options only if query doesn't specify one
-    if (options.limit && ast.limit === undefined) {
-      ast.limit = parseInt(String(options.limit));
-    }
-
-    // Resolve workspace and database
+    // Resolve workspace
     let wsContext;
     try {
       wsContext = resolveWorkspaceContext({ workspace: options.workspace });
@@ -73,124 +55,113 @@ export function createGQueryCommand(): Command {
       process.exit(1);
     }
 
-    const db = new Database(wsContext.dbPath, { readonly: true });
-
     try {
-      // Plan the query (validates tags/fields)
-      const planner = new GraphQueryPlanner(db);
-      let plan;
-      try {
-        plan = await planner.plan(ast);
-      } catch (error) {
-        if (error instanceof GraphPlanError) {
-          console.error(`❌ Query validation error: ${error.message}`);
-          if (error.suggestion) {
-            console.error(`   💡 ${error.suggestion}`);
-          }
-          process.exit(1);
-        }
-        throw error;
-      }
+      const result = await executeGraphQuery({
+        query: queryStr,
+        dbPath: wsContext.dbPath,
+        limit: options.limit ? parseInt(String(options.limit)) : undefined,
+        explain: options.explain,
+      });
 
       // --explain: show plan and exit
-      if (options.explain) {
-        const explanation = planner.formatExplain(plan);
+      if (result.executionPlan) {
         if (format === "json") {
-          console.log(JSON.stringify({ plan: plan.steps, explanation }, null, 2));
+          console.log(JSON.stringify({ explanation: result.executionPlan }, null, 2));
         } else {
           console.log(`\n${header(EMOJI.search, "Query Execution Plan")}:\n`);
-          console.log(explanation);
-          console.log(`\nEstimated hops: ${plan.estimatedHops}`);
+          console.log(result.executionPlan);
         }
         return;
       }
 
-      // Execute the query
-      const executor = new GraphQueryExecutor(db, wsContext.dbPath);
-      const limit = ast.limit ?? parseInt(String(options.limit)) ?? 100;
+      // Results mode
+      const queryResult = result.results!;
 
-      try {
-        const result = await executor.execute(plan, ast, limit);
-
-        // Handle empty results
-        if (result.count === 0) {
-          if (format === "json" || format === "jsonl" || format === "minimal") {
-            console.log("[]");
-          } else if (format === "ids" || format === "csv") {
-            // Empty output for machine formats
-          } else {
-            console.log(`No results found for: ${queryStr}`);
-          }
-          return;
+      // Handle empty results
+      if (queryResult.count === 0) {
+        if (format === "json" || format === "jsonl" || format === "minimal") {
+          console.log("[]");
+        } else if (format === "ids" || format === "csv") {
+          // Empty output for machine formats
+        } else {
+          console.log(`No results found for: ${queryStr}`);
         }
-
-        // Create formatter
-        const formatter = createFormatter({
-          format,
-          noHeader: options.header === false,
-          humanDates: outputOpts.humanDates,
-          verbose: outputOpts.verbose,
-        });
-
-        // Table format: pretty output
-        if (format === "table") {
-          const headerText = outputOpts.verbose
-            ? `Graph query results (${result.count}) in ${result.queryTimeMs?.toFixed(0) ?? "?"}ms`
-            : `Graph query results (${result.count})`;
-          console.log(`\n${header(EMOJI.search, headerText)}:\n`);
-
-          // Build table from result columns and rows
-          const tableHeaders = ["#", ...result.columns];
-          const tableAligns: ("left" | "right")[] = [
-            "right",
-            ...result.columns.map(() => "left" as const),
-          ];
-
-          const tableRows = result.rows.map((row, i) => {
-            const rowData = [String(i + 1)];
-            for (const col of result.columns) {
-              const val = row[col];
-              if (Array.isArray(val)) {
-                rowData.push(val.join(", "));
-              } else {
-                rowData.push(String(val ?? ""));
-              }
-            }
-            return rowData;
-          });
-
-          console.log(table(tableHeaders, tableRows, { align: tableAligns }));
-
-          if (result.hasMore) {
-            tip("More results available. Add LIMIT <n> to your query.");
-          }
-
-          if (outputOpts.verbose && result.queryTimeMs) {
-            console.log(`\nQuery time: ${result.queryTimeMs.toFixed(1)}ms`);
-          }
-          return;
-        }
-
-        // Other formats: use formatter
-        const headers = result.columns;
-        const rows = result.rows.map((row) => {
-          return result.columns.map((col) => {
-            const val = row[col];
-            if (Array.isArray(val)) return val.join(", ");
-            return String(val ?? "");
-          });
-        });
-
-        formatter.table(headers, rows);
-        formatter.finalize();
-      } finally {
-        executor.close();
+        return;
       }
+
+      // Create formatter
+      const formatter = createFormatter({
+        format,
+        noHeader: options.header === false,
+        humanDates: outputOpts.humanDates,
+        verbose: outputOpts.verbose,
+      });
+
+      // Table format: pretty output
+      if (format === "table") {
+        const headerText = outputOpts.verbose
+          ? `Graph query results (${queryResult.count}) in ${queryResult.queryTimeMs?.toFixed(0) ?? "?"}ms`
+          : `Graph query results (${queryResult.count})`;
+        console.log(`\n${header(EMOJI.search, headerText)}:\n`);
+
+        // Build table from result columns and rows
+        const tableHeaders = ["#", ...queryResult.columns];
+        const tableAligns: ("left" | "right")[] = [
+          "right",
+          ...queryResult.columns.map(() => "left" as const),
+        ];
+
+        const tableRows = queryResult.rows.map((row, i) => {
+          const rowData = [String(i + 1)];
+          for (const col of queryResult.columns) {
+            const val = row[col];
+            if (Array.isArray(val)) {
+              rowData.push(val.join(", "));
+            } else {
+              rowData.push(String(val ?? ""));
+            }
+          }
+          return rowData;
+        });
+
+        console.log(table(tableHeaders, tableRows, { align: tableAligns }));
+
+        if (queryResult.hasMore) {
+          tip("More results available. Add LIMIT <n> to your query.");
+        }
+
+        if (outputOpts.verbose && queryResult.queryTimeMs) {
+          console.log(`\nQuery time: ${queryResult.queryTimeMs.toFixed(1)}ms`);
+        }
+        return;
+      }
+
+      // Other formats: use formatter
+      const headers = queryResult.columns;
+      const rows = queryResult.rows.map((row) => {
+        return queryResult.columns.map((col) => {
+          const val = row[col];
+          if (Array.isArray(val)) return val.join(", ");
+          return String(val ?? "");
+        });
+      });
+
+      formatter.table(headers, rows);
+      formatter.finalize();
     } catch (error) {
+      if (error instanceof GraphParseError) {
+        console.error(`❌ Query syntax error: ${error.message}`);
+        process.exit(1);
+      }
+      if (error instanceof GraphPlanError) {
+        console.error(`❌ Query validation error: ${error.message}`);
+        if (error.suggestion) {
+          console.error(`   💡 ${error.suggestion}`);
+        }
+        process.exit(1);
+      }
       console.error(`❌ Query execution error: ${(error as Error).message}`);
       process.exit(1);
-    } finally {
-      db.close();
     }
   });
 

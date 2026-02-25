@@ -170,21 +170,21 @@ export class GraphQueryPlanner {
   // ---------------------------------------------------------------------------
 
   private async validateTagName(tagName: string): Promise<void> {
-    // Case-insensitive tag lookup
+    // Case-insensitive tag lookup against the supertags table
     const result = this.db
       .query(
-        "SELECT name FROM tag_definitions WHERE LOWER(name) = LOWER(?) LIMIT 1"
+        "SELECT DISTINCT tag_name FROM supertags WHERE LOWER(tag_name) = LOWER(?) LIMIT 1"
       )
-      .get(tagName) as { name: string } | null;
+      .get(tagName) as { tag_name: string } | null;
 
     if (!result) {
       // Find similar tag names for suggestions
       const allTags = this.db
-        .query("SELECT name FROM tag_definitions ORDER BY name")
-        .all() as { name: string }[];
+        .query("SELECT DISTINCT tag_name FROM supertags ORDER BY tag_name")
+        .all() as { tag_name: string }[];
 
       const suggestions = allTags
-        .map((t) => t.name)
+        .map((t) => t.tag_name)
         .filter((name) => {
           const lower = name.toLowerCase();
           const target = tagName.toLowerCase();
@@ -222,33 +222,30 @@ export class GraphQueryPlanner {
       return;
     }
 
-    // Look up field in the tag's field definitions
-    // Field names are stored in field_definitions associated with the tag
+    // Look up field in supertag_fields table (tag_name + field_name)
     const result = this.db
       .query(`
-        SELECT fd.name
-        FROM field_definitions fd
-        JOIN tag_definitions td ON fd.tag_id = td.id
-        WHERE LOWER(td.name) = LOWER(?)
-          AND LOWER(fd.name) = LOWER(?)
+        SELECT field_name
+        FROM supertag_fields
+        WHERE LOWER(tag_name) = LOWER(?)
+          AND LOWER(field_name) = LOWER(?)
         LIMIT 1
       `)
-      .get(tagName, fieldName) as { name: string } | null;
+      .get(tagName, fieldName) as { field_name: string } | null;
 
     if (!result) {
       // Get available fields for this tag
       const availableFields = this.db
         .query(`
-          SELECT fd.name
-          FROM field_definitions fd
-          JOIN tag_definitions td ON fd.tag_id = td.id
-          WHERE LOWER(td.name) = LOWER(?)
-          ORDER BY fd.name
+          SELECT field_name
+          FROM supertag_fields
+          WHERE LOWER(tag_name) = LOWER(?)
+          ORDER BY field_name
         `)
-        .all(tagName) as { name: string }[];
+        .all(tagName) as { field_name: string }[];
 
       if (availableFields.length > 0) {
-        const fieldList = availableFields.map((f) => f.name).join(", ");
+        const fieldList = availableFields.map((f) => f.field_name).join(", ");
         throw new GraphPlanError(
           `Field '${fieldName}' not found on #${tagName}.`,
           `Available fields: ${fieldList}`

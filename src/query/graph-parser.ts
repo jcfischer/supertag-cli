@@ -238,10 +238,8 @@ class GraphParser {
     }
 
     // Optional WHERE on the connected type
-    if (this.peekKeyword("where") && !this.peekKeywordAt("connected", 0) && !this.peekKeywordAt("return", 0)) {
-      if (this.matchKeyword("where")) {
-        where = this.parseWhereConditions();
-      }
+    if (this.matchKeyword("where")) {
+      where = this.parseWhereConditions();
     }
 
     return { toTag, viaField, where };
@@ -395,11 +393,6 @@ class GraphParser {
       this.current().type === TokenType.KEYWORD &&
       this.current().value === keyword
     );
-  }
-
-  private peekKeywordAt(keyword: string, _offset: number): boolean {
-    // Look at current position (offset relative to 'next meaningful check')
-    return this.peekKeyword(keyword);
   }
 
   private matchToken(type: TokenType): boolean {
