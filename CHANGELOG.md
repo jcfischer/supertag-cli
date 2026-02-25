@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F-102 Graph Query DSL**: **Core Problem**: Querying the Tana knowledge graph requires chaining multiple primitive operations manually — search for nodes, traverse relationships, extract fields, filter results. There's no d...
+- **F-102 Graph Query DSL**: **Core Problem**: Querying the Tana knowledge graph requires chaining multiple primitive operations manually — search for nodes, traverse relationships, extract fields, filter results. There's no d...
 
 - **Embedding Maintenance & Diagnostics (F-106)** - Tools for managing embedding health at scale
   - `embed maintain compact` — merge fragmented LanceDB storage for faster queries
