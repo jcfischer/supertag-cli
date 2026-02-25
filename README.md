@@ -34,6 +34,7 @@ Tana has officially released their [Local API and MCP server](https://tana.inc),
   - [WRITE - Create Nodes](#write---create-nodes)
   - [MUTATE - Edit Existing Nodes](#mutate---edit-existing-nodes)
   - [QUERY - Unified Query Language](#query---unified-query-language)
+  - [GQUERY - Graph Query DSL](#gquery---graph-query-dsl)
   - [BATCH - Multi-Node Operations](#batch---multi-node-operations)
   - [AGGREGATE - Group and Count](#aggregate---group-and-count)
   - [TIMELINE - Time-Based Queries](#timeline---time-based-queries)
@@ -269,6 +270,49 @@ supertag query "find task where Status is empty"
 - No select = Core fields only (id, name, created)
 - `select *` = All supertag fields including inherited
 - `select "Email,Phone"` = Specific fields by name
+
+### GQUERY - Graph Query DSL
+
+Declarative graph queries for traversing typed relationships in a single statement.
+
+```bash
+# Find all persons
+supertag gquery "FIND person RETURN name"
+
+# Filter with WHERE clause
+supertag gquery 'FIND person WHERE name ~ Simon RETURN name'
+
+# Graph traversal: find meetings connected to persons
+supertag gquery 'FIND person CONNECTED TO meeting RETURN name'
+
+# Traverse via specific field
+supertag gquery 'FIND meeting CONNECTED TO person VIA Attendees RETURN name, Date, person.name'
+
+# Multi-hop traversal
+supertag gquery 'FIND project CONNECTED TO person VIA "Team Members" CONNECTED TO meeting RETURN meeting.name'
+
+# Show execution plan without running
+supertag gquery 'FIND meeting CONNECTED TO person RETURN name' --explain
+
+# Output formats and limits
+supertag gquery "FIND person RETURN name" --format json
+supertag gquery "FIND todo RETURN name" --limit 10
+```
+
+**DSL Syntax:**
+```
+FIND <supertag>
+  [WHERE <field> <op> <value>]*
+  [CONNECTED TO <supertag> [VIA <field>]]*
+  [DEPTH <n>]
+  RETURN <projection>
+```
+
+**Operators:** `=`, `!=`, `>`, `<`, `>=`, `<=`, `~` (contains), `LIKE`, `CONTAINS`
+
+**How it differs from `query`:** The `query` command runs SQL-like flat queries against the node index. The `gquery` command understands the graph structure — it traverses typed relationships between supertags using `CONNECTED TO` and can project fields from related nodes using dot notation.
+
+See [Graph Query Documentation](./.specify/specs/F-102-graph-query-dsl/docs.md) for full grammar and MCP usage.
 
 ### BATCH - Multi-Node Operations
 
@@ -821,9 +865,9 @@ Integrate with Claude Desktop, ChatGPT, Cursor, VS Code, and other MCP-compatibl
 
 | Mode | Tools | Flag | Use Case |
 |------|-------|------|----------|
-| `full` | 36 | (default) | Standalone — all tools available |
+| `full` | 37 | (default) | Standalone — all tools available |
 | `slim` | 17 | `--slim` | Context-optimized — fewer tools for AI agents |
-| `lite` | 20 | `--lite` | Complement tana-local MCP — analytics & search only |
+| `lite` | 21 | `--lite` | Complement tana-local MCP — analytics & search only |
 
 ```bash
 # Lite mode: complement tana-local with analytics/search tools

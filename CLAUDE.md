@@ -148,6 +148,39 @@ When generating embeddings, content is filtered to focus on meaningful nodes:
 - `--include-system` - Include system docTypes
 - `-t, --tag <tag>` - Only embed nodes with specific supertag
 
+### Graph Query DSL (F-102)
+
+Declarative graph query language for traversing typed relationships.
+
+**CLI:** `supertag gquery "<DSL>" [--explain] [--format json|csv|table] [--limit N]`
+
+**DSL syntax:**
+```
+FIND <supertag> [WHERE <field> <op> <value>]* [CONNECTED TO <supertag> [VIA <field>]]* [DEPTH <n>] RETURN <projection>
+```
+
+**Examples:**
+```bash
+supertag gquery "FIND person RETURN name"
+supertag gquery 'FIND person WHERE name ~ Simon RETURN name'
+supertag gquery 'FIND meeting CONNECTED TO person VIA Attendees RETURN name, person.name'
+supertag gquery 'FIND person CONNECTED TO meeting RETURN name' --explain
+```
+
+**MCP tool:** `tana_graph_query` with `query`, `workspace`, `limit`, `explain` parameters.
+
+**Architecture:** 4-stage pipeline — Tokenizer → Parser → Planner (validates tags/fields against DB) → Executor (orchestrates UnifiedQueryEngine + GraphTraversalService).
+
+**Key files:**
+- `src/query/graph-types.ts` - Type definitions (GraphQueryAST, QueryPlan, QueryStep)
+- `src/query/graph-parser.ts` - Recursive descent parser
+- `src/query/graph-planner.ts` - Query planner with tag/field validation
+- `src/query/graph-executor.ts` - Executor via existing services
+- `src/query/graph-query-service.ts` - Service facade
+- `src/commands/gquery.ts` - CLI command
+- `src/mcp/tools/graph-query.ts` - MCP tool
+- `tests/graph-parser.test.ts`, `tests/graph-planner.test.ts`, `tests/graph-executor.test.ts` - Tests
+
 ### Graph-Aware Embeddings (F-104)
 
 Embedding generation enriches node text with supertag type and field values before embedding, improving semantic search for typed queries like "find meetings about X".

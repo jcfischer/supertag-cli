@@ -8,7 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **F-102 Graph Query DSL**: **Core Problem**: Querying the Tana knowledge graph requires chaining multiple primitive operations manually — search for nodes, traverse relationships, extract fields, filter results. There's no d...
+- **Graph Query DSL (F-102)** - Declarative graph query language for traversing typed relationships
+  - `supertag gquery` CLI command with DSL syntax: `FIND <type> WHERE <filter> CONNECTED TO <type> RETURN <fields>`
+  - `FIND` clause selects nodes by supertag type
+  - `WHERE` clause filters on name or field values with operators: `=`, `!=`, `>`, `<`, `~` (contains), `LIKE`
+  - `CONNECTED TO` clause traverses graph relationships to related nodes
+  - `VIA <field>` modifier for traversal through specific typed edges
+  - `RETURN` clause projects specific fields including dot-notation (`person.name`)
+  - Multi-hop traversal: chain `CONNECTED TO` clauses for complex graph queries
+  - `--explain` flag shows execution plan without running the query
+  - `--format json|csv|table` output formats, `--limit` for result capping
+  - `tana_graph_query` MCP tool with same capabilities for AI agents
+  - Available in all modes (full, slim, lite)
+  - 4-stage pipeline: Tokenizer → Parser → Planner (validates tags/fields) → Executor
+  - Contextual error messages with fuzzy-matched suggestions for typos
 
 - **Embedding Maintenance & Diagnostics (F-106)** - Tools for managing embedding health at scale
   - `embed maintain compact` — merge fragmented LanceDB storage for faster queries
