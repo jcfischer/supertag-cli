@@ -7,22 +7,14 @@
  */
 
 import { syncLearnings } from '../../pai/sync-service';
-import { handleMcpError } from '../error-handler';
 import type { PaiSyncInput } from '../schemas';
+import type { PaiSyncResult } from '../../types/pai';
 
-export async function paiSync(input: PaiSyncInput) {
-  try {
-    const result = await syncLearnings({
-      seedPath: input.seedPath,
-      workspace: input.workspace,
-      dryRun: input.dryRun,
-      force: input.force,
-    });
-
-    return {
-      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error) {
-    return handleMcpError(error);
-  }
+export async function paiSync(input: PaiSyncInput): Promise<PaiSyncResult> {
+  return syncLearnings({
+    seedPath: input.seedPath,
+    workspace: input.workspace,
+    dryRun: input.dryRun,
+    force: input.force,
+  });
 }

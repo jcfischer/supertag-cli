@@ -7,21 +7,13 @@
  */
 
 import { assessFreshness } from '../../pai/freshness-service';
-import { handleMcpError } from '../error-handler';
 import type { PaiFreshnessInput } from '../schemas';
+import type { FreshnessResult } from '../../types/pai';
 
-export async function paiFreshness(input: PaiFreshnessInput) {
-  try {
-    const results = await assessFreshness({
-      threshold: input.threshold,
-      type: input.type,
-      workspace: input.workspace,
-    });
-
-    return {
-      content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }],
-    };
-  } catch (error) {
-    return handleMcpError(error);
-  }
+export async function paiFreshness(input: PaiFreshnessInput): Promise<FreshnessResult[]> {
+  return assessFreshness({
+    threshold: input.threshold,
+    type: input.type,
+    workspace: input.workspace,
+  });
 }

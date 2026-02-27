@@ -7,21 +7,13 @@
  */
 
 import { getPaiContext } from '../../pai/context-service';
-import { handleMcpError } from '../error-handler';
 import type { PaiContextInput } from '../schemas';
+import type { PaiContextResponse } from '../../types/pai';
 
-export async function paiContext(input: PaiContextInput) {
-  try {
-    const result = await getPaiContext(input.topic, {
-      maxTokens: input.maxTokens,
-      type: input.type,
-      workspace: input.workspace,
-    });
-
-    return {
-      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error) {
-    return handleMcpError(error);
-  }
+export async function paiContext(input: PaiContextInput): Promise<PaiContextResponse> {
+  return getPaiContext(input.topic, {
+    maxTokens: input.maxTokens,
+    type: input.type,
+    workspace: input.workspace,
+  });
 }
