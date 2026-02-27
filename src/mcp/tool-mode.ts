@@ -95,6 +95,11 @@ export const LITE_MODE_TOOLS: Set<string> = new Set([
 
   // Schema Analysis (1)
   'tana_schema_audit',
+
+  // PAI (3)
+  'tana_pai_sync',
+  'tana_pai_context',
+  'tana_pai_freshness',
 ]);
 
 /**

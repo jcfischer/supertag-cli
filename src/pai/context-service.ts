@@ -8,6 +8,7 @@
  */
 
 import { resolveReadBackend } from '../api/read-backend-resolver';
+import type { ReadSearchResult } from '../api/read-backend';
 import { readSeedFile, getConfirmedLearnings, getDefaultSeedPath } from './seed-reader';
 import { loadMapping } from './mapping';
 import type {
@@ -178,18 +179,18 @@ function getSeedOnlyContext(
 // Helpers
 // =============================================================================
 
-function extractFieldValue(result: Record<string, unknown>, fieldName: string): string | undefined {
-  // Check in fields object if present
-  const fields = result.fields as Record<string, unknown> | undefined;
+function extractFieldValue(result: ReadSearchResult, fieldName: string): string | undefined {
+  // Check in fields object if present (may exist on extended results)
+  const fields = (result as unknown as Record<string, unknown>).fields as Record<string, unknown> | undefined;
   if (fields && typeof fields[fieldName] === 'string') {
     return fields[fieldName] as string;
   }
   return undefined;
 }
 
-function extractLinkedEntities(result: Record<string, unknown>): string[] {
+function extractLinkedEntities(result: ReadSearchResult): string[] {
   const linked: string[] = [];
-  const fields = result.fields as Record<string, unknown> | undefined;
+  const fields = (result as unknown as Record<string, unknown>).fields as Record<string, unknown> | undefined;
   if (!fields) return linked;
 
   for (const key of ['Related People', 'Related Projects']) {

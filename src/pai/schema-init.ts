@@ -171,6 +171,7 @@ async function ensureTag(
   const tagResponse = await client.createTag(workspaceId, {
     name: tagName,
     description: `PAI ${tagName.replace('pai_', '')} supertag for AI memory integration`,
+    extendsTagIds: [],
   });
   tagId = tagResponse.tagId;
   result.created.push(tagName);

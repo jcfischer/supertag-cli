@@ -7,7 +7,6 @@
  */
 
 import { Command } from 'commander';
-import { addStandardOptions } from './helpers';
 
 /**
  * Create the `supertag pai` command group with all subcommands.

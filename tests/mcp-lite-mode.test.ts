@@ -42,8 +42,8 @@ const MUTATION_TOOLS = [
 // =============================================================================
 
 describe('LITE_MODE_TOOLS set', () => {
-  it('has exactly 21 entries', () => {
-    expect(LITE_MODE_TOOLS.size).toBe(21);
+  it('has exactly 24 entries', () => {
+    expect(LITE_MODE_TOOLS.size).toBe(24);
   });
 
   it('contains expected query tools (11)', () => {
@@ -159,8 +159,8 @@ describe('isToolEnabled() regression (slim mode)', () => {
 });
 
 describe('getLiteModeToolCount()', () => {
-  it('returns 21', () => {
-    expect(getLiteModeToolCount()).toBe(21);
+  it('returns 24', () => {
+    expect(getLiteModeToolCount()).toBe(24);
   });
 });
 
@@ -177,7 +177,7 @@ describe('getExcludedTools()', () => {
 
   it('excludes correct count for lite mode', () => {
     const excluded = getExcludedTools('lite', ALL_TOOL_NAMES);
-    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 21);
+    expect(excluded.length).toBe(ALL_TOOL_NAMES.length - 24);
   });
 
   it('excludes correct count for slim mode', () => {
@@ -244,16 +244,16 @@ describe('getCapabilities() with mode filtering', () => {
   it('lite mode returns only 21 tools', () => {
     const caps = getCapabilities({ mode: 'lite' });
     const totalTools = caps.categories.reduce((sum, c) => sum + c.tools.length, 0);
-    expect(totalTools).toBe(21);
+    expect(totalTools).toBe(24);
     expect(caps.mode).toBe('lite');
   });
 
   // Note: category counts follow TOOL_METADATA assignments, not conceptual grouping.
   // tana_batch_get is in 'query', tana_sync is in 'mutate' per the registry.
-  it('lite mode: query category has 11 tools (includes batch_get, table, resolve, graph_query)', () => {
+  it('lite mode: query category has 13 tools (includes batch_get, table, resolve, graph_query, pai_context, pai_freshness)', () => {
     const caps = getCapabilities({ category: 'query', mode: 'lite' });
     const queryCategory = caps.categories.find((c) => c.name === 'query');
-    expect(queryCategory?.tools.length).toBe(11);
+    expect(queryCategory?.tools.length).toBe(13);
   });
 
   it('lite mode: explore category has 4 tools (stats, related, context, schema_audit)', () => {
@@ -268,11 +268,13 @@ describe('getCapabilities() with mode filtering', () => {
     expect(transcriptCategory?.tools.length).toBe(3);
   });
 
-  it('lite mode: mutate category has 1 tool (tana_sync only)', () => {
+  it('lite mode: mutate category has 2 tools (tana_sync, tana_pai_sync)', () => {
     const caps = getCapabilities({ category: 'mutate', mode: 'lite' });
     const mutateCategory = caps.categories.find((c) => c.name === 'mutate');
-    expect(mutateCategory?.tools.length).toBe(1);
-    expect(mutateCategory?.tools[0].name).toBe('tana_sync');
+    expect(mutateCategory?.tools.length).toBe(2);
+    const toolNames = mutateCategory?.tools.map((t) => t.name) ?? [];
+    expect(toolNames).toContain('tana_sync');
+    expect(toolNames).toContain('tana_pai_sync');
   });
 
   it('lite mode: system category has 2 tools (no tana_tool_schema)', () => {

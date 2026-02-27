@@ -217,16 +217,13 @@ async function processEntry(
     }
 
     // Create node via backend
-    const payload = {
-      targetNodeId: undefined,
-      nodes: [{
-        name: nodeName,
-        supertags: [{ id: 'pai_learning' }],
-        children: children.map((c) => ({ name: c.name })),
-      }],
-    };
+    const nodes = [{
+      name: nodeName,
+      supertags: [{ id: 'pai_learning' }],
+      children: children.map((c) => ({ name: c.name })),
+    }];
 
-    const response = await backend!.createNodes(payload);
+    const response = await backend!.createNodes('', nodes);
 
     // Extract created node ID
     const nodeId = extractNodeId(response);

@@ -102,11 +102,21 @@ async function getGraphEnrichedFreshness(
         const linkedEntities: FreshnessResult['linkedEntities'] = [];
 
         // Parse node content for linked entity references
-        const markdown = typeof nodeContent === 'string' ? nodeContent : (nodeContent as Record<string, unknown>).markdown as string || '';
+        const markdown = typeof nodeContent === 'string' ? nodeContent : nodeContent.markdown || '';
         const entityNames = extractEntityNamesFromMarkdown(markdown);
 
         for (const name of entityNames) {
-          linkedEntities.push({ name, lastModified: undefined });
+          let lastModified: string | undefined;
+          try {
+            const searchResults = await backend.search(name, { limit: 1 });
+            if (searchResults.length > 0 && searchResults[0].created) {
+              lastModified = searchResults[0].created;
+              linkedTimestamps.push(lastModified);
+            }
+          } catch {
+            // Entity lookup failed, skip
+          }
+          linkedEntities.push({ name, lastModified });
         }
 
         result.linkedEntities = linkedEntities;
