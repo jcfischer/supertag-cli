@@ -48,6 +48,9 @@ import { handleDone, handleUndone } from './tools/done.js';
 import { schemaAudit } from './tools/schema-audit.js';
 import { resolve } from './tools/resolve.js';
 import { graphQuery } from './tools/graph-query.js';
+import { paiSync } from './tools/pai-sync.js';
+import { paiContext } from './tools/pai-context.js';
+import { paiFreshness } from './tools/pai-freshness.js';
 import { VERSION } from '../version.js';
 import { createLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
@@ -331,6 +334,25 @@ const allTools = [
           'Assemble structured AI context from the Tana knowledge graph. Resolves a topic or node ID, walks the graph, scores by relevance, and returns a token-budgeted context document. Supports graph lenses (general, writing, coding, planning, meeting-prep) for task-specific traversal patterns.',
         inputSchema: schemas.zodToJsonSchema(schemas.contextSchema),
       },
+      // PAI Memory Integration (F-108)
+      {
+        name: 'tana_pai_sync',
+        description:
+          'Sync confirmed AI learnings from seed.json to Tana as #pai_learning nodes. Supports incremental sync (only new entries), entity linking to existing Tana nodes, and dry-run preview. Use force=true to re-sync all entries.',
+        inputSchema: schemas.zodToJsonSchema(schemas.paiSyncSchema),
+      },
+      {
+        name: 'tana_pai_context',
+        description:
+          'Retrieve AI learnings related to a topic, enriched with Tana graph context. Returns learnings with freshness status and linked entities. Primary interface for PAI session start hooks.',
+        inputSchema: schemas.zodToJsonSchema(schemas.paiContextSchema),
+      },
+      {
+        name: 'tana_pai_freshness',
+        description:
+          'Check learning freshness using graph activity. A learning linked to an active project stays fresh even if confirmed long ago. Returns per-learning freshness status with contextual scoring.',
+        inputSchema: schemas.zodToJsonSchema(schemas.paiFreshnessSchema),
+      },
 ];
 
 // List available tools (filtered by tool mode)
@@ -557,6 +579,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: 'text' as const, text: contextOutput }],
         };
+      }
+      // PAI Memory Integration (F-108)
+      case 'tana_pai_sync': {
+        const validated = schemas.paiSyncSchema.parse(args);
+        result = await paiSync(validated);
+        break;
+      }
+      case 'tana_pai_context': {
+        const validated = schemas.paiContextSchema.parse(args);
+        result = await paiContext(validated);
+        break;
+      }
+      case 'tana_pai_freshness': {
+        const validated = schemas.paiFreshnessSchema.parse(args);
+        result = await paiFreshness(validated);
+        break;
       }
       default:
         throw new Error(`Unknown tool: ${name}`);

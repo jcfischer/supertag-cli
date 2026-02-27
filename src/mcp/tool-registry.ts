@@ -278,6 +278,26 @@ export const TOOL_METADATA: ToolMetadata[] = [
     example: 'Reopen a completed item',
   },
 
+  // PAI tools
+  {
+    name: 'tana_pai_sync',
+    description: 'Sync PAI learnings from seed.json to Tana',
+    category: 'mutate',
+    example: 'Sync confirmed learnings: { workspace: "main" }',
+  },
+  {
+    name: 'tana_pai_context',
+    description: 'Get PAI context for a topic, enriched with graph data',
+    category: 'query',
+    example: 'Get learnings about TypeScript: { topic: "TypeScript" }',
+  },
+  {
+    name: 'tana_pai_freshness',
+    description: 'Assess freshness of synced PAI learnings using graph activity',
+    category: 'query',
+    example: 'Check stale learnings: { threshold: 30 }',
+  },
+
   // System tools
   {
     name: 'tana_cache_clear',
@@ -341,6 +361,9 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof schemas.zodToJsonSchema>> =
   tana_resolve: schemas.zodToJsonSchema(schemas.resolveSchema),
   tana_schema_audit: schemas.zodToJsonSchema(schemas.schemaAuditSchema),
   tana_graph_query: schemas.zodToJsonSchema(schemas.graphQuerySchema),
+  tana_pai_sync: schemas.zodToJsonSchema(schemas.paiSyncSchema),
+  tana_pai_context: schemas.zodToJsonSchema(schemas.paiContextSchema),
+  tana_pai_freshness: schemas.zodToJsonSchema(schemas.paiFreshnessSchema),
 };
 
 // =============================================================================

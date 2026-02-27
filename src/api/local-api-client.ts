@@ -19,6 +19,7 @@ import {
   DoneResponseSchema, type DoneResponse,
   TrashResponseSchema, type TrashResponse,
   CreateTagResponseSchema, type CreateTagResponse, type CreateTagRequest,
+  AddFieldToTagResponseSchema, type AddFieldToTagResponse, type AddFieldToTagRequest,
   TagSchemaResponseSchema, type TagSchemaResponse,
   TagListResponseSchema, type TagInfo,
   WorkspaceListResponseSchema, type LocalApiWorkspace,
@@ -431,6 +432,17 @@ export class LocalApiClient {
     return this.request(
       { method: 'POST', path: `/workspaces/${encodeURIComponent(workspaceId)}/tags`, body: request },
       CreateTagResponseSchema,
+    );
+  }
+
+  /**
+   * Add a field to a tag definition.
+   * POST /tags/{tagId}/fields
+   */
+  async addFieldToTag(tagId: string, request: AddFieldToTagRequest): Promise<AddFieldToTagResponse> {
+    return this.request(
+      { method: 'POST', path: `/tags/${encodeURIComponent(tagId)}/fields`, body: request },
+      AddFieldToTagResponseSchema,
     );
   }
 
