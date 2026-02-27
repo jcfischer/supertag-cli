@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F-107 F-103**: **Core Problem**: The current sync workflow is pull-based — users run `supertag sync` manually to update the local SQLite database from Tana. There's no way to detect changes in Tana in near-real-t...
+- **F-107 F-103**: **Core Problem**: The current sync workflow is pull-based — users run `supertag sync` manually to update the local SQLite database from Tana. There's no way to detect changes in Tana in near-real-t...
 - **Graph Query DSL (F-102)** - Declarative graph query language for traversing typed relationships
   - `supertag gquery` CLI command with DSL syntax: `FIND <type> WHERE <filter> CONNECTED TO <type> RETURN <fields>`
   - `FIND` clause selects nodes by supertag type
