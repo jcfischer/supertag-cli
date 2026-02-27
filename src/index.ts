@@ -56,6 +56,8 @@ import { createDoneCommand, createUndoneCommand } from './commands/done';
 import { createContextCommand } from './commands/context';
 // F-102: Graph Query DSL
 import { createGQueryCommand } from './commands/gquery';
+// F-108: PAI Memory Integration
+import { createPaiCommand } from './commands/pai';
 import { configureGlobalLogger } from './utils/logger';
 import { resolveOutputMode } from './utils/output-formatter';
 import { setDebugMode, formatDebugError } from './utils/debug';
@@ -201,6 +203,7 @@ program.addCommand(createDoneCommand());       // supertag done <nodeId>
 program.addCommand(createUndoneCommand());     // supertag undone <nodeId>
 program.addCommand(createContextCommand());    // supertag context <query> [--depth] [--max-tokens] [--lens]
 program.addCommand(createGQueryCommand());     // supertag gquery "FIND person CONNECTED TO project RETURN name"
+program.addCommand(createPaiCommand());        // supertag pai {sync, context, freshness, schema init}
 
 /**
  * Help text with examples
@@ -314,6 +317,12 @@ program.on('--help', () => {
   console.log('      --split                      One file per supertag');
   console.log('      --optional <strategy>        option|undefined|nullable');
   console.log('      -d, --dry-run                Preview without writing');
+  console.log('');
+  console.log('  PAI MEMORY:');
+  console.log('    supertag pai schema init    Create PAI supertags in Tana');
+  console.log('    supertag pai sync           Sync learnings to Tana');
+  console.log('    supertag pai context <topic> Retrieve graph-aware learning context');
+  console.log('    supertag pai freshness      Check learning freshness');
   console.log('');
   console.log('  ERRORS:');
   console.log('    supertag errors                Show recent errors');

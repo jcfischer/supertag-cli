@@ -983,3 +983,57 @@ export const graphQuerySchema = z.object({
     .describe('Return execution plan instead of results. Useful for debugging complex queries.'),
 });
 export type GraphQueryInput = z.infer<typeof graphQuerySchema>;
+
+// =============================================================================
+// PAI Memory Integration (F-105/F-108)
+// =============================================================================
+
+// tana_pai_sync
+export const paiSyncSchema = z.object({
+  seedPath: z
+    .string()
+    .optional()
+    .describe('Path to seed.json (default: ~/.pai/seed.json)'),
+  workspace: workspaceSchema,
+  dryRun: z
+    .boolean()
+    .default(false)
+    .describe('Preview sync without creating nodes'),
+  force: z
+    .boolean()
+    .default(false)
+    .describe('Re-sync all entries, not just incremental'),
+});
+export type PaiSyncInput = z.infer<typeof paiSyncSchema>;
+
+// tana_pai_context
+export const paiContextSchema = z.object({
+  topic: z
+    .string()
+    .min(1)
+    .describe('Topic to find related learnings for'),
+  maxTokens: z
+    .number()
+    .default(2000)
+    .describe('Token budget for context output'),
+  type: z
+    .enum(['pattern', 'insight', 'self_knowledge'])
+    .optional()
+    .describe('Filter by learning type'),
+  workspace: workspaceSchema,
+});
+export type PaiContextInput = z.infer<typeof paiContextSchema>;
+
+// tana_pai_freshness
+export const paiFreshnessSchema = z.object({
+  threshold: z
+    .number()
+    .default(30)
+    .describe('Days before marking a learning as stale'),
+  type: z
+    .enum(['pattern', 'insight', 'self_knowledge'])
+    .optional()
+    .describe('Filter by learning type'),
+  workspace: workspaceSchema,
+});
+export type PaiFreshnessInput = z.infer<typeof paiFreshnessSchema>;
