@@ -36,6 +36,8 @@ import { syncSchemaToPath, getSchemaRegistryFromDatabase } from "./schema";
 import { DeltaSyncService } from "../services/delta-sync";
 import { LocalApiClient } from "../api/local-api-client";
 import type { DeltaSyncResult } from "../types/local-api";
+import { WatchService } from "../watch/watch-service";
+import { Database } from "bun:sqlite";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');
@@ -632,5 +634,103 @@ export function registerSyncCommands(program: Command): void {
       }
 
       process.exit(0);
+    });
+
+  // =========================================================================
+  // F-103: sync watch subcommand
+  // =========================================================================
+
+  sync
+    .command("watch")
+    .description("Continuously watch for Tana changes via Local API")
+    .option("-w, --workspace <alias>", "Workspace alias (default: main)")
+    .option("-i, --interval <seconds>", "Poll interval in seconds (default: 30, min: 5)", "30")
+    .option("-t, --filter-tag <tag>", "Only watch changes on nodes with this supertag")
+    .option("--on-change <command>", "Execute command on any change")
+    .option("--on-create <command>", "Execute command on new nodes")
+    .option("--on-modify <command>", "Execute command on modified nodes")
+    .option("--on-delete <command>", "Execute command on deleted/trashed nodes")
+    .option("--event-log <path>", "Custom event log path (JSONL)")
+    .option("--dry-run", "Detect changes without executing hooks", false)
+    .option("--max-failures <n>", "Exit after N consecutive poll failures (default: 10)", "10")
+    .option("--db-path <path>", "Database path override")
+    .action(async (options) => {
+      // Resolve workspace
+      let resolvedPaths: { dbPath: string; alias: string };
+      try {
+        const paths = resolvePaths(options);
+        resolvedPaths = paths;
+      } catch (error) {
+        logger.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+
+      // Validate and clamp interval
+      let interval = parseInt(options.interval, 10);
+      if (isNaN(interval) || interval < 5) {
+        if (!isNaN(interval) && interval > 0) {
+          process.stderr.write(`[supertag watch] WARNING: --interval ${interval} is below minimum (5). Clamping to 5.\n`);
+        }
+        interval = 5;
+      }
+
+      // Validate Local API availability
+      const config = ConfigManager.getInstance();
+      const localApiConfig = config.getLocalApiConfig();
+
+      if (!localApiConfig.bearerToken) {
+        logger.error("No bearer token configured. Set it with: supertag config set localApi.bearerToken <token>");
+        process.exit(1);
+      }
+
+      const client = new LocalApiClient({
+        endpoint: localApiConfig.endpoint,
+        bearerToken: localApiConfig.bearerToken,
+      });
+
+      try {
+        const healthy = await client.health();
+        if (!healthy) {
+          logger.error("Local API not available. Watch mode requires Tana Desktop.");
+          logger.error("Start Tana Desktop and enable Local API in Settings.");
+          process.exit(1);
+        }
+      } catch {
+        logger.error("Local API not available. Watch mode requires Tana Desktop.");
+        logger.error("Start Tana Desktop and enable Local API in Settings.");
+        process.exit(1);
+      }
+
+      // Set up DeltaSyncService and WatchService
+      const db = new Database(resolvedPaths.dbPath);
+      const deltaSyncService = new DeltaSyncService({
+        dbPath: resolvedPaths.dbPath,
+        localApiClient: client,
+      });
+
+      const watchOptions = {
+        workspace: resolvedPaths.alias,
+        interval,
+        filterTag: options.filterTag,
+        onChangeCmd: options.onChange,
+        onCreateCmd: options.onCreate,
+        onModifyCmd: options.onModify,
+        onDeleteCmd: options.onDelete,
+        eventLogPath: options.eventLog,
+        dryRun: options.dryRun,
+        maxConsecutiveFailures: parseInt(options.maxFailures, 10) || 10,
+      };
+
+      const service = new WatchService(watchOptions, {
+        deltaSyncService,
+        db,
+      });
+
+      try {
+        await service.start();
+      } finally {
+        deltaSyncService.close();
+        db.close();
+      }
     });
 }
