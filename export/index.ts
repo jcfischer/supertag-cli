@@ -35,6 +35,7 @@ import { VERSION } from "../src/version";
 import { getAuthToken, isTokenValid, getTokenExpiryMinutes, extractTokenFromBrowser, saveCachedToken, type AuthLogger } from "./lib/auth";
 import { getAccount, getSnapshotMeta, getSnapshotUrl, downloadSnapshot } from "./lib/api";
 import { discoverWorkspaces, discoverWorkspacesViaCDP, discoverWorkspacesViaRawCDP } from "./lib/discover";
+import { findBrowserExecutable, isBrowserAvailable } from "./lib/browser-path";
 
 const USER_DATA_DIR = BROWSER_DATA_DIR;
 const TANA_APP_URL = "https://app.tana.inc";
@@ -42,16 +43,11 @@ const TANA_APP_URL = "https://app.tana.inc";
 const logger = createSimpleLogger("supertag-export");
 
 /**
- * Check if Playwright chromium browser is installed
+ * Check if a browser (system or Playwright) is available.
+ * Uses robust path resolution that doesn't depend on CWD (fixes #76).
  */
 async function isBrowserInstalled(): Promise<boolean> {
-  try {
-    // Try to get the executable path - this will throw if not installed
-    const execPath = chromium.executablePath();
-    return existsSync(execPath);
-  } catch {
-    return false;
-  }
+  return isBrowserAvailable();
 }
 
 /**
@@ -512,46 +508,12 @@ async function manualLogin(timeout: number = 180000): Promise<void> {
   // Use a fixed debug port for CDP token extraction
   const debugPort = 19222;
 
-  // Find browser executable
-  let browserPath: string;
-
-  if (process.platform === 'win32') {
-    // Try Chrome first, then Edge
-    const chromePath = join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
-    const edgePath = join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
-    const edgePathX86 = join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
-
-    if (existsSync(chromePath)) {
-      browserPath = chromePath;
-    } else if (existsSync(edgePath)) {
-      browserPath = edgePath;
-    } else if (existsSync(edgePathX86)) {
-      browserPath = edgePathX86;
-    } else {
-      // Try Playwright's bundled Chromium as fallback
-      try {
-        browserPath = chromium.executablePath();
-      } catch {
-        throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
-      }
-    }
-  } else if (process.platform === 'darwin') {
-    browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-    if (!existsSync(browserPath)) {
-      try {
-        browserPath = chromium.executablePath();
-      } catch {
-        throw new Error("No browser found. Install Chrome or run 'supertag-export setup'");
-      }
-    }
-  } else {
-    // Linux - use Playwright's bundled Chromium
-    try {
-      browserPath = chromium.executablePath();
-    } catch {
-      throw new Error("Browser not available. Run 'supertag-export setup' first");
-    }
+  // Find browser executable using robust path resolution (fixes #76)
+  const browserResult = findBrowserExecutable();
+  if (!browserResult) {
+    throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
   }
+  const browserPath = browserResult.executablePath;
 
   // Detect browser type and check if already running
   const browserType = detectBrowserType(browserPath);
@@ -976,43 +938,12 @@ async function manualDiscover(options: { timeout?: number } = {}): Promise<impor
   const debugPort = 19222;
   const timeout = options.timeout ?? 15000;
 
-  // Find browser executable (same logic as manualLogin)
-  let browserPath: string;
-
-  if (process.platform === 'win32') {
-    const chromePath = join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
-    const edgePath = join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
-    const edgePathX86 = join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
-
-    if (existsSync(chromePath)) {
-      browserPath = chromePath;
-    } else if (existsSync(edgePath)) {
-      browserPath = edgePath;
-    } else if (existsSync(edgePathX86)) {
-      browserPath = edgePathX86;
-    } else {
-      try {
-        browserPath = chromium.executablePath();
-      } catch {
-        throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
-      }
-    }
-  } else if (process.platform === 'darwin') {
-    browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-    if (!existsSync(browserPath)) {
-      try {
-        browserPath = chromium.executablePath();
-      } catch {
-        throw new Error("No browser found. Install Chrome or run 'supertag-export setup'");
-      }
-    }
-  } else {
-    try {
-      browserPath = chromium.executablePath();
-    } catch {
-      throw new Error("Browser not available. Run 'supertag-export setup' first");
-    }
+  // Find browser executable using robust path resolution (fixes #76)
+  const browserResult = findBrowserExecutable();
+  if (!browserResult) {
+    throw new Error("No browser found. Install Chrome or Edge, or run 'supertag-export setup'");
   }
+  const browserPath = browserResult.executablePath;
 
   // Detect browser type and check if already running
   const browserType = detectBrowserType(browserPath);
@@ -1240,14 +1171,20 @@ program
   .action(async () => {
     const installed = await isBrowserInstalled();
     if (installed) {
-      logger.info("Playwright chromium browser is already installed.");
-      logger.info(`Executable: ${chromium.executablePath()}`);
+      const result = findBrowserExecutable();
+      logger.info("Browser is already available.");
+      if (result) {
+        logger.info(`Executable: ${result.executablePath} (${result.source})`);
+      }
       return;
     }
 
     const success = await installBrowser();
     if (success) {
-      logger.info(`Executable: ${chromium.executablePath()}`);
+      const result = findBrowserExecutable();
+      if (result) {
+        logger.info(`Executable: ${result.executablePath} (${result.source})`);
+      }
     } else {
       process.exit(1);
     }
