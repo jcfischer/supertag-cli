@@ -146,19 +146,38 @@ export class UnifiedSchemaService {
       // Fallback: check supertags table for workspace-only tags not in metadata
       // This handles tags that exist in the workspace but aren't in Tana exports
       try {
+        // Try exact match first (fast path)
         const fallbackQuery = `
           SELECT DISTINCT tag_id, tag_name, color
           FROM supertags
           WHERE tag_name = ?
-             OR LOWER(REPLACE(REPLACE(REPLACE(tag_name, ' ', ''), '-', ''), '_', '')) = ?
           LIMIT 1
         `;
 
-        const fallbackRow = this.db.query(fallbackQuery).get(name, normalizedQuery) as {
+        let fallbackRow = this.db.query(fallbackQuery).get(name) as {
           tag_id: string;
           tag_name: string;
           color: string | null;
         } | null;
+
+        // If no exact match, fetch distinct tags and normalize in TypeScript
+        // We normalize in TypeScript (not SQL) to ensure consistency with the canonical normalizeName()
+        // function which handles emoji removal via regex - not possible in SQLite without extensions
+        if (!fallbackRow) {
+          const candidatesQuery = `
+            SELECT DISTINCT tag_id, tag_name, color
+            FROM supertags
+          `;
+
+          const candidates = this.db.query(candidatesQuery).all() as {
+            tag_id: string;
+            tag_name: string;
+            color: string | null;
+          }[];
+
+          // Use canonical normalizeName() to match against pre-computed normalizedQuery
+          fallbackRow = candidates.find(tag => normalizeName(tag.tag_name) === normalizedQuery) || null;
+        }
 
         if (fallbackRow) {
           // Build UnifiedSupertag with minimal data (no field metadata available)

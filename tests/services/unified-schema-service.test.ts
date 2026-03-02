@@ -100,6 +100,102 @@ describe("UnifiedSchemaService (T-3.1)", () => {
       expect(result!.fields[0].name).toBe("Email");
       expect(result!.fields[1].name).toBe("Phone");
     });
+
+    describe("fallback to supertags table (Issue #78)", () => {
+      beforeEach(() => {
+        // Create supertags table (normally created by indexer)
+        db.run(`
+          CREATE TABLE IF NOT EXISTS supertags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node_id TEXT NOT NULL,
+            tag_name TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            color TEXT
+          )
+        `);
+      });
+
+      it("should fallback to supertags table when not in metadata", () => {
+        // Insert a workspace-only tag in supertags table (not in metadata)
+        db.run(`
+          INSERT INTO supertags (node_id, tag_name, tag_id, color)
+          VALUES ('node1', 'webSource', 'webSource-id', '#blue')
+        `);
+
+        const result = service.getSupertag("webSource");
+        expect(result).not.toBeNull();
+        expect(result!.id).toBe("webSource-id");
+        expect(result!.name).toBe("webSource");
+        expect(result!.color).toBe("#blue");
+      });
+
+      it("should return empty fields array for fallback tags", () => {
+        db.run(`
+          INSERT INTO supertags (node_id, tag_name, tag_id, color)
+          VALUES ('node1', 'webSource', 'webSource-id', NULL)
+        `);
+
+        const result = service.getSupertag("webSource");
+        expect(result).not.toBeNull();
+        expect(result!.fields).toEqual([]);
+      });
+
+      it("should match fallback tags by normalized name", () => {
+        db.run(`
+          INSERT INTO supertags (node_id, tag_name, tag_id, color)
+          VALUES ('node1', 'My Project', 'myproject-id', NULL)
+        `);
+
+        // Should find by normalized name (removes space)
+        const result = service.getSupertag("myproject");
+        expect(result).not.toBeNull();
+        expect(result!.name).toBe("My Project");
+        expect(result!.normalizedName).toBe("myproject");
+      });
+
+      it("should match fallback tags with emoji in name", () => {
+        db.run(`
+          INSERT INTO supertags (node_id, tag_name, tag_id, color)
+          VALUES ('node1', '🔥 hot topic', 'hot-id', NULL)
+        `);
+
+        // Should normalize emoji away and match
+        const result = service.getSupertag("hot topic");
+        expect(result).not.toBeNull();
+        expect(result!.name).toBe("🔥 hot topic");
+      });
+
+      it("should prefer metadata over supertags table", () => {
+        // Add tag to both metadata and supertags
+        db.run(`
+          INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, description)
+          VALUES ('meeting-meta-id', 'meeting', 'meeting', 'From metadata')
+        `);
+        db.run(`
+          INSERT INTO supertags (node_id, tag_name, tag_id, color)
+          VALUES ('node1', 'meeting', 'meeting-supertags-id', NULL)
+        `);
+
+        const result = service.getSupertag("meeting");
+        expect(result).not.toBeNull();
+        expect(result!.id).toBe("meeting-meta-id");
+        expect(result!.description).toBe("From metadata");
+      });
+
+      it("should return null when tag not in either table", () => {
+        const result = service.getSupertag("nonexistent");
+        expect(result).toBeNull();
+      });
+
+      it("should handle supertags table missing gracefully", () => {
+        // Drop supertags table
+        db.run("DROP TABLE IF EXISTS supertags");
+
+        // Should not throw, just return null
+        const result = service.getSupertag("webSource");
+        expect(result).toBeNull();
+      });
+    });
   });
 
   describe("getSupertagById", () => {

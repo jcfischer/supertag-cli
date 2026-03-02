@@ -299,7 +299,7 @@ export async function createCommand(
     if (options.verbose) {
       console.error('⚙️  Configuration:');
       if (schemas.length === 1) {
-        console.error(`   Supertag: ${primarySchema.name} (${primarySchema.id})`);
+        console.error(`   Supertag: ${schemas[0].name} (${schemas[0].id})`);
       } else {
         console.error(`   Supertags: ${schemas.map(s => s.name).join(', ')}`);
         schemas.forEach(s => console.error(`     - ${s.name} (${s.id})`));
@@ -434,7 +434,7 @@ export async function createCommand(
         console.log(`   Node ID: ${result.nodeId}`);
       }
       if (schemas.length === 1) {
-        console.log(`   Supertag: ${primarySchema.name}`);
+        console.log(`   Supertag: ${schemas[0].name}`);
       } else {
         console.log(`   Supertags: ${tagNames}`);
       }
