@@ -180,24 +180,22 @@ export async function createCommand(
       : [supertag];
 
     // Validate all supertags exist and collect schemas
+    // Note: Tags may not be in schema registry if they're workspace-only (not in export)
+    // In such cases, createNode will use database fallback for validation
     const schemas: Array<{ id: string; name: string; fields: Array<{ attributeId: string }> }> = [];
     for (const tagName of supertagNames) {
       const schema = registry.getSupertag(tagName);
       if (!schema) {
-        console.error(`❌ Unknown supertag: ${tagName}`);
-        console.error('');
-        const similar = registry.searchSupertags(tagName);
-        if (similar.length > 0) {
-          console.error('Did you mean:');
-          similar.slice(0, 5).forEach(s => console.error(`  - ${s.name}`));
+        if (options.verbose) {
+          console.error(`⚠️  Supertag '${tagName}' not in schema registry (will attempt database fallback)`);
         }
-        process.exit(1);
+        // Don't add to schemas array, but continue - createNode will validate via database
+        continue;
       }
       schemas.push(schema);
     }
 
-    // Use first schema as primary for display purposes
-    const primarySchema = schemas[0];
+    // Note: schemas array may be empty if tags are workspace-only (not in export)
 
     // Determine input source: --file > --json > stdin > CLI args
     let nodeName: string = '';
@@ -383,16 +381,25 @@ export async function createCommand(
     if (result.dryRun) {
       console.error('🔍 DRY RUN MODE - Not posting to API');
       console.error('');
-      const tagDisplay = schemas.length === 1
-        ? `${primarySchema.name}`
-        : `node with ${schemas.length} supertags`;
-      console.error(`Would create ${tagDisplay}:`);
-      console.error(`  Name: ${nodeName}`);
-      if (schemas.length === 1) {
-        console.error(`  Supertag: ${primarySchema.name} (${primarySchema.id})`);
+
+      // Display tag info if available from registry
+      if (schemas.length > 0) {
+        const primarySchema = schemas[0];
+        const tagDisplay = schemas.length === 1
+          ? `${primarySchema.name}`
+          : `node with ${schemas.length} supertags`;
+        console.error(`Would create ${tagDisplay}:`);
+        console.error(`  Name: ${nodeName}`);
+        if (schemas.length === 1) {
+          console.error(`  Supertag: ${primarySchema.name} (${primarySchema.id})`);
+        } else {
+          console.error(`  Supertags:`);
+          schemas.forEach(s => console.error(`    - ${s.name} (${s.id})`));
+        }
       } else {
-        console.error(`  Supertags:`);
-        schemas.forEach(s => console.error(`    - ${s.name} (${s.id})`));
+        // Fallback display for workspace-only tags
+        console.error(`Would create node with supertag: ${supertag}`);
+        console.error(`  Name: ${nodeName}`);
       }
       for (const [field, value] of Object.entries(fieldValues)) {
         console.error(`  ${field}: ${value}`);

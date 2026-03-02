@@ -143,6 +143,39 @@ export class UnifiedSchemaService {
     } | null;
 
     if (!row) {
+      // Fallback: check supertags table for workspace-only tags not in metadata
+      // This handles tags that exist in the workspace but aren't in Tana exports
+      try {
+        const fallbackQuery = `
+          SELECT DISTINCT tag_id, tag_name, color
+          FROM supertags
+          WHERE tag_name = ?
+             OR LOWER(REPLACE(REPLACE(REPLACE(tag_name, ' ', ''), '-', ''), '_', '')) = ?
+          LIMIT 1
+        `;
+
+        const fallbackRow = this.db.query(fallbackQuery).get(name, normalizedQuery) as {
+          tag_id: string;
+          tag_name: string;
+          color: string | null;
+        } | null;
+
+        if (fallbackRow) {
+          // Build UnifiedSupertag with minimal data (no field metadata available)
+          return {
+            id: fallbackRow.tag_id,
+            name: fallbackRow.tag_name,
+            normalizedName: normalizeName(fallbackRow.tag_name),
+            description: null,
+            color: fallbackRow.color,
+            fields: [],
+            extends: undefined,
+          };
+        }
+      } catch (error) {
+        // supertags table doesn't exist (e.g., in test databases) - skip fallback
+      }
+
       return null;
     }
 
