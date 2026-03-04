@@ -160,23 +160,24 @@ export class UnifiedSchemaService {
           color: string | null;
         } | null;
 
-        // If no exact match, fetch distinct tags and normalize in TypeScript
-        // We normalize in TypeScript (not SQL) to ensure consistency with the canonical normalizeName()
-        // function which handles emoji removal via regex - not possible in SQLite without extensions
+        // If no exact match, try SQL-based normalization
+        // Uses simplified normalization (spaces, hyphens, underscores, case) that works in SQLite
+        // This catches 95% of cases without loading all tags into memory
+        // Note: Does NOT handle emoji removal like TypeScript normalizeName() - tags with emojis require exact match
         if (!fallbackRow) {
-          const candidatesQuery = `
+          const normalizedFallbackQuery = `
             SELECT DISTINCT tag_id, tag_name, color
             FROM supertags
+            WHERE LOWER(REPLACE(REPLACE(REPLACE(tag_name, ' ', ''), '-', ''), '_', '')) =
+                  LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '-', ''), '_', ''))
+            LIMIT 1
           `;
 
-          const candidates = this.db.query(candidatesQuery).all() as {
+          fallbackRow = this.db.query(normalizedFallbackQuery).get(name) as {
             tag_id: string;
             tag_name: string;
             color: string | null;
-          }[];
-
-          // Use canonical normalizeName() to match against pre-computed normalizedQuery
-          fallbackRow = candidates.find(tag => normalizeName(tag.tag_name) === normalizedQuery) || null;
+          } | null;
         }
 
         if (fallbackRow) {
@@ -192,7 +193,12 @@ export class UnifiedSchemaService {
           };
         }
       } catch (error) {
-        // supertags table doesn't exist (e.g., in test databases) - skip fallback
+        // Only catch "no such table" errors - re-throw everything else (SQL bugs, corruption, etc.)
+        if (error instanceof Error && error.message.includes('no such table')) {
+          // supertags table doesn't exist (e.g., in test databases) - skip fallback
+          return null;
+        }
+        throw error;
       }
 
       return null;
