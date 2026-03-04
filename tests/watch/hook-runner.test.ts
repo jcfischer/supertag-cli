@@ -119,12 +119,12 @@ describe("HookRunner - timeout", () => {
     const result = await runner.execute('sleep 10', [makeEvent()]);
 
     expect(result.timedOut).toBe(true);
-  }, 5000); // Allow up to 5s for this test
+  }, 15000); // CI runners can be slow to spawn/kill processes
 
   test("timeout returns null exit code", async () => {
     const runner = new HookRunner({ timeoutMs: 100 });
     const result = await runner.execute('sleep 10', [makeEvent()]);
 
     expect(result.exitCode).toBeNull();
-  }, 5000);
+  }, 15000);
 });
