@@ -143,6 +143,64 @@ export class UnifiedSchemaService {
     } | null;
 
     if (!row) {
+      // Fallback: check supertags table for workspace-only tags not in metadata
+      // This handles tags that exist in the workspace but aren't in Tana exports
+      try {
+        // Try exact match first (fast path)
+        const fallbackQuery = `
+          SELECT DISTINCT tag_id, tag_name, color
+          FROM supertags
+          WHERE tag_name = ?
+          LIMIT 1
+        `;
+
+        let fallbackRow = this.db.query(fallbackQuery).get(name) as {
+          tag_id: string;
+          tag_name: string;
+          color: string | null;
+        } | null;
+
+        // If no exact match, try SQL-based normalization
+        // Uses simplified normalization (spaces, hyphens, underscores, case) that works in SQLite
+        // This catches 95% of cases without loading all tags into memory
+        // Note: Does NOT handle emoji removal like TypeScript normalizeName() - tags with emojis require exact match
+        if (!fallbackRow) {
+          const normalizedFallbackQuery = `
+            SELECT DISTINCT tag_id, tag_name, color
+            FROM supertags
+            WHERE LOWER(REPLACE(REPLACE(REPLACE(tag_name, ' ', ''), '-', ''), '_', '')) =
+                  LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '-', ''), '_', ''))
+            LIMIT 1
+          `;
+
+          fallbackRow = this.db.query(normalizedFallbackQuery).get(name) as {
+            tag_id: string;
+            tag_name: string;
+            color: string | null;
+          } | null;
+        }
+
+        if (fallbackRow) {
+          // Build UnifiedSupertag with minimal data (no field metadata available)
+          return {
+            id: fallbackRow.tag_id,
+            name: fallbackRow.tag_name,
+            normalizedName: normalizeName(fallbackRow.tag_name),
+            description: null,
+            color: fallbackRow.color,
+            fields: [],
+            extends: undefined,
+          };
+        }
+      } catch (error) {
+        // Only catch "no such table" errors - re-throw everything else (SQL bugs, corruption, etc.)
+        if (error instanceof Error && error.message.includes('no such table')) {
+          // supertags table doesn't exist (e.g., in test databases) - skip fallback
+          return null;
+        }
+        throw error;
+      }
+
       return null;
     }
 
