@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **F-108 F-105-pai-memory-integration**: **Core Problem**: pai-seed stores AI learnings (patterns, insights, self-knowledge) as flat JSON entries with no relationships between them. A learning about "Jens-Christian prefers German for inte...
-- **F-107 F-103**: **Core Problem**: The current sync workflow is pull-based — users run `supertag sync` manually to update the local SQLite database from Tana. There's no way to detect changes in Tana in near-real-t...
-- **F-107 F-103**: **Core Problem**: The current sync workflow is pull-based — users run `supertag sync` manually to update the local SQLite database from Tana. There's no way to detect changes in Tana in near-real-t...
+- **Watch Mode (F-103)** — Continuous monitoring of Tana changes with hook-based automation
+  - `supertag sync watch` polls Tana Local API for changes at configurable intervals (default: 30s)
+  - Shell hooks: `--on-change`, `--on-create`, `--on-modify`, `--on-delete` execute commands on lifecycle events
+  - `--filter-tag <tag>` to watch only specific supertags
+  - `--event-log <path>` for JSONL event audit trail
+  - `--dry-run` to detect changes without executing hooks
+  - Exponential backoff on failures, configurable `--max-failures` limit
+  - Pre/post snapshot diffing around delta-sync for reliable change detection
+
+- **PAI Memory Integration (F-108)** — Tana graph as persistent AI memory store for cross-session learning
 - **Graph Query DSL (F-102)** - Declarative graph query language for traversing typed relationships
   - `supertag gquery` CLI command with DSL syntax: `FIND <type> WHERE <filter> CONNECTED TO <type> RETURN <fields>`
   - `FIND` clause selects nodes by supertag type
@@ -79,12 +86,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Graph query join maps** — `CONNECTED TO` dot-notation projections now correctly associate per-row (e.g., each meeting row shows only its own attendees, not all attendees across all meetings)
+- **Tag name normalization** — fuzzy tag matching moved from SQL to TypeScript `normalizeName()`, enabling emoji removal in tag lookups (e.g., searching "hot topic" matches tag named "🔥 hot topic")
 - **Graph-aware enrichment refactored** — extracted shared `buildEnrichedText()` helper, eliminating ~60 lines of duplication between single-node and batch enrichment paths
 - **Type guard for enriched nodes** — replaced unsafe `"enriched" in node` + `as` cast with proper `isEnrichedNode()` type guard
 - **FieldType-based filtering** — `defaults.includeFields` in enrichment config now correctly filters by field type (options, date, instance), fixing spec deviation
 
 ### Fixed
 
+- **tana_create fails for webSource/workspace-only tags** — supertags that exist in the workspace but not in export metadata (e.g., `webSource`) are now resolved via fallback to the `supertags` table (#78)
+- **Playwright browser path independent of CWD** — `supertag-export` now resolves Playwright's browser executable via system browsers, module API, and direct cache scan, fixing failures when run from arbitrary directories (#77)
 - **Single-quoted field names in queries** — `where` and `order by` clauses now accept single-quoted field names (#69)
 - **Day page children not returned** — `nodes show` on day pages now resolves effective children including inline items (#65)
 - **Schema audit --detector flag** — the `--detector` flag is now properly recognized (#56)

@@ -39,6 +39,7 @@ Tana has officially released their [Local API and MCP server](https://tana.inc),
   - [AGGREGATE - Group and Count](#aggregate---group-and-count)
   - [TIMELINE - Time-Based Queries](#timeline---time-based-queries)
   - [RELATED - Graph Traversal](#related---graph-traversal)
+  - [WATCH - Continuous Monitoring](#watch---continuous-monitoring)
   - [EXPORT - Automated Backup](#export---automated-backup)
   - [EMBED - Semantic Search](#embed---semantic-search)
   - [TABLE - Bulk Field Export](#table---bulk-field-export)
@@ -490,6 +491,39 @@ supertag sync cleanup --keep 5
 **Delta-sync** uses Tana Desktop's Local API to fetch only nodes changed since the last sync, making it much faster than a full reindex. Requires Tana Desktop running with Local API enabled and a bearer token configured (`supertag config --bearer-token <token>`).
 
 The MCP server can run delta-sync automatically in the background at a configurable interval (default: every 5 minutes). Set `localApi.deltaSyncInterval` in config or use `TANA_DELTA_SYNC_INTERVAL` environment variable (0 disables polling).
+
+### WATCH - Continuous Monitoring
+
+Monitor Tana for changes in real-time and trigger automation hooks.
+
+```bash
+# Watch for changes with default 30s interval
+supertag sync watch
+
+# Custom interval (minimum 5s)
+supertag sync watch -i 10
+
+# Execute shell commands on specific events
+supertag sync watch --on-change "echo 'Something changed'"
+supertag sync watch --on-create "notify-send 'New node created'"
+supertag sync watch --on-modify "curl -X POST http://localhost/webhook"
+supertag sync watch --on-delete "echo 'Node deleted'"
+
+# Watch only specific supertags
+supertag sync watch --filter-tag todo --on-create "say 'New todo'"
+
+# Dry run — detect changes without executing hooks
+supertag sync watch --dry-run
+
+# Custom event log path (default: ~/.local/share/supertag/watch-events.jsonl)
+supertag sync watch --event-log ./events.jsonl
+```
+
+**Requirements:** Tana Desktop running with Local API enabled. Uses delta-sync under the hood — each poll fetches only changed nodes.
+
+**Hooks** receive change details via environment variables (`SUPERTAG_EVENT_TYPE`, `SUPERTAG_NODE_ID`, `SUPERTAG_NODE_NAME`, etc.). All events are logged to a JSONL file for audit and replay.
+
+**Failure handling:** Exponential backoff on poll failures (5s → 10s → 20s → ... → 60s cap). Exits after 10 consecutive failures by default (`--max-failures`).
 
 ### EXPORT - Automated Backup
 
@@ -945,6 +979,10 @@ supertag schema audit --severity warning     # Only warnings and above
 supertag schema audit --detector orphan-tags # Run specific detector
 supertag schema audit --tag project          # Audit a specific supertag
 supertag schema audit --format json          # Machine-readable output
+
+# Auto-fix safe issues (interactive confirmation)
+supertag schema audit --fix
+supertag schema audit --fix --yes            # Apply all safe fixes without prompting
 
 # Use specific workspace
 supertag schema list -w work

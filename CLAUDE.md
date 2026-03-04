@@ -440,6 +440,30 @@ const backend = await resolveReadBackendFromOptions(options); // respects --offl
 - Tagged search, nodes recent, tags list (need structured query support)
 - Reference graph, field queries, aggregation
 
+### Watch Mode (F-103)
+
+**Continuous monitoring of Tana changes with hook-based automation.**
+
+**CLI:** `supertag sync watch [--interval <s>] [--filter-tag <tag>] [--on-change <cmd>] [--on-create <cmd>] [--on-modify <cmd>] [--on-delete <cmd>] [--event-log <path>] [--dry-run] [--max-failures <n>]`
+
+**Architecture:** Pre/post snapshot diffing around DeltaSyncService. Each poll cycle:
+1. Captures snapshot of current node state
+2. Runs delta-sync to fetch changes from Tana Local API
+3. Captures post-sync snapshot
+4. Diffs to detect creates, modifies, deletes
+5. Dispatches shell hooks with change details via env vars
+
+**Key files:**
+- `src/watch/watch-service.ts` - Main watch loop with backoff
+- `src/watch/differ.ts` - Snapshot diffing (creates/modifies/deletes)
+- `src/watch/snapshot.ts` - Pre/post snapshot capture
+- `src/watch/hook-runner.ts` - Shell hook execution ("never throws" pattern)
+- `src/watch/event-logger.ts` - JSONL event logging
+- `src/commands/sync.ts` - CLI command registration (lines 643-735)
+- `tests/watch/` - 6 test files, 70 tests
+
+**Design patterns:** Interface narrowing for DI (`Pick<Service, 'method'>`), exponential backoff with cap, JSONL event logs, "never throws" for side effects.
+
 ### Error Handling System (Spec 073)
 
 **Structured Errors** - All errors extend `StructuredError` with consistent structure:
