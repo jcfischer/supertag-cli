@@ -428,20 +428,15 @@ export async function createCommand(
 
     // Handle result
     if (result.success) {
+      const tagNames = schemas.map(s => s.name).join(', ');
       console.log(`✅ Node created successfully in Tana`);
       if (result.nodeId) {
         console.log(`   Node ID: ${result.nodeId}`);
       }
-      // Display supertag info (handles both registry and workspace-only tags)
       if (schemas.length === 1) {
         console.log(`   Supertag: ${schemas[0].name}`);
-      } else if (schemas.length > 1) {
-        const tagNames = schemas.map(s => s.name).join(', ');
-        console.log(`   Supertags: ${tagNames}`);
       } else {
-        // Workspace-only tags (not in registry) - show the input supertag name(s)
-        const inputTags = Array.isArray(supertag) ? supertag.join(', ') : supertag;
-        console.log(`   Supertag: ${inputTags}`);
+        console.log(`   Supertags: ${tagNames}`);
       }
     } else {
       throw new Error(result.error || 'API returned success: false');

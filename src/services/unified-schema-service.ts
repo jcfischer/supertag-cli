@@ -160,24 +160,23 @@ export class UnifiedSchemaService {
           color: string | null;
         } | null;
 
-        // If no exact match, try SQL-based normalization
-        // Uses simplified normalization (spaces, hyphens, underscores, case) that works in SQLite
-        // This catches 95% of cases without loading all tags into memory
-        // Note: Does NOT handle emoji removal like TypeScript normalizeName() - tags with emojis require exact match
+        // If no exact match, fetch distinct tags and normalize in TypeScript
+        // We normalize in TypeScript (not SQL) to ensure consistency with the canonical normalizeName()
+        // function which handles emoji removal via regex - not possible in SQLite without extensions
         if (!fallbackRow) {
-          const normalizedFallbackQuery = `
+          const candidatesQuery = `
             SELECT DISTINCT tag_id, tag_name, color
             FROM supertags
-            WHERE LOWER(REPLACE(REPLACE(REPLACE(tag_name, ' ', ''), '-', ''), '_', '')) =
-                  LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '-', ''), '_', ''))
-            LIMIT 1
           `;
 
-          fallbackRow = this.db.query(normalizedFallbackQuery).get(name) as {
+          const candidates = this.db.query(candidatesQuery).all() as {
             tag_id: string;
             tag_name: string;
             color: string | null;
-          } | null;
+          }[];
+
+          // Use canonical normalizeName() to match against pre-computed normalizedQuery
+          fallbackRow = candidates.find(tag => normalizeName(tag.tag_name) === normalizedQuery) || null;
         }
 
         if (fallbackRow) {
@@ -193,12 +192,7 @@ export class UnifiedSchemaService {
           };
         }
       } catch (error) {
-        // Only catch "no such table" errors - re-throw everything else (SQL bugs, corruption, etc.)
-        if (error instanceof Error && error.message.includes('no such table')) {
-          // supertags table doesn't exist (e.g., in test databases) - skip fallback
-          return null;
-        }
-        throw error;
+        // supertags table doesn't exist (e.g., in test databases) - skip fallback
       }
 
       return null;

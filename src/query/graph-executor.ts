@@ -66,6 +66,7 @@ export class GraphQueryExecutor {
   ): Promise<GraphQueryResult> {
     const startTime = Date.now();
     const sets = new Map<string, NodeRecord[]>();
+    const joinMaps = new Map<string, Map<string, string[]>>(); // per result set: source→target IDs
     const visitedIds = new Set<string>(); // Cycle detection
 
     for (const step of plan.steps) {
@@ -88,7 +89,7 @@ export class GraphQueryExecutor {
 
         case "traverse": {
           const fromNodes = sets.get(step.fromSet) ?? [];
-          const toNodes = await this.traverseSet(
+          const { nodes: toNodes, joinMap } = await this.traverseSet(
             fromNodes,
             step.toTag,
             step.viaField,
@@ -97,6 +98,7 @@ export class GraphQueryExecutor {
             limit
           );
           sets.set(step.resultSet, toNodes);
+          joinMaps.set(step.resultSet, joinMap);
 
           // Warn and truncate large intermediate sets
           if (toNodes.length > LARGE_SET_THRESHOLD) {
@@ -123,7 +125,7 @@ export class GraphQueryExecutor {
     }
 
     const queryTimeMs = Date.now() - startTime;
-    return this.buildResult(sets, ast, limit, queryTimeMs);
+    return this.buildResult(sets, joinMaps, ast, limit, queryTimeMs);
   }
 
   /**
@@ -144,8 +146,9 @@ export class GraphQueryExecutor {
     depth: number,
     visitedIds: Set<string>,
     limit: number
-  ): Promise<NodeRecord[]> {
+  ): Promise<{ nodes: NodeRecord[]; joinMap: Map<string, string[]> }> {
     const results: NodeRecord[] = [];
+    const joinMap = new Map<string, string[]>(); // source node ID → target node IDs
     const toTagLower = toTag.toLowerCase();
 
     for (const fromNode of fromNodes) {
@@ -164,9 +167,6 @@ export class GraphQueryExecutor {
         );
 
         for (const related of traversalResult.related) {
-          // Cycle detection
-          if (visitedIds.has(related.id)) continue;
-
           // Filter by target tag (case-insensitive)
           const hasTags = related.tags?.some(
             (t) => t.toLowerCase() === toTagLower
@@ -179,12 +179,21 @@ export class GraphQueryExecutor {
             continue;
           }
 
-          visitedIds.add(related.id);
-          results.push({
-            id: related.id,
-            name: related.name,
-            tags: related.tags,
-          });
+          // Track source→target association (even for already-visited nodes,
+          // so multiple source nodes can claim the same target)
+          const existing = joinMap.get(fromNode.id) ?? [];
+          existing.push(related.id);
+          joinMap.set(fromNode.id, existing);
+
+          // Only add to results if not visited (dedup)
+          if (!visitedIds.has(related.id)) {
+            visitedIds.add(related.id);
+            results.push({
+              id: related.id,
+              name: related.name,
+              tags: related.tags,
+            });
+          }
 
           if (results.length >= limit * 10) break;
         }
@@ -194,7 +203,7 @@ export class GraphQueryExecutor {
       }
     }
 
-    return results;
+    return { nodes: results, joinMap };
   }
 
   // ---------------------------------------------------------------------------
@@ -287,14 +296,26 @@ export class GraphQueryExecutor {
 
   private buildResult(
     sets: Map<string, NodeRecord[]>,
+    joinMaps: Map<string, Map<string, string[]>>,
     ast: GraphQueryAST,
     limit: number,
     queryTimeMs: number
   ): GraphQueryResult {
-    // Determine which result set has the final data
-    const lastSetIndex = ast.connected.length;
-    const resultSetName = `R${lastSetIndex}`;
-    const resultNodes = sets.get(resultSetName) ?? sets.get("R0") ?? [];
+    // Always use R0 (primary FIND set) as the base result
+    let resultNodes = sets.get("R0") ?? [];
+
+    // If CONNECTED TO clauses exist, filter R0 to only nodes that have
+    // live connections in the first connected set (after WHERE filtering)
+    if (ast.connected.length > 0) {
+      const firstJoinMap = joinMaps.get("R1");
+      if (firstJoinMap) {
+        const r1LiveIds = new Set((sets.get("R1") ?? []).map((n) => n.id));
+        resultNodes = resultNodes.filter((n) => {
+          const targets = firstJoinMap.get(n.id) ?? [];
+          return targets.some((t) => r1LiveIds.has(t));
+        });
+      }
+    }
 
     // Build column names from RETURN clause
     const columns = ast.return.map((f) => {
@@ -303,9 +324,30 @@ export class GraphQueryExecutor {
       return f.fieldName;
     });
 
-    // Resolve field values for projection
+    // Resolve field values for primary nodes
     const nodeIds = resultNodes.map((n) => n.id);
     const fieldMap = this.fieldResolver.resolveFields(nodeIds, "*");
+
+    // Pre-resolve fields for connected sets used in dot-notation projections
+    const connectedFieldMaps = new Map<string, Map<string, Record<string, string>>>();
+    for (const proj of ast.return) {
+      if (proj.typeAlias && !proj.aggregateFn) {
+        const setName = this.findSetForTypeAlias(proj.typeAlias, ast);
+        if (setName && !connectedFieldMaps.has(setName)) {
+          const connectedNodes = sets.get(setName) ?? [];
+          const connectedIds = connectedNodes.map((n) => n.id);
+          connectedFieldMaps.set(setName, this.fieldResolver.resolveFields(connectedIds, "*"));
+        }
+      }
+    }
+
+    // Index connected nodes by ID for fast lookup
+    const connectedNodeIndex = new Map<string, NodeRecord>();
+    for (const [, nodes] of sets) {
+      for (const n of nodes) {
+        connectedNodeIndex.set(n.id, n);
+      }
+    }
 
     // Build rows with projected fields
     const allRows: Record<string, unknown>[] = [];
@@ -334,27 +376,32 @@ export class GraphQueryExecutor {
         const colName = proj.alias ?? (proj.typeAlias ? `${proj.typeAlias}.${proj.fieldName}` : proj.fieldName);
 
         if (proj.typeAlias) {
-          // Dot notation: resolve from the connected type's result set
-          // For now, look up in the connected nodes' fields
+          // Dot notation: resolve from connected nodes for THIS specific row
           const connectedSetName = this.findSetForTypeAlias(proj.typeAlias, ast);
           if (connectedSetName) {
-            const connectedNodes = sets.get(connectedSetName) ?? [];
-            // Collect all values from connected nodes
-            const connectedIds = connectedNodes.map((n) => n.id);
-            const connectedFields = this.fieldResolver.resolveFields(connectedIds, [proj.fieldName]);
+            const joinMap = joinMaps.get(connectedSetName);
+            const connectedIds = joinMap?.get(node.id) ?? [];
+            // Only include IDs that survived filtering
+            const liveIds = new Set((sets.get(connectedSetName) ?? []).map((n) => n.id));
+            const rowConnectedIds = connectedIds.filter((id) => liveIds.has(id));
+
+            const connFields = connectedFieldMaps.get(connectedSetName);
             const values: string[] = [];
-            for (const cn of connectedNodes) {
-              const cf = connectedFields.get(cn.id);
-              if (cf && cf[proj.fieldName]) {
-                values.push(cf[proj.fieldName]);
-              } else if (proj.fieldName.toLowerCase() === "name") {
-                values.push(cn.name);
+            for (const cid of rowConnectedIds) {
+              if (proj.fieldName.toLowerCase() === "name") {
+                const cn = connectedNodeIndex.get(cid);
+                if (cn) values.push(cn.name);
+              } else {
+                const cf = connFields?.get(cid);
+                if (cf && cf[proj.fieldName]) {
+                  values.push(cf[proj.fieldName]);
+                }
               }
             }
-            row[colName] = values.length === 1 ? values[0] : values;
+            row[colName] = values.length === 0 ? null : values.length === 1 ? values[0] : values;
           }
         } else {
-          // Simple field: resolve from the result node
+          // Simple field: resolve from the primary result node
           if (proj.fieldName.toLowerCase() === "name") {
             row[colName] = node.name;
           } else if (proj.fieldName.toLowerCase() === "id") {
