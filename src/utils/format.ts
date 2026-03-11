@@ -57,6 +57,26 @@ export function record(fields: Record<string, string | undefined>): string {
 // ============================================================================
 
 /**
+ * Extract local date/time components from a Date, pre-formatted for string output.
+ * Shared helper to avoid duplicating getFullYear/getMonth/getDate/etc. logic.
+ */
+export function formatDateComponents(date: Date): {
+  year: number;
+  month: string;
+  day: string;
+  hours: string;
+  minutes: string;
+} {
+  return {
+    year: date.getFullYear(),
+    month: String(date.getMonth() + 1).padStart(2, '0'),
+    day: String(date.getDate()).padStart(2, '0'),
+    hours: String(date.getHours()).padStart(2, '0'),
+    minutes: String(date.getMinutes()).padStart(2, '0'),
+  };
+}
+
+/**
  * Format date as ISO 8601 date string (YYYY-MM-DD)
  * This is the default date format - sortable and unambiguous
  *
@@ -65,9 +85,7 @@ export function record(fields: Record<string, string | undefined>): string {
  */
 export function formatDateISO(date: Date | string | number): string {
   const d = toDate(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const { year, month, day } = formatDateComponents(d);
   return `${year}-${month}-${day}`;
 }
 
