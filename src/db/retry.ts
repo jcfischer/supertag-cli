@@ -166,6 +166,24 @@ export function enableWalMode(db: Database): string {
  *
  * @param db - The database connection to configure
  */
+/**
+ * Run a passive WAL checkpoint to keep the WAL file from growing unbounded.
+ *
+ * PASSIVE mode checkpoints as many frames as possible without waiting for
+ * readers or writers — it never blocks and never throws. Safe to call
+ * on every connection close.
+ *
+ * @param db - The database connection to checkpoint
+ */
+export function walCheckpoint(db: Database): void {
+  if (isInMemoryDb(db)) return;
+  try {
+    db.run("PRAGMA wal_checkpoint(PASSIVE)");
+  } catch {
+    // Best-effort — checkpoint failure is non-fatal
+  }
+}
+
 export function configureDbForConcurrency(db: Database): void {
   // Skip configuration for in-memory databases
   if (isInMemoryDb(db)) {

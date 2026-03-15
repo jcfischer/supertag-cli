@@ -9,6 +9,7 @@
  */
 
 import { Database } from "bun:sqlite";
+import { walCheckpoint } from "../db/retry";
 import { ensureDeltaSyncSchema } from "../db/delta-sync-schema";
 import type {
   DeltaSyncOptions,
@@ -48,6 +49,7 @@ export class DeltaSyncService {
    */
   close(): void {
     try {
+      walCheckpoint(this.db);
       this.db.close();
     } catch {
       // Already closed or error - ignore

@@ -5,6 +5,11 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-03-15
+
+### Fixed
+- **WAL checkpoint on close** — SQLite WAL files could grow unbounded (44GB+) because write connections never checkpointed. Added passive WAL checkpoint before every write-connection close in `withDatabase`, `withTransaction`, `TanaIndexer`, and `DeltaSyncService`.
+
 ## [2.4.0] - 2026-03-04
 
 ### Added

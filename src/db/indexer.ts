@@ -31,7 +31,7 @@ import { eq, like, sql } from "drizzle-orm";
 import { TanaExportParser } from "../parsers/tana-export";
 import { nodes, supertags, fields, references, fieldNames } from "./schema";
 import type { Node, Supertag, Field, Reference, FieldName } from "./schema";
-import { withDbRetrySync, configureDbForConcurrency } from "./retry";
+import { withDbRetrySync, configureDbForConcurrency, walCheckpoint } from "./retry";
 import { migrateFieldValuesSchema, clearFieldValues, migrateSupertagMetadataSchema, clearSupertagMetadata, migrateSchemaConsolidation } from "./migrate";
 import { extractFieldValuesFromNodes, insertFieldValues } from "./field-values";
 import { extractSupertagMetadata } from "./supertag-metadata";
@@ -1158,6 +1158,7 @@ export class TanaIndexer {
    * Close database connection
    */
   close(): void {
+    walCheckpoint(this.sqlite);
     this.sqlite.close();
   }
 }

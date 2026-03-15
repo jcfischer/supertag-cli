@@ -12,7 +12,7 @@ import { existsSync } from "fs";
 import { TanaQueryEngine } from "../query/tana-query-engine";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import type { ResolvedWorkspace } from "../config/workspace-resolver";
-import { configureDbForConcurrency } from "./retry";
+import { configureDbForConcurrency, walCheckpoint } from "./retry";
 
 // =============================================================================
 // Types
@@ -137,7 +137,10 @@ export async function withDatabase<T>(
     const result = await fn({ db, dbPath });
     return result;
   } finally {
-    // Always close database
+    // Checkpoint WAL before closing to prevent unbounded WAL growth
+    if (!readonly) {
+      walCheckpoint(db);
+    }
     db.close();
   }
 }
@@ -188,6 +191,8 @@ export async function withTransaction<T>(
     db.exec("ROLLBACK");
     throw error;
   } finally {
+    // Checkpoint WAL before closing to prevent unbounded WAL growth
+    walCheckpoint(db);
     db.close();
   }
 }
