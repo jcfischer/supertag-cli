@@ -22,6 +22,33 @@ import type {
 } from "../types/tana-dump";
 import { TanaDumpSchema } from "../types/tana-dump";
 
+/**
+ * Fast structural validation — checks top-level shape without per-node Zod overhead.
+ * Falls back to full Zod parse if structure looks unexpected.
+ */
+function fastValidate(data: any): TanaDump {
+  // Quick structural check on top-level fields
+  if (
+    typeof data !== "object" || data === null ||
+    typeof data.formatVersion !== "number" ||
+    !Array.isArray(data.docs) ||
+    !Array.isArray(data.editors) ||
+    typeof data.workspaces !== "object"
+  ) {
+    // Fall back to full Zod validation for better error messages
+    return TanaDumpSchema.parse(data);
+  }
+
+  // Apply defaults that Zod would normally set on nodes
+  for (const node of data.docs) {
+    if (!node.inbound_refs) node.inbound_refs = [];
+    if (!node.outbound_refs) node.outbound_refs = [];
+    if (node.props && node.props.editMode === undefined) node.props.editMode = false;
+  }
+
+  return data as TanaDump;
+}
+
 export class TanaExportParser {
   /**
    * Parse Tana JSON export file
@@ -38,7 +65,7 @@ export class TanaExportParser {
 
     // Handle API export wrapper format
     const data = json.storeData ?? json;
-    return TanaDumpSchema.parse(data);
+    return fastValidate(data);
   }
 
   /**
