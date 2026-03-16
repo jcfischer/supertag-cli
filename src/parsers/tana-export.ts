@@ -56,9 +56,8 @@ export class TanaExportParser {
    * 2. API wrapper format: { storeData: { formatVersion, docs, editors, ... } }
    */
   async parseFile(filePath: string): Promise<TanaDump> {
-    const file = Bun.file(filePath);
-    const content = await file.text();
-    const json = JSON.parse(content);
+    // Bun.file().json() avoids intermediate string allocation for large files
+    const json = await Bun.file(filePath).json();
 
     // Handle API export wrapper format
     const data = json.storeData ?? json;
