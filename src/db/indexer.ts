@@ -257,18 +257,17 @@ export class TanaIndexer {
    * Uses a simple hash of critical node properties
    */
   private computeNodeChecksum(node: any): string {
-    // Hash critical properties that indicate a node has changed
-    const criticalData = {
-      name: node.props?.name || null,
-      created: node.props?.created || null,
-      modified: Array.isArray(node.modifiedTs) ? node.modifiedTs[0] : null,
-      doneAt: node.props?._done || null, // Include completion timestamp
-      children: node.children || [],
-      supertags: node.refs?.filter((r: any) => r.type === 'instance' || r.type === 'supertag') || [],
-    };
-
-    // Simple JSON stringify as checksum (could use crypto.hash for better performance)
-    return JSON.stringify(criticalData);
+    // Fast checksum: concatenate key change indicators as a string.
+    // Avoids expensive JSON.stringify of children arrays.
+    const name = node.props?.name || "";
+    const created = node.props?.created || 0;
+    const modified = Array.isArray(node.modifiedTs) ? node.modifiedTs[0] : 0;
+    const doneAt = node.props?._done || 0;
+    const childCount = node.children?.length || 0;
+    // Include first and last child IDs as a proxy for children changes
+    const firstChild = node.children?.[0] || "";
+    const lastChild = childCount > 1 ? node.children[childCount - 1] : "";
+    return `${name}\t${created}\t${modified}\t${doneAt}\t${childCount}\t${firstChild}\t${lastChild}`;
   }
 
   /**
