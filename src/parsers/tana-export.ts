@@ -65,11 +65,12 @@ export class TanaExportParser {
   }
 
   /**
-   * Build complete graph with supertags, fields, inline refs
-   * Single-pass design: iterates docs twice (index build + classification)
-   * instead of 5 separate passes.
+   * Build complete graph with supertags, fields, inline refs.
+   * Single iteration over docs — builds index and collects deferred tuple
+   * candidates, then resolves them with one pass over the small candidate set.
    */
   buildGraph(dump: TanaDump): TanaGraph {
+    const docs = dump.docs;
     const index = new Map<string, NodeDump>();
     const trash = new Map<string, NodeDump>();
     const supertags = new Map<string, SupertagTuple>();
@@ -78,67 +79,83 @@ export class TanaExportParser {
     const tagColors = new Map<string, string>();
     const tagApplications: TagApplication[] = [];
 
-    // Pass 1: Build index and identify trash
-    let trashChildren: Set<string> | null = null;
-    for (const node of dump.docs) {
-      if (node.id.includes("TRASH")) {
-        trash.set(node.id, node);
-        if (node.children) {
-          trashChildren = new Set(node.children);
-        }
-        continue;
-      }
-      index.set(node.id, node);
-    }
-
-    // Mark trashed children
-    if (trashChildren) {
-      for (const nodeId of trashChildren) {
-        const node = index.get(nodeId);
-        if (node) trash.set(nodeId, node);
-      }
-    }
+    // Deferred candidates: nodes with SYS_A13 that need index lookups
+    // Tuple: [node, hasSysT01, hasSysT02]
+    const candidates: [NodeDump, boolean, boolean][] = [];
 
     // Inline ref regex (compiled once)
     const inlineRefPattern = /<span data-inlineref-node="([^"]*)"><\/span>/g;
 
-    // Pass 2: Single pass — classify each node (supertag, field, tag application, inline refs)
-    for (const node of dump.docs) {
-      // Skip trash and system-only nodes
-      if (!index.has(node.id)) continue;
+    // Deferred inline refs: [sourceNodeId, rawMatches[]]
+    const deferredInlineRefs: [string, string[]][] = [];
 
-      // Extract inline refs from name (independent of children)
+    // Trash children for second-pass filtering
+    let trashChildIds: string[] | undefined;
+
+    // === SINGLE PASS: build index + collect candidates ===
+    for (let i = 0; i < docs.length; i++) {
+      const node = docs[i];
+      const id = node.id;
+
+      // Trash detection
+      if (id.includes("TRASH")) {
+        trash.set(id, node);
+        if (node.children) trashChildIds = node.children;
+        continue;
+      }
+
+      // Build index
+      index.set(id, node);
+
+      // Collect inline ref candidates (fast string check)
       const name = node.props.name;
       if (name && name.includes("data-inlineref-node")) {
         inlineRefPattern.lastIndex = 0;
-        const targetIds: string[] = [];
+        const targets: string[] = [];
         let m: RegExpExecArray | null;
         while ((m = inlineRefPattern.exec(name)) !== null) {
-          if (index.has(m[1])) targetIds.push(m[1]);
+          targets.push(m[1]);
         }
-        if (targetIds.length > 0) {
-          inlineRefs.push({ sourceNodeId: node.id, targetNodeIds: targetIds, type: "inline_ref" });
-        }
+        if (targets.length > 0) deferredInlineRefs.push([id, targets]);
       }
 
-      // Skip nodes without children or SYS nodes for tuple detection
+      // Collect tuple candidates (nodes with SYS_A13 in children)
       const children = node.children;
-      if (!children || node.id.includes("SYS")) continue;
+      if (!children || id.includes("SYS")) continue;
 
-      // Fast check: does children contain SYS_A13?
-      // Use indexOf instead of includes for slight perf gain on large arrays
       let hasSysA13 = false;
       let hasSysT01 = false;
       let hasSysT02 = false;
-      for (let i = 0; i < children.length; i++) {
-        const c = children[i];
+      for (let j = 0; j < children.length; j++) {
+        const c = children[j];
         if (c === "SYS_A13") hasSysA13 = true;
         else if (c === "SYS_T01") hasSysT01 = true;
         else if (c === "SYS_T02") hasSysT02 = true;
       }
 
-      if (!hasSysA13) continue;
+      if (hasSysA13) {
+        candidates.push([node, hasSysT01, hasSysT02]);
+      }
+    }
 
+    // Mark trashed children
+    if (trashChildIds) {
+      for (const nodeId of trashChildIds) {
+        const node = index.get(nodeId);
+        if (node) trash.set(nodeId, node);
+      }
+    }
+
+    // === RESOLVE: inline refs (filter to valid targets) ===
+    for (const [sourceId, targets] of deferredInlineRefs) {
+      const valid = targets.filter(id => index.has(id));
+      if (valid.length > 0) {
+        inlineRefs.push({ sourceNodeId: sourceId, targetNodeIds: valid, type: "inline_ref" });
+      }
+    }
+
+    // === RESOLVE: tuple candidates (only ~1% of nodes) ===
+    for (const [node, hasSysT01, hasSysT02] of candidates) {
       const ownerId = node.props._ownerId;
       if (!ownerId || trash.has(ownerId)) continue;
       const metaNode = index.get(ownerId);
@@ -153,7 +170,7 @@ export class TanaExportParser {
         const tagName = tagNode.props.name;
 
         const superclasses: string[] = [];
-        for (const childId of children) {
+        for (const childId of node.children!) {
           if (childId.includes("SYS") || trash.has(childId)) continue;
           const sc = index.get(childId);
           if (sc?.props.name) superclasses.push(sc.props.name);
@@ -173,7 +190,7 @@ export class TanaExportParser {
         const dataNodeId = metaNode.props._ownerId;
         if (!dataNodeId || trash.has(dataNodeId) || !index.has(dataNodeId)) continue;
 
-        for (const childId of children) {
+        for (const childId of node.children!) {
           if (childId.includes("SYS") || trash.has(childId) || !index.has(childId)) continue;
           const tagNode = index.get(childId);
           const tagName = tagNode?.props.name;
