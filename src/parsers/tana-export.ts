@@ -39,12 +39,9 @@ function fastValidate(data: any): TanaDump {
     return TanaDumpSchema.parse(data);
   }
 
-  // Apply defaults that Zod would normally set on nodes
-  for (const node of data.docs) {
-    if (!node.inbound_refs) node.inbound_refs = [];
-    if (!node.outbound_refs) node.outbound_refs = [];
-    if (node.props && node.props.editMode === undefined) node.props.editMode = false;
-  }
+  // Zod defaults (inbound_refs=[], outbound_refs=[], editMode=false) are
+  // not applied here — they're unused in the codebase. Consumers access
+  // node.children, node.props.name, node.props._ownerId directly.
 
   return data as TanaDump;
 }
