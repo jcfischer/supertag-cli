@@ -126,15 +126,16 @@ export class TanaExportParser {
       const children = node.children;
       if (!children || node.id.includes("SYS")) continue;
 
-      // Fast SYS marker scan with early exit
+      // Fast check: does children contain SYS_A13?
+      // Use indexOf instead of includes for slight perf gain on large arrays
       let hasSysA13 = false;
       let hasSysT01 = false;
       let hasSysT02 = false;
       for (let i = 0; i < children.length; i++) {
         const c = children[i];
-        if (c === "SYS_A13") { hasSysA13 = true; if (hasSysT01 || hasSysT02) break; }
-        else if (c === "SYS_T01") { hasSysT01 = true; if (hasSysA13) break; }
-        else if (c === "SYS_T02") { hasSysT02 = true; if (hasSysA13) break; }
+        if (c === "SYS_A13") hasSysA13 = true;
+        else if (c === "SYS_T01") hasSysT01 = true;
+        else if (c === "SYS_T02") hasSysT02 = true;
       }
 
       if (!hasSysA13) continue;
