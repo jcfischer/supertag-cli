@@ -5,6 +5,15 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2026-03-16
+
+### Performance
+- **47% faster JSON parse + graph build** — Replaced per-node Zod validation with fast structural check, merged 5 iteration passes into single-pass with deferred resolution. 5.3s → 2.8s on 360MB / 1.68M node export.
+- **97% faster sync index** — Skip all work when 0 changes detected, only upsert checksums for changed nodes, skip full metadata rebuild for small change sets (<5%). 232s → 6s on real database.
+
+### Fixed
+- **Off-by-one day in formatDateISO** — `toISOString()` formatted in UTC, causing dates to shift back one day in UTC+ timezones. Now uses local timezone components. (PR #80, @dalxds)
+
 ## [2.4.1] - 2026-03-15
 
 ### Fixed
