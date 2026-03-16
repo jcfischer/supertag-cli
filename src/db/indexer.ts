@@ -534,12 +534,35 @@ export class TanaIndexer {
       }
     }
 
+    const totalChanges = changes.added.size + changes.modified.size + changes.deleted.size;
+
     getLogger().info("Change detection complete", {
       added: changes.added.size,
       modified: changes.modified.size,
       deleted: changes.deleted.size,
       embeddingsCleared,
     });
+
+    // Fast path: no changes detected — skip expensive rebuilds entirely
+    if (totalChanges === 0) {
+      const durationMs = Date.now() - startTime;
+      return {
+        nodesIndexed: graph.nodes.size,
+        nodesAdded: 0,
+        nodesModified: 0,
+        nodesDeleted: 0,
+        embeddingsCleared: 0,
+        supertagsIndexed: graph.supertags.size,
+        fieldsIndexed: graph.fields.size,
+        referencesIndexed: graph.inlineRefs.length,
+        tagApplicationsIndexed: graph.tagApplications.length,
+        fieldNamesIndexed: 0,
+        fieldValuesIndexed: 0,
+        supertagFieldsExtracted: 0,
+        supertagParentsExtracted: 0,
+        durationMs,
+      };
+    }
 
     // Use transaction for all operations - wrap in retry for concurrent access
     withDbRetrySync(() => this.sqlite.run("BEGIN TRANSACTION"), "BEGIN indexExport");
@@ -603,43 +626,46 @@ export class TanaIndexer {
       );
 
       // STEP 3: Insert new nodes and update modified nodes
+      // Only iterate changed nodes — not all 1.68M
       let nodesAdded = 0;
       let nodesModified = 0;
 
-      for (const [id, node] of graph.nodes) {
+      for (const id of changes.added) {
+        const node = graph.nodes.get(id)!;
         const updated = Array.isArray(node.modifiedTs) ? node.modifiedTs[0] : null;
-        // Only store numeric timestamps, ignore boolean _done values
         const doneAt = typeof node.props._done === 'number' ? node.props._done : null;
         const checksum = this.computeNodeChecksum(node);
 
-        if (changes.added.has(id)) {
-          // Insert new node
-          insertNode.run(
-            id,
-            node.props.name || null,
-            parentMap.get(id) || null,
-            "node",
-            node.props.created ?? 0,
-            updated,
-            doneAt,
-            JSON.stringify(node)
-          );
-          nodesAdded++;
-        } else if (changes.modified.has(id)) {
-          // Update modified node
-          updateNode.run(
-            node.props.name || null,
-            parentMap.get(id) || null,
-            updated,
-            doneAt,
-            JSON.stringify(node),
-            id
-          );
-          nodesModified++;
-        }
-
-        // Update checksum for all nodes (new, modified, and unchanged)
+        insertNode.run(
+          id,
+          node.props.name || null,
+          parentMap.get(id) || null,
+          "node",
+          node.props.created ?? 0,
+          updated,
+          doneAt,
+          JSON.stringify(node)
+        );
         upsertNodeChecksum.run(id, checksum, now);
+        nodesAdded++;
+      }
+
+      for (const id of changes.modified) {
+        const node = graph.nodes.get(id)!;
+        const updated = Array.isArray(node.modifiedTs) ? node.modifiedTs[0] : null;
+        const doneAt = typeof node.props._done === 'number' ? node.props._done : null;
+        const checksum = this.computeNodeChecksum(node);
+
+        updateNode.run(
+          node.props.name || null,
+          parentMap.get(id) || null,
+          updated,
+          doneAt,
+          JSON.stringify(node),
+          id
+        );
+        upsertNodeChecksum.run(id, checksum, now);
+        nodesModified++;
       }
 
       // STEP 4: Rebuild related tables for changed nodes only
