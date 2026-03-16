@@ -80,24 +80,23 @@ export class TanaExportParser {
     const tagApplications: TagApplication[] = [];
 
     // Pass 1: Build index and identify trash
-    let trashChildren: Set<string> | null = null;
+    const trashIds = new Set<string>();
     for (const node of dump.docs) {
       if (node.id.includes("TRASH")) {
         trash.set(node.id, node);
+        trashIds.add(node.id);
         if (node.children) {
-          trashChildren = new Set(node.children);
+          for (const childId of node.children) trashIds.add(childId);
         }
         continue;
       }
       index.set(node.id, node);
     }
 
-    // Mark trashed children
-    if (trashChildren) {
-      for (const nodeId of trashChildren) {
-        const node = index.get(nodeId);
-        if (node) trash.set(nodeId, node);
-      }
+    // Populate trash map for trashed children
+    for (const nodeId of trashIds) {
+      const node = index.get(nodeId);
+      if (node) trash.set(nodeId, node);
     }
 
     // Inline ref regex (compiled once)
@@ -105,8 +104,8 @@ export class TanaExportParser {
 
     // Pass 2: Single pass — classify each node (supertag, field, tag application, inline refs)
     for (const node of dump.docs) {
-      // Skip trash and system-only nodes
-      if (!index.has(node.id)) continue;
+      // Skip trash nodes (cheap Set check instead of Map.has on full index)
+      if (trashIds.has(node.id) || node.id.includes("TRASH")) continue;
 
       // Extract inline refs from name (independent of children)
       const name = node.props.name;
@@ -141,21 +140,21 @@ export class TanaExportParser {
       if (!hasSysA13) continue;
 
       const ownerId = node.props._ownerId;
-      if (!ownerId || trash.has(ownerId)) continue;
+      if (!ownerId || trashIds.has(ownerId)) continue;
       const metaNode = index.get(ownerId);
       if (!metaNode) continue;
 
       if (hasSysT01) {
         // Supertag tuple
         const tagId = metaNode.props._ownerId;
-        if (!tagId || trash.has(tagId)) continue;
+        if (!tagId || trashIds.has(tagId)) continue;
         const tagNode = index.get(tagId);
         if (!tagNode?.props.name) continue;
         const tagName = tagNode.props.name;
 
         const superclasses: string[] = [];
         for (const childId of children) {
-          if (childId.includes("SYS") || trash.has(childId)) continue;
+          if (childId.includes("SYS") || trashIds.has(childId)) continue;
           const sc = index.get(childId);
           if (sc?.props.name) superclasses.push(sc.props.name);
         }
@@ -165,17 +164,17 @@ export class TanaExportParser {
       } else if (hasSysT02) {
         // Field tuple
         const fieldId = metaNode.props._ownerId;
-        if (!fieldId || trash.has(fieldId)) continue;
+        if (!fieldId || trashIds.has(fieldId)) continue;
         const fieldNode = index.get(fieldId);
         if (!fieldNode?.props.name) continue;
         fields.set(fieldNode.props.name, { nodeId: node.id, fieldName: fieldNode.props.name, fieldId });
-      } else if (!trash.has(node.id)) {
+      } else if (!trashIds.has(node.id)) {
         // Tag application (has SYS_A13 but not T01/T02)
         const dataNodeId = metaNode.props._ownerId;
-        if (!dataNodeId || trash.has(dataNodeId) || !index.has(dataNodeId)) continue;
+        if (!dataNodeId || trashIds.has(dataNodeId) || !index.has(dataNodeId)) continue;
 
         for (const childId of children) {
-          if (childId.includes("SYS") || trash.has(childId) || !index.has(childId)) continue;
+          if (childId.includes("SYS") || trashIds.has(childId) || !index.has(childId)) continue;
           const tagNode = index.get(childId);
           const tagName = tagNode?.props.name;
           if (tagName) {
