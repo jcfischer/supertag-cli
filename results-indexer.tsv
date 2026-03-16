@@ -1,0 +1,4 @@
+commit	total_ms	nodes_added	status	description
+fdcee88	175884	0	keep	baseline (0 changes)
+fdcee88	6707	0	keep	skip all work when 0 changes
+79b88ec	10386	5000	keep	skip metadata rebuild for small changes
