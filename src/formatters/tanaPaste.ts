@@ -4,6 +4,7 @@
  */
 
 import type { TanaNode } from '../types';
+import { formatDateComponents } from '../utils/format';
 
 /**
  * Format TanaNode array as Tana Paste
@@ -123,12 +124,7 @@ export function escapeTanaText(text: string): string {
  */
 export function formatTanaDate(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const hours = String(dateObj.getHours()).padStart(2, '0');
-  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  const { year, month, day, hours, minutes } = formatDateComponents(dateObj);
 
   // If time is 00:00, just return date
   if (hours === '00' && minutes === '00') {
@@ -149,20 +145,11 @@ export function formatTanaDateRange(start: Date | string, end: Date | string): s
   const startObj = typeof start === 'string' ? new Date(start) : start;
   const endObj = typeof end === 'string' ? new Date(end) : end;
 
-  const startYear = startObj.getFullYear();
-  const startMonth = String(startObj.getMonth() + 1).padStart(2, '0');
-  const startDay = String(startObj.getDate()).padStart(2, '0');
-  const startHours = String(startObj.getHours()).padStart(2, '0');
-  const startMinutes = String(startObj.getMinutes()).padStart(2, '0');
+  const s = formatDateComponents(startObj);
+  const e = formatDateComponents(endObj);
 
-  const endYear = endObj.getFullYear();
-  const endMonth = String(endObj.getMonth() + 1).padStart(2, '0');
-  const endDay = String(endObj.getDate()).padStart(2, '0');
-  const endHours = String(endObj.getHours()).padStart(2, '0');
-  const endMinutes = String(endObj.getMinutes()).padStart(2, '0');
-
-  const startStr = `${startYear}-${startMonth}-${startDay} ${startHours}:${startMinutes}`;
-  const endStr = `${endYear}-${endMonth}-${endDay} ${endHours}:${endMinutes}`;
+  const startStr = `${s.year}-${s.month}-${s.day} ${s.hours}:${s.minutes}`;
+  const endStr = `${e.year}-${e.month}-${e.day} ${e.hours}:${e.minutes}`;
 
   return `[[date:${startStr}/${endStr}]]`;
 }
