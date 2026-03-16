@@ -1,0 +1,8 @@
+commit	total_ms	parse_ms	graph_ms	status	description
+af02f5e	5338.8	2111.3	3227.5	keep	baseline (fast validate, 360MB/1.68M nodes)
+93fec81	3148.1	1748.3	1399.8	keep	single-pass graph build, remove 4 separate iterations
+d205f3a	2982.8	1692.2	1290.6	keep	remove per-node defaults loop (unused fields)
+d324b26	3121.9	1828.6	1293.3	discard	early exit in SYS marker scan — no improvement
+da26963	3195.1	1588.3	1606.9	discard	trashIds Set — no improvement
+77d485f	2999.4	1618.6	1380.8	keep	Bun.file().json() — simpler, equal perf
+9e5706d	2797.3	1763.3	1034.1	keep	merge to single iteration + deferred resolution
