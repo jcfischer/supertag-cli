@@ -616,7 +616,7 @@ export class TanaIndexer {
 
       // STEP 2: Prepare statements for inserts and updates
       const insertNode = this.sqlite.prepare(
-        "INSERT INTO nodes (id, name, parent_id, node_type, created, updated, done_at, raw_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT OR REPLACE INTO nodes (id, name, parent_id, node_type, created, updated, done_at, raw_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const updateNode = this.sqlite.prepare(
         "UPDATE nodes SET name = ?, parent_id = ?, updated = ?, done_at = ?, raw_data = ? WHERE id = ?"
@@ -767,38 +767,49 @@ export class TanaIndexer {
         fieldNamesCount++;
       }
 
-      // STEP 5.5: T-3.2 & T-3.3 - Clear and rebuild field_values
-      clearFieldValues(this.sqlite);
-      const fieldValues = extractFieldValuesFromNodes(graph.nodes as Map<string, NodeDump>, this.sqlite, { parentMap });
-      const getCreatedTimestamp = (parentId: string): number | null => {
-        const parentNode = graph.nodes.get(parentId);
-        return parentNode?.props?.created ?? null;
-      };
-      insertFieldValues(this.sqlite, fieldValues, getCreatedTimestamp);
-      const fieldValuesCount = fieldValues.length;
+      // STEP 5.5-5.8: Field values, supertag metadata, type extraction
+      // Only do full rebuild when change ratio is significant (>5% of nodes)
+      // For small incremental changes, skip these expensive operations —
+      // they'll be rebuilt on the next full sync or when the ratio exceeds threshold.
+      const changeRatio = totalChanges / graph.nodes.size;
+      const needsFullRebuild = changeRatio > 0.05;
 
-      // STEP 5.6: T-2.4 - Clear and rebuild supertag metadata
-      clearSupertagMetadata(this.sqlite);
-      const supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
+      let fieldValuesCount = 0;
+      let supertagMetadataResult = { fieldsExtracted: 0, parentsExtracted: 0 };
 
-      // STEP 5.6.5: Spec 074 - Discover and store system field sources
-      // This finds which tagDefs define SYS_A* fields (Date, Attendees, etc.)
-      const docsById = new Map(dump.docs.map(d => [d.id, d]));
-      const systemFieldSources = discoverSystemFieldSources(dump.docs, docsById);
-      insertSystemFieldSources(this.sqlite, systemFieldSources);
+      if (needsFullRebuild) {
+        getLogger().info("Full metadata rebuild", { changeRatio: changeRatio.toFixed(3), totalChanges });
 
-      // STEP 5.7: Post-process field types using explicit type extraction from Tana's typeChoice structure
-      // This is the most reliable source - extracts actual type definitions from the export
-      const explicitTypes = extractFieldTypesFromDocs(dump.docs);
-      updateFieldTypesFromExport(this.sqlite, explicitTypes);
+        // T-3.2 & T-3.3 - Clear and rebuild field_values
+        clearFieldValues(this.sqlite);
+        const fieldValues = extractFieldValuesFromNodes(graph.nodes as Map<string, NodeDump>, this.sqlite, { parentMap });
+        const getCreatedTimestamp = (parentId: string): number | null => {
+          const parentNode = graph.nodes.get(parentId);
+          return parentNode?.props?.created ?? null;
+        };
+        insertFieldValues(this.sqlite, fieldValues, getCreatedTimestamp);
+        fieldValuesCount = fieldValues.length;
 
-      // STEP 5.7.5: Extract and store target supertags for reference fields (Options from Supertag)
-      const targetSupertags = extractTargetSupertagsFromDocs(dump.docs);
-      updateTargetSupertagsFromExport(this.sqlite, targetSupertags);
+        // T-2.4 - Clear and rebuild supertag metadata
+        clearSupertagMetadata(this.sqlite);
+        supertagMetadataResult = extractSupertagMetadata(graph.nodes as Map<string, NodeDump>, this.sqlite);
 
-      // STEP 5.8: Apply value-based inference for any remaining 'text' types
-      // This catches fields without explicit typeChoice (older exports, etc.)
-      updateFieldTypesFromValues(this.sqlite);
+        // Spec 074 - Discover and store system field sources
+        const docsById = new Map(dump.docs.map(d => [d.id, d]));
+        const systemFieldSources = discoverSystemFieldSources(dump.docs, docsById);
+        insertSystemFieldSources(this.sqlite, systemFieldSources);
+
+        // Post-process field types
+        const explicitTypes = extractFieldTypesFromDocs(dump.docs);
+        updateFieldTypesFromExport(this.sqlite, explicitTypes);
+
+        const targetSupertags = extractTargetSupertagsFromDocs(dump.docs);
+        updateTargetSupertagsFromExport(this.sqlite, targetSupertags);
+
+        updateFieldTypesFromValues(this.sqlite);
+      } else {
+        getLogger().info("Skipping full metadata rebuild (small change set)", { totalChanges });
+      }
 
       // STEP 6: Update sync metadata
       this.sqlite.run(
