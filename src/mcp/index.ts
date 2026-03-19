@@ -67,6 +67,29 @@ if (process.argv.includes('--lite')) {
 const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
 
 /**
+ * Idle auto-exit: if no tool calls arrive for IDLE_TIMEOUT_MS, the MCP server
+ * self-terminates. Claude Code will restart it on the next tool call.
+ * This prevents zombie processes from accumulating across sessions.
+ * Set SUPERTAG_MCP_IDLE_TIMEOUT=0 to disable.
+ */
+const IDLE_TIMEOUT_MS = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000); // 30 min default
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resetIdleTimer() {
+  if (IDLE_TIMEOUT_MS <= 0) return;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    logger.info('Idle timeout reached, shutting down', { timeoutMs: IDLE_TIMEOUT_MS });
+    activePoller?.stop();
+    process.exit(0);
+  }, IDLE_TIMEOUT_MS);
+  // Don't keep the process alive just for the timer
+  if (idleTimer && typeof idleTimer === 'object' && 'unref' in idleTimer) {
+    (idleTimer as NodeJS.Timeout).unref();
+  }
+}
+
+/**
  * MCP-safe logger - configured to write to stderr to avoid interfering with stdio JSON-RPC
  * Uses unified logger with explicit stderr stream for MCP protocol compliance
  */
@@ -366,6 +389,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Execute tools
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  resetIdleTimer();
   const { name, arguments: args } = request.params;
   const mode = getToolMode();
   logger.info('Tool called', { tool: name, mode });
@@ -660,6 +684,9 @@ async function main() {
         error: String(pollerError),
       });
     }
+
+    // Start idle timer after successful initialization
+    resetIdleTimer();
   } catch (error) {
     logger.error('Failed to start MCP server', { error: String(error) });
     process.exit(1);

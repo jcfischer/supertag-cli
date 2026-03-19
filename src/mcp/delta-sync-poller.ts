@@ -79,6 +79,7 @@ export class DeltaSyncPoller {
   private paused = false;
   private wasHealthy = true;
   private lastResult: DeltaSyncResult | null = null;
+  private tickCount = 0;
 
   constructor(private options: DeltaSyncPollerOptions) {
     this.service = new DeltaSyncService({
@@ -180,6 +181,12 @@ export class DeltaSyncPoller {
       }
 
       if (this.paused || this.service.isSyncing()) return;
+
+      // Periodic connection health check (every 10th tick)
+      this.tickCount++;
+      if (this.tickCount % 10 === 0) {
+        this.service.ensureHealthyConnection();
+      }
 
       const result = await this.service.sync();
       this.lastResult = result;

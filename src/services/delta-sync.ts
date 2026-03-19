@@ -27,12 +27,14 @@ const PAGE_SIZE = 100;
  */
 export class DeltaSyncService {
   private db: Database;
+  private dbPath: string;
   private localApiClient: DeltaSyncOptions["localApiClient"];
   private embeddingConfig?: DeltaSyncOptions["embeddingConfig"];
   private logger: NonNullable<DeltaSyncOptions["logger"]>;
   private syncing = false;
 
   constructor(options: DeltaSyncOptions) {
+    this.dbPath = options.dbPath;
     this.db = new Database(options.dbPath);
     this.localApiClient = options.localApiClient;
     this.embeddingConfig = options.embeddingConfig;
@@ -41,6 +43,27 @@ export class DeltaSyncService {
       warn: () => {},
       error: () => {},
     };
+  }
+
+  /**
+   * Check if the database connection is healthy.
+   * If stale (e.g., "disk full" error from WAL corruption), reconnect.
+   */
+  ensureHealthyConnection(): void {
+    try {
+      this.db.run("SELECT 1");
+    } catch (error) {
+      this.logger.warn("Database connection unhealthy, reconnecting", {
+        error: String(error),
+      });
+      try {
+        this.db.close();
+      } catch {
+        // Already broken — ignore
+      }
+      this.db = new Database(this.dbPath);
+      this.logger.info("Database connection re-established");
+    }
   }
 
   /**
@@ -229,6 +252,9 @@ export class DeltaSyncService {
    * 6. Return result
    */
   async sync(): Promise<DeltaSyncResult> {
+    // Verify connection health before syncing (mitigates stale connection from process accumulation)
+    this.ensureHealthyConnection();
+
     // T-2.3: In-memory lock check
     if (this.syncing) {
       this.logger.warn("Delta-sync already in progress, skipping");
