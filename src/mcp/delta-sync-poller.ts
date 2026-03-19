@@ -113,6 +113,7 @@ export class DeltaSyncPoller {
       clearInterval(this.interval);
       this.interval = null;
     }
+    this.tickCount = 0;
     this.service.close();
     this.options.logger?.info("Delta-sync poller stopped");
   }
@@ -182,11 +183,7 @@ export class DeltaSyncPoller {
 
       if (this.paused || this.service.isSyncing()) return;
 
-      // Periodic connection health check (every 10th tick)
       this.tickCount++;
-      if (this.tickCount % 10 === 0) {
-        this.service.ensureHealthyConnection();
-      }
 
       const result = await this.service.sync();
       this.lastResult = result;

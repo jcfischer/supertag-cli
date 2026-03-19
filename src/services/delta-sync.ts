@@ -58,8 +58,11 @@ export class DeltaSyncService {
       });
       try {
         this.db.close();
-      } catch {
-        // Already broken — ignore
+      } catch (closeError) {
+        // Already broken — log at debug level for troubleshooting
+        this.logger.warn("Failed to close stale connection (expected)", {
+          error: String(closeError),
+        });
       }
       this.db = new Database(this.dbPath);
       this.logger.info("Database connection re-established");

@@ -72,7 +72,8 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'supertag-mcp';
  * This prevents zombie processes from accumulating across sessions.
  * Set SUPERTAG_MCP_IDLE_TIMEOUT=0 to disable.
  */
-const IDLE_TIMEOUT_MS = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000); // 30 min default
+const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
+const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout; // 30 min default, guard against NaN
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function resetIdleTimer() {
