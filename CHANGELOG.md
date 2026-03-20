@@ -5,6 +5,17 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-03-20
+
+### Added
+- **MCP idle auto-exit** — Server self-terminates after 30 minutes without tool calls, preventing zombie process accumulation across Claude Code sessions. Configurable via `SUPERTAG_MCP_IDLE_TIMEOUT` env var (set `0` to disable).
+- **SQLite connection health check** — `DeltaSyncService` tests its database connection before each sync and auto-reconnects if stale, resolving "database or disk is full" errors caused by long-lived processes.
+- **busy_timeout on all DeltaSyncService connections** — `PRAGMA busy_timeout = 5000` configured on both initial and reconnected connections for better concurrent access resilience.
+
+### Fixed
+- **Idle timer NaN guard** — Invalid `SUPERTAG_MCP_IDLE_TIMEOUT` values (e.g., non-numeric strings) now fall back to the 30-minute default instead of causing immediate server exit.
+- **Idle timer sync race** — Timer now checks if a sync is in progress before exiting, deferring shutdown until the sync completes.
+
 ## [2.4.2] - 2026-03-16
 
 ### Performance
