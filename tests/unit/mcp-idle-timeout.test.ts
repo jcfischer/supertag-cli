@@ -1,134 +1,169 @@
 /**
  * MCP Idle Timeout Tests
  *
- * Tests for the idle auto-exit feature in the MCP server:
- * - Timeout parsing and NaN guard
- * - Timer reset on tool calls
- * - Disable with SUPERTAG_MCP_IDLE_TIMEOUT=0
- * - Process exit after timeout
+ * Tests for the idle auto-exit logic in the MCP server:
+ * - NaN env var falls back to default
+ * - SUPERTAG_MCP_IDLE_TIMEOUT=0 disables the timer
+ * - Valid env var is respected
+ *
+ * Note: We test the timeout parsing logic directly rather than
+ * the full MCP server lifecycle, since the timer is module-level.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect } from "bun:test";
 
-describe("MCP Idle Timeout", () => {
-  let originalEnv: string | undefined;
+// =============================================================================
+// Tests for the timeout parsing logic (extracted for testability)
+// =============================================================================
 
-  beforeEach(() => {
-    originalEnv = process.env.SUPERTAG_MCP_IDLE_TIMEOUT;
+/**
+ * Replicate the timeout parsing logic from src/mcp/index.ts
+ * so we can test edge cases without starting the MCP server.
+ */
+function parseIdleTimeout(envValue: string | undefined): number {
+  const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+  const rawTimeout = Number(envValue ?? DEFAULT_IDLE_TIMEOUT_MS);
+  return Number.isNaN(rawTimeout) ? DEFAULT_IDLE_TIMEOUT_MS : rawTimeout;
+}
+
+describe("MCP idle timeout parsing", () => {
+  const DEFAULT_30_MIN = 30 * 60 * 1000;
+
+  it("should return 30 min default when env var is undefined", () => {
+    expect(parseIdleTimeout(undefined)).toBe(DEFAULT_30_MIN);
   });
 
-  afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = originalEnv;
-    } else {
-      delete process.env.SUPERTAG_MCP_IDLE_TIMEOUT;
+  it("should return 0 when env var is '0' (disabled)", () => {
+    expect(parseIdleTimeout("0")).toBe(0);
+  });
+
+  it("should parse valid numeric string", () => {
+    expect(parseIdleTimeout("60000")).toBe(60000);
+  });
+
+  it("should fall back to default for NaN values", () => {
+    expect(parseIdleTimeout("abc")).toBe(DEFAULT_30_MIN);
+    expect(parseIdleTimeout("not-a-number")).toBe(DEFAULT_30_MIN);
+  });
+
+  it("should treat empty string as 0 (disabled)", () => {
+    // Number("") === 0, which is a valid value meaning "disabled"
+    expect(parseIdleTimeout("")).toBe(0);
+  });
+
+  it("should handle negative values (treated as disabled)", () => {
+    // Negative values pass the NaN check but fail the <= 0 guard in resetIdleTimer
+    expect(parseIdleTimeout("-1")).toBe(-1);
+  });
+
+  it("should handle very large values", () => {
+    expect(parseIdleTimeout("999999999")).toBe(999999999);
+  });
+
+  it("should handle float values", () => {
+    expect(parseIdleTimeout("1500.5")).toBe(1500.5);
+  });
+});
+
+// =============================================================================
+// Tests for resetIdleTimer behavior
+// =============================================================================
+
+describe("MCP idle timer behavior", () => {
+  it("should not create timer when timeout is 0 (disabled)", () => {
+    // Replicate the guard logic
+    const IDLE_TIMEOUT_MS = 0;
+    let timerCreated = false;
+
+    function resetIdleTimer() {
+      if (IDLE_TIMEOUT_MS <= 0) return;
+      timerCreated = true;
     }
+
+    resetIdleTimer();
+    expect(timerCreated).toBe(false);
   });
 
-  describe("timeout parsing", () => {
-    it("should use default timeout when env var not set", () => {
-      delete process.env.SUPERTAG_MCP_IDLE_TIMEOUT;
+  it("should not create timer when timeout is negative", () => {
+    const IDLE_TIMEOUT_MS = -1;
+    let timerCreated = false;
 
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
+    function resetIdleTimer() {
+      if (IDLE_TIMEOUT_MS <= 0) return;
+      timerCreated = true;
+    }
 
-      expect(IDLE_TIMEOUT_MS).toBe(30 * 60 * 1000); // 30 minutes
-    });
-
-    it("should parse valid numeric timeout", () => {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = "60000";
-
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
-
-      expect(IDLE_TIMEOUT_MS).toBe(60000);
-    });
-
-    it("should guard against NaN and use default", () => {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = "invalid";
-
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
-
-      expect(IDLE_TIMEOUT_MS).toBe(30 * 60 * 1000); // Falls back to default
-    });
-
-    it("should allow disabling with 0", () => {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = "0";
-
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
-
-      expect(IDLE_TIMEOUT_MS).toBe(0);
-    });
-
-    it("should guard against empty string", () => {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = "";
-
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
-
-      expect(IDLE_TIMEOUT_MS).toBe(0); // Empty string converts to 0, which is valid
-    });
-
-    it("should handle negative numbers (treated as timeout value)", () => {
-      process.env.SUPERTAG_MCP_IDLE_TIMEOUT = "-1000";
-
-      const rawTimeout = Number(process.env.SUPERTAG_MCP_IDLE_TIMEOUT ?? 30 * 60 * 1000);
-      const IDLE_TIMEOUT_MS = Number.isNaN(rawTimeout) ? 30 * 60 * 1000 : rawTimeout;
-
-      expect(IDLE_TIMEOUT_MS).toBe(-1000);
-    });
+    resetIdleTimer();
+    expect(timerCreated).toBe(false);
   });
 
-  describe("resetIdleTimer logic", () => {
-    it("should skip timer creation when timeout is 0", () => {
-      const IDLE_TIMEOUT_MS = 0;
-      let timerCreated = false;
+  it("should create timer when timeout is positive", () => {
+    const IDLE_TIMEOUT_MS = 1000;
+    let timerCreated = false;
 
-      // Simulate resetIdleTimer logic
-      if (IDLE_TIMEOUT_MS > 0) {
-        timerCreated = true;
-      }
+    function resetIdleTimer() {
+      if (IDLE_TIMEOUT_MS <= 0) return;
+      timerCreated = true;
+    }
 
-      expect(timerCreated).toBe(false);
-    });
-
-    it("should skip timer creation when timeout is negative", () => {
-      const IDLE_TIMEOUT_MS = -1000;
-      let timerCreated = false;
-
-      // Simulate resetIdleTimer logic
-      if (IDLE_TIMEOUT_MS > 0) {
-        timerCreated = true;
-      }
-
-      expect(timerCreated).toBe(false);
-    });
-
-    it("should create timer when timeout is positive", () => {
-      const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-      let timerCreated = false;
-
-      // Simulate resetIdleTimer logic
-      if (IDLE_TIMEOUT_MS > 0) {
-        timerCreated = true;
-      }
-
-      expect(timerCreated).toBe(true);
-    });
+    resetIdleTimer();
+    expect(timerCreated).toBe(true);
   });
 
-  describe("timer unref behavior", () => {
-    it("should verify unref is called on Node.js timeout objects", () => {
-      // Create a timer to verify it has unref method
-      const timer = setTimeout(() => {}, 1000);
+  it("should skip exit when activePoller is syncing", () => {
+    let exitCalled = false;
+    let timerReset = false;
+    const mockPoller = {
+      isSyncing: () => true,
+      stop: () => {},
+    };
 
-      expect(timer).toBeDefined();
-      expect(typeof timer === "object").toBe(true);
-      expect("unref" in timer).toBe(true);
+    // Replicate the timer callback logic
+    function idleTimeoutCallback() {
+      if (mockPoller?.isSyncing()) {
+        timerReset = true;
+        return;
+      }
+      exitCalled = true;
+    }
 
-      clearTimeout(timer);
-    });
+    idleTimeoutCallback();
+    expect(exitCalled).toBe(false);
+    expect(timerReset).toBe(true);
+  });
+
+  it("should exit when activePoller is not syncing", () => {
+    let exitCalled = false;
+    const mockPoller = {
+      isSyncing: () => false,
+      stop: () => {},
+    };
+
+    function idleTimeoutCallback() {
+      if (mockPoller?.isSyncing()) {
+        return;
+      }
+      mockPoller.stop();
+      exitCalled = true;
+    }
+
+    idleTimeoutCallback();
+    expect(exitCalled).toBe(true);
+  });
+
+  it("should exit when activePoller is null", () => {
+    let exitCalled = false;
+    const mockPoller = null;
+
+    function idleTimeoutCallback() {
+      if (mockPoller?.isSyncing()) {
+        return;
+      }
+      mockPoller?.stop();
+      exitCalled = true;
+    }
+
+    idleTimeoutCallback();
+    expect(exitCalled).toBe(true);
   });
 });

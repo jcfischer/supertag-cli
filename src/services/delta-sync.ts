@@ -36,6 +36,7 @@ export class DeltaSyncService {
   constructor(options: DeltaSyncOptions) {
     this.dbPath = options.dbPath;
     this.db = new Database(options.dbPath);
+    this.db.run("PRAGMA busy_timeout = 5000");
     this.localApiClient = options.localApiClient;
     this.embeddingConfig = options.embeddingConfig;
     this.logger = options.logger ?? {
@@ -59,12 +60,12 @@ export class DeltaSyncService {
       try {
         this.db.close();
       } catch (closeError) {
-        // Already broken — log at debug level for troubleshooting
         this.logger.warn("Failed to close stale connection (expected)", {
           error: String(closeError),
         });
       }
       this.db = new Database(this.dbPath);
+      this.db.run("PRAGMA busy_timeout = 5000");
       this.logger.info("Database connection re-established");
     }
   }
