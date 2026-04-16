@@ -5,6 +5,14 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.6] - 2026-04-16
+
+### Fixed
+- **Delta-sync was silently a no-op after first run (CRITICAL)** — Tana Local API interprets `edited.since` as **seconds since epoch**, but supertag-cli was passing **milliseconds**. The API resolved the ms value to a far-future timestamp (~year 58,000) and returned 0 results, so every delta-sync after the initial one did nothing. Fixed by converting ms → seconds at the API boundary in `DeltaSyncService.fetchChangedNodes()`. The watermark remains in ms internally for backward compat with existing databases. This explains most reported staleness — delta-sync now actually catches Tana-originated edits.
+
+### Known limitation (still present after this fix)
+- **Field-value-only changes may still not surface in delta-sync.** Investigation showed that modifying only a field value on a node does not appear to bump the parent's `edited.since` timestamp in Tana's index. A proper fix requires a per-supertag rescan (planned for v2.6). Until then, a nightly `supertag sync index` (full reindex) remains required for field-filtered query correctness.
+
 ## [2.5.5] - 2026-04-16
 
 ### Fixed

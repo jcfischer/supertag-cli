@@ -243,13 +243,25 @@ export class DeltaSyncService {
    * Calls localApiClient.searchNodes with edited.since filter,
    * yielding each page of results. Stops when an empty page or
    * a page smaller than PAGE_SIZE is returned.
+   *
+   * NOTE (v2.5.6 fix): Tana Local API interprets `edited.since` as
+   * **seconds since epoch**, not milliseconds. Prior to this release we
+   * passed the ms watermark directly, which the API resolved to a
+   * far-future timestamp (~year 58,000) — making delta-sync silently a
+   * no-op after its first run. We keep watermarks in ms internally (for
+   * backward-compat with existing databases) and convert at this boundary.
    */
   async *fetchChangedNodes(sinceMs: number): AsyncGenerator<SearchResultNode[]> {
+    // Convert ms → seconds. Floor so we don't skip edits that happened
+    // within the sub-second of the previous watermark. Clamp to min 1
+    // because the API rejects `since=0` with a validation error.
+    const sinceSec = Math.max(1, Math.floor(sinceMs / 1000));
+
     let offset = 0;
 
     while (true) {
       const page = await this.localApiClient.searchNodes(
-        { edited: { since: sinceMs } },
+        { edited: { since: sinceSec } },
         { limit: PAGE_SIZE, offset }
       );
 

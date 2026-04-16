@@ -124,6 +124,66 @@ describe("DeltaSyncService - Pagination + Sync Orchestration (T-2.2)", () => {
       expect(pages).toHaveLength(0);
     });
 
+    it("passes edited.since as seconds, not milliseconds (v2.5.6 fix E1)", async () => {
+      // Regression test: Tana Local API interprets edited.since as seconds.
+      // Prior to v2.5.6 this was passed as ms, which the API resolved to a
+      // far-future timestamp (~year 58,000), making delta-sync a no-op.
+      const capturedQueries: Array<Record<string, unknown>> = [];
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (query) => {
+            capturedQueries.push(query);
+            return [];
+          },
+          health: async () => true,
+        },
+      });
+
+      // Pass an ms watermark equivalent to 2026-04-16
+      const watermarkMs = 1_776_371_000_000;
+      const expectedSec = Math.floor(watermarkMs / 1000);
+
+      const pages: SearchResultNode[][] = [];
+      for await (const page of service.fetchChangedNodes(watermarkMs)) {
+        pages.push(page);
+      }
+
+      expect(capturedQueries).toHaveLength(1);
+      const q = capturedQueries[0] as { edited: { since: number } };
+      expect(q.edited.since).toBe(expectedSec);
+
+      // Hard guard: the value must look like "seconds since epoch around now",
+      // not "milliseconds" (which would be ~1e12).
+      expect(q.edited.since).toBeLessThan(10_000_000_000); // 10 billion = year 2286 as seconds
+      expect(q.edited.since).toBeGreaterThan(1_000_000_000); // 1 billion = year 2001 as seconds
+    });
+
+    it("clamps edited.since to minimum 1 (API rejects since=0)", async () => {
+      const capturedQueries: Array<Record<string, unknown>> = [];
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (query) => {
+            capturedQueries.push(query);
+            return [];
+          },
+          health: async () => true,
+        },
+      });
+
+      const pages: SearchResultNode[][] = [];
+      for await (const page of service.fetchChangedNodes(0)) {
+        pages.push(page);
+      }
+
+      expect(capturedQueries).toHaveLength(1);
+      const q = capturedQueries[0] as { edited: { since: number } };
+      expect(q.edited.since).toBe(1);
+    });
+
     it("handles single partial page", async () => {
       const nodes = [createTestNode("n-1", "Node 1"), createTestNode("n-2", "Node 2")];
 
