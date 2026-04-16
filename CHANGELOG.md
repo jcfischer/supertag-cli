@@ -5,11 +5,13 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.1] - 2026-04-16
+## [2.5.2] - 2026-04-16
 
 ### Fixed
 - **`select` with `fields.*` prefix returns null** — `tana_query` and `tana_tagged` with `select: ["fields.Status", ...]` returned empty/null field values because the `fields.` prefix was passed directly to the database query instead of being stripped. Field values now resolve correctly with both `"fields.Status"` and bare `"Status"` formats.
 - **`tana_tagged` missing field values** — `tana_tagged` tool never loaded field values from the database, so any `select` referencing `fields.*` paths found nothing to project. Field values are now resolved via `FieldResolver` before projection.
+- **`sync status` always shows `latestExport: null`** — `getStatus()` returned a cached null value without ever searching the export directory. Now eagerly calls `findLatestExport()` so the actual latest export file is reported.
+- **Silent `sync index` failure diagnostics** — When no matching export files are found, the error now reports which directory was searched and lists any JSON files present that didn't match the expected `*@YYYY-MM-DD.json` pattern.
 
 ## [2.5.0] - 2026-03-20
 
