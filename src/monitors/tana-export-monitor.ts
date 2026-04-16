@@ -123,7 +123,23 @@ export class TanaExportWatcher extends EventEmitter {
     const exportFile = this.findLatestExport();
 
     if (!exportFile) {
-      throw new Error("No export files found in directory");
+      // List what's actually in the directory for diagnostics
+      try {
+        const files = readdirSync(this.config.exportDir);
+        const jsonFiles = files.filter((f) => f.endsWith(".json"));
+        if (jsonFiles.length > 0) {
+          throw new Error(
+            `No export files matching *@YYYY-MM-DD.json pattern in ${this.config.exportDir}. ` +
+            `Found ${jsonFiles.length} JSON file(s): ${jsonFiles.slice(0, 5).join(", ")}${jsonFiles.length > 5 ? "..." : ""}`
+          );
+        }
+        throw new Error(
+          `No export files found in ${this.config.exportDir} (${files.length} file(s) present, none are .json)`
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith("No export files")) throw e;
+        throw new Error(`No export files found in directory: ${this.config.exportDir}`);
+      }
     }
 
     try {
@@ -262,6 +278,11 @@ export class TanaExportWatcher extends EventEmitter {
    * Get current watcher status
    */
   getStatus(): WatcherStatus {
+    // Eagerly search for latest export if not yet cached
+    if (!this.latestExportFile) {
+      this.findLatestExport();
+    }
+
     return {
       watching: this.isWatching(),
       exportDir: this.config.exportDir,
