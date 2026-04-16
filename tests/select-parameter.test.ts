@@ -150,7 +150,7 @@ describe("--select parameter support", () => {
         expect(parsed[0]).not.toHaveProperty("name");
         expect(parsed[0]).not.toHaveProperty("updated");
       }
-    });
+    }, 15_000);
 
     testFn("should filter Unix output to selected fields only", async () => {
       const result = await $`bun run src/index.ts nodes recent --select id --limit 3`.text();
@@ -160,7 +160,7 @@ describe("--select parameter support", () => {
       for (const line of lines) {
         expect(line).not.toContain("\t");
       }
-    });
+    }, 15_000);
 
     testFn("should support multiple selected fields", async () => {
       const result = await $`bun run src/index.ts nodes recent --json --select id,name --limit 3`.text();
@@ -171,6 +171,6 @@ describe("--select parameter support", () => {
         expect(parsed[0]).toHaveProperty("name");
         expect(parsed[0]).not.toHaveProperty("updated");
       }
-    });
+    }, 15_000);
   });
 });

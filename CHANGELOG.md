@@ -5,6 +5,14 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.3] - 2026-04-16
+
+### Fixed
+- **`select` with `fields.*` still returns null/empty** — Root cause: field resolution used exact SQL `field_name IN (...)` matching which failed silently on case/encoding mismatches. Now resolves ALL fields with wildcard and lets JS projection handle filtering — eliminates any SQL matching fragility.
+- **`tana_query` ignores `select` clause** — `tana_query` never applied projection, returning all core fields (parentId, nodeType, doneAt) regardless of `select`. Now applies `applyProjectionToArray` like all other MCP tools.
+- **Field name matching now case-insensitive** — Both SQL field resolution (`COLLATE NOCASE`) and JS projection (`getNestedValue`) now match field names case-insensitively, so `fields.status` correctly resolves `Status`.
+- **`sync status` fails on Windows junctions** — `findLatestExport()` silently returned null when the export directory was a Windows junction (e.g., to Google Drive). Now resolves the canonical path via `realpathSync` before reading, with improved diagnostic logging.
+
 ## [2.5.2] - 2026-04-16
 
 ### Fixed

@@ -169,7 +169,7 @@ export class FieldResolver {
 
       if (fieldNames !== "*" && fieldNames.length > 0) {
         const fieldPlaceholders = fieldNames.map(() => "?").join(", ");
-        sql += ` AND field_name IN (${fieldPlaceholders})`;
+        sql += ` AND field_name COLLATE NOCASE IN (${fieldPlaceholders})`;
         params.push(...fieldNames);
       }
 

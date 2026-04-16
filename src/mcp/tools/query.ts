@@ -12,6 +12,10 @@ import { UnifiedQueryEngine } from "../../query/unified-query-engine";
 import type { QueryAST, WhereClause } from "../../query/types";
 import { resolveWorkspaceContext } from "../../config/workspace-resolver";
 import { parseComparisonDate } from "../../query/date-resolver";
+import {
+  parseSelectPaths,
+  applyProjectionToArray,
+} from "../../utils/select-projection";
 
 /**
  * Convert MCP input to QueryAST
@@ -129,6 +133,10 @@ export async function query(input: QueryInput): Promise<{
     try {
       const result = await engine.execute(ast);
 
+      // Apply projection when select clause is specified
+      const projection = parseSelectPaths(input.select);
+      const projectedResults = applyProjectionToArray(result.results, projection);
+
       const response: {
         workspace: string;
         query: QueryAST;
@@ -139,8 +147,8 @@ export async function query(input: QueryInput): Promise<{
       } = {
         workspace: wsContext.alias,
         query: ast,
-        results: result.results,
-        count: result.count,
+        results: projectedResults as Record<string, unknown>[],
+        count: projectedResults.length,
         hasMore: result.hasMore,
       };
 

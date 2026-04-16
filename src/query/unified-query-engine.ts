@@ -87,52 +87,28 @@ export class UnifiedQueryEngine {
    * Execute query with field value resolution
    */
   private executeWithFields(
-    ast: QueryAST,
+    _ast: QueryAST,
     results: Record<string, unknown>[],
     hasMore: boolean
   ): QueryResult {
     const fieldResolver = new FieldResolver(this.db);
 
-    // Determine which fields to include
-    let fieldNames: string[];
-    if (ast.select!.includes("*")) {
-      // Get all fields for this supertag, fall back to wildcard if metadata unavailable
-      try {
-        fieldNames = fieldResolver.getSupertagFields(ast.find);
-      } catch {
-        fieldNames = [];
-      }
-    } else {
-      // Strip "fields." prefix — select paths use "fields.Status" but
-      // the field_values table stores bare names like "Status"
-      fieldNames = ast.select!
-        .filter((s) => s.startsWith("fields.") || s === "*")
-        .map((s) => s.startsWith("fields.") ? s.replace("fields.", "") : s);
-
-      // If no field-prefixed paths, try treating non-core names as field names
-      if (fieldNames.length === 0) {
-        const coreFields = ["id", "name", "created", "updated", "parentId", "nodeType", "doneAt"];
-        fieldNames = ast.select!.filter((s) => !coreFields.includes(s));
-      }
-    }
-
     // Get node IDs
     const nodeIds = results.map((r) => r.id as string);
 
-    // Resolve field values — use wildcard if no specific fields determined
-    const resolveTarget = fieldNames.length > 0 ? fieldNames : ("*" as const);
-    const fieldValuesMap = fieldResolver.resolveFields(nodeIds, resolveTarget);
+    // Always resolve ALL fields with '*' to avoid SQL field-name matching
+    // issues (case, encoding, schema-name vs stored-name mismatches).
+    // Projection in the caller handles filtering to requested fields.
+    const fieldValuesMap = fieldResolver.resolveFields(nodeIds, "*");
 
     // Collect actual field names from resolved values
-    if (fieldNames.length === 0) {
-      const allFields = new Set<string>();
-      for (const fields of fieldValuesMap.values()) {
-        for (const key of Object.keys(fields)) {
-          allFields.add(key);
-        }
+    const allFields = new Set<string>();
+    for (const fields of fieldValuesMap.values()) {
+      for (const key of Object.keys(fields)) {
+        allFields.add(key);
       }
-      fieldNames = [...allFields];
     }
+    const fieldNames = [...allFields];
 
     // Merge field values into results
     const resultsWithFields = results.map((r) => {

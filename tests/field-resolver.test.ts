@@ -209,5 +209,23 @@ describe("FieldResolver", () => {
       expect(result.get("person1")?.Email).toBe("john@example.com");
       expect(result.get("person1")?.Company).toBeUndefined();
     });
+
+    it("should match field names case-insensitively", () => {
+      // Field stored as "Email" but queried as "email" (lowercase)
+      const result = resolver.resolveFields(["person1"], ["email"]);
+      expect(result.get("person1")?.Email).toBe("john@example.com");
+    });
+
+    it("should match field names case-insensitively (uppercase)", () => {
+      // Field stored as "Email" but queried as "EMAIL"
+      const result = resolver.resolveFields(["person1"], ["EMAIL"]);
+      expect(result.get("person1")?.Email).toBe("john@example.com");
+    });
+
+    it("should match field names case-insensitively (mixed case)", () => {
+      // Field stored as "Phone" but queried as "phone"
+      const result = resolver.resolveFields(["person1"], ["phone"]);
+      expect(result.get("person1")?.Phone).toBe("+1-555-1234");
+    });
   });
 });

@@ -140,7 +140,18 @@ function getNestedValue(
     if (typeof current !== "object") {
       return null;
     }
-    current = (current as Record<string, unknown>)[segment];
+    const record = current as Record<string, unknown>;
+    // Try exact match first, then case-insensitive fallback
+    // This handles field names like "fields.status" matching DB-stored "Status"
+    if (segment in record) {
+      current = record[segment];
+    } else {
+      const lowerSegment = segment.toLowerCase();
+      const matchKey = Object.keys(record).find(
+        (k) => k.toLowerCase() === lowerSegment
+      );
+      current = matchKey !== undefined ? record[matchKey] : undefined;
+    }
   }
 
   return current === undefined ? null : current;

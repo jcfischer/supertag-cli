@@ -5,7 +5,7 @@
  * triggers reindexing when changes are detected.
  */
 
-import { watch, type FSWatcher, existsSync, readdirSync, statSync } from "fs";
+import { watch, type FSWatcher, existsSync, readdirSync, statSync, realpathSync } from "fs";
 import { join, basename } from "path";
 import { TanaIndexer, type IndexResult } from "../db/indexer";
 import { UnifiedSchemaService } from "../services/unified-schema-service";
@@ -93,7 +93,20 @@ export class TanaExportWatcher extends EventEmitter {
    */
   findLatestExport(): string | null {
     try {
-      const files = readdirSync(this.config.exportDir);
+      // Resolve symlinks/junctions to canonical path (fixes Windows junction traversal)
+      let resolvedDir = this.config.exportDir;
+      try {
+        if (existsSync(this.config.exportDir)) {
+          resolvedDir = realpathSync(this.config.exportDir);
+        }
+      } catch {
+        // Fall back to original path if realpath fails
+        getLogger().debug("Could not resolve realpath for export dir, using original", {
+          exportDir: this.config.exportDir,
+        });
+      }
+
+      const files = readdirSync(resolvedDir);
 
       // Filter for Tana export files (pattern: *@YYYY-MM-DD.json)
       const exportFiles = files.filter((file) => {
@@ -101,17 +114,24 @@ export class TanaExportWatcher extends EventEmitter {
       });
 
       if (exportFiles.length === 0) {
+        getLogger().debug("No export files found matching pattern *@YYYY-MM-DD.json", {
+          dir: resolvedDir,
+          totalFiles: files.length,
+        });
         return null;
       }
 
       // Sort by filename (date is in filename, so lexicographic sort works)
       exportFiles.sort().reverse();
 
-      const latestFile = join(this.config.exportDir, exportFiles[0]);
+      const latestFile = join(resolvedDir, exportFiles[0]);
       this.latestExportFile = latestFile;
       return latestFile;
     } catch (error) {
-      getLogger().error("Error finding latest export", { error: String(error) });
+      getLogger().error("Error finding latest export", {
+        error: String(error),
+        exportDir: this.config.exportDir,
+      });
       return null;
     }
   }

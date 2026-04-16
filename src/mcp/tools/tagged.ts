@@ -63,24 +63,14 @@ export async function tagged(input: TaggedInput): Promise<TaggedResult> {
       updated: n.updated,
     }));
 
-    // Resolve field values when select includes fields.* paths or always for completeness
-    const hasFieldSelect = input.select?.some((s) => s.startsWith('fields.'));
-    if (hasFieldSelect || !input.select) {
+    // Always resolve all field values — using '*' avoids SQL field-name matching
+    // issues (case sensitivity, encoding). Projection handles filtering.
+    {
       const db = engine.rawDb;
       const fieldResolver = new FieldResolver(db);
       const nodeIds = nodes.map((n) => n.id);
 
-      // Determine which fields to resolve
-      let fieldTarget: string[] | '*';
-      if (hasFieldSelect) {
-        fieldTarget = input.select!
-          .filter((s) => s.startsWith('fields.'))
-          .map((s) => s.replace('fields.', ''));
-      } else {
-        fieldTarget = '*';
-      }
-
-      const fieldValuesMap = fieldResolver.resolveFields(nodeIds, fieldTarget);
+      const fieldValuesMap = fieldResolver.resolveFields(nodeIds, '*');
       for (const item of items) {
         const fields = fieldValuesMap.get(item.id as string) ?? {};
         item.fields = fields;
