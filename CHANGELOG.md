@@ -5,6 +5,18 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.5] - 2026-04-16
+
+### Fixed
+- **Delta-sync hangs indefinitely on Windows 11** — `LocalApiClient` now wraps every `fetch()` with an `AbortSignal`-based timeout (default 30s, override via `SUPERTAG_LOCAL_API_TIMEOUT_MS`). A wedged Tana Desktop process used to hang the entire sync forever; it now surfaces as a retryable `TIMEOUT` error after the configured timeout and retries with exponential backoff.
+
+### Added
+- **`tana_stats` exposes index freshness** — Response now includes `lastFullSync`, `lastDeltaSync`, `lastDeltaNodesCount`, `secondsSinceLastSync`, and `isStale` (with a `staleReason` message when stale). Lets AI callers detect a stale index before trusting query results.
+- **`tana_query` emits staleness warnings** — Responses now include an optional `warnings` field when the local index is stale or when a field-filtered query runs against a database with no full sync. Thresholds configurable via `SUPERTAG_STALE_DELTA_MINUTES` (default 60) and `SUPERTAG_STALE_FULL_HOURS` (default 168).
+
+### Documentation
+- **Field-filtered queries require a recent full sync** — Documented that delta-sync clears `field_values` for touched nodes without repopulating them (by design — delta-sync has no tuple context). Any query filtering on a non-core field must therefore run against a recently full-synced index; delta-sync alone is insufficient for field-value correctness. A proper fix requires a deeper redesign (see #sync-correctness).
+
 ## [2.5.4] - 2026-04-16
 
 ### Fixed

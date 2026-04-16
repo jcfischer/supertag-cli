@@ -10,7 +10,7 @@
 
 import { StructuredError } from '../utils/structured-errors';
 import {
-  HealthResponseSchema, type HealthResponse,
+  HealthResponseSchema,
   ImportResponseSchema, type ImportResponse,
   TagOperationResponseSchema, type TagOperationResponse,
   FieldContentResponseSchema, type FieldContentResponse,
@@ -43,6 +43,22 @@ const BASE_BACKOFF_MS = 100;
 /** HTTP status codes that trigger automatic retry */
 const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 
+/**
+ * Default per-request timeout (ms). Overridable via constructor `timeoutMs` or
+ * `SUPERTAG_LOCAL_API_TIMEOUT_MS` env var. 30s covers typical delta pages
+ * without masking a genuinely unresponsive Tana Desktop. AbortSignal-based
+ * so a hung socket surfaces as a retryable error rather than hanging forever
+ * (which was the Windows 11 symptom reported in v2.5.4).
+ */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function resolveDefaultTimeout(): number {
+  const raw = process.env.SUPERTAG_LOCAL_API_TIMEOUT_MS;
+  if (!raw) return DEFAULT_TIMEOUT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TIMEOUT_MS;
+}
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -50,6 +66,8 @@ const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 interface LocalApiClientConfig {
   endpoint: string;
   bearerToken: string;
+  /** Per-request timeout in milliseconds (default 30_000). */
+  timeoutMs?: number;
 }
 
 interface RequestOptions {
@@ -109,10 +127,19 @@ function serializeDeepObject(
 export class LocalApiClient {
   private readonly endpoint: string;
   private readonly bearerToken: string;
+  private readonly timeoutMs: number;
 
   constructor(config: LocalApiClientConfig) {
     this.endpoint = config.endpoint.replace(/\/+$/, '');
     this.bearerToken = config.bearerToken;
+    // Accept only positive finite overrides; anything else (0, NaN, Infinity,
+    // negative) falls through to env/default so a bad override can't silently
+    // disable timeouts.
+    const override = config.timeoutMs;
+    this.timeoutMs =
+      override !== undefined && Number.isFinite(override) && override > 0
+        ? override
+        : resolveDefaultTimeout();
   }
 
   // ===========================================================================
@@ -159,8 +186,14 @@ export class LocalApiClient {
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      // Per-attempt AbortController so a hung socket aborts instead of hanging forever.
+      // This is the fix for the Windows 11 delta-sync hang reported in v2.5.4.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      const attemptOptions: RequestInit = { ...fetchOptions, signal: controller.signal };
+
       try {
-        const response = await fetch(url, fetchOptions);
+        const response = await fetch(url, attemptOptions);
 
         // Handle non-retryable HTTP errors immediately
         if (!response.ok && !RETRYABLE_STATUS_CODES.has(response.status)) {
@@ -181,6 +214,20 @@ export class LocalApiClient {
         const data = await response.json();
         return schema.parse(data);
       } catch (error) {
+        // Timeout / abort -- treat as transient and retry
+        if (this.isAbortError(error)) {
+          lastError = new StructuredError('TIMEOUT', `Local API request timed out after ${this.timeoutMs}ms`, {
+            details: { endpoint: url, method, timeoutMs: this.timeoutMs, attempt },
+            suggestion: 'Tana Desktop may be unresponsive. Check that Tana Desktop is running and not stuck. Increase timeout via SUPERTAG_LOCAL_API_TIMEOUT_MS env var if needed.',
+            recovery: { canRetry: true, retryable: true, retryStrategy: 'exponential', maxRetries: MAX_RETRIES },
+          });
+          if (attempt < MAX_RETRIES) {
+            await this.backoff(attempt);
+            continue;
+          }
+          throw lastError;
+        }
+
         // Already a StructuredError from mapHttpError -- do not wrap again
         if (error instanceof StructuredError) {
           // Only retry retryable StructuredErrors on transient status codes
@@ -211,6 +258,8 @@ export class LocalApiClient {
           details: { endpoint: url, method, originalError: error instanceof Error ? error.message : String(error) },
           cause: error instanceof Error ? error : undefined,
         });
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -540,6 +589,16 @@ export class LocalApiClient {
         });
       }
     }
+  }
+
+  /**
+   * Detect AbortSignal-triggered aborts (from our per-attempt timeout).
+   * fetch rejects with DOMException name=AbortError when the signal aborts.
+   * Narrowed to `error.name === 'AbortError'` only — message substring matching
+   * would false-positive on error bodies or upstream errors echoing "aborted".
+   */
+  private isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AbortError';
   }
 
   /**

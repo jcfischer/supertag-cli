@@ -492,6 +492,33 @@ supertag sync cleanup --keep 5
 
 The MCP server can run delta-sync automatically in the background at a configurable interval (default: every 5 minutes). Set `localApi.deltaSyncInterval` in config or use `TANA_DELTA_SYNC_INTERVAL` environment variable (0 disables polling).
 
+#### ⚠️ Field-Filtered Queries Require a Recent Full Sync
+
+Delta-sync has a known correctness gap around supertag **field values**. When delta-sync detects a changed node it clears that node's entries in the `field_values` table but **does not repopulate them** — the tuple structure needed to re-extract field values isn't available via the Local API. A subsequent full sync (`supertag sync index`, without `--delta`) re-populates them from the export JSON.
+
+Consequences:
+
+- Queries that filter on a supertag field (e.g., `where: { "Time Sector": "🔴 This week" }`) are **only fully accurate** against a recently full-synced database. Between full syncs, delta-sync will steadily degrade field-filter correctness.
+- If a node's field value changes in Tana but the node itself isn't otherwise edited, the Local API's `edited.since` filter may not surface it — delta-sync misses field-only changes entirely. The stale value remains in `field_values` until the next full sync.
+- `tana_query` and `tana_stats` now emit staleness warnings/flags (see below) so callers can detect this state before trusting results.
+
+**Recommended cadence:** schedule a nightly `supertag sync index` (full reindex from the latest export) alongside any delta-sync-based workflows. Rely on delta-sync only for name/tag/creation changes and semantic search freshness.
+
+#### Staleness Detection
+
+Both `tana_stats` and `tana_query` now surface index freshness:
+
+- `tana_stats` returns `lastFullSync`, `lastDeltaSync`, `lastDeltaNodesCount`, `secondsSinceLastSync`, and `isStale` fields.
+- `tana_query` returns a `warnings` array when the index is older than the configured thresholds or when a field-filtered query runs against a database with no full sync.
+
+Configurable thresholds (env vars):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SUPERTAG_STALE_DELTA_MINUTES` | `60` | Warn when newest sync (full or delta) is older than this. |
+| `SUPERTAG_STALE_FULL_HOURS` | `168` (7 days) | Warn when last full sync is older than this (field values drift). |
+| `SUPERTAG_LOCAL_API_TIMEOUT_MS` | `30000` | Per-request timeout for Local API calls. Hung requests abort and retry. |
+
 ### WATCH - Continuous Monitoring
 
 Monitor Tana for changes in real-time and trigger automation hooks.

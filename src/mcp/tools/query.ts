@@ -9,9 +9,45 @@
 import { Database } from "bun:sqlite";
 import type { QueryInput } from "../schemas";
 import { UnifiedQueryEngine } from "../../query/unified-query-engine";
-import type { QueryAST, WhereClause } from "../../query/types";
+import type { QueryAST, WhereClause, WhereGroup } from "../../query/types";
+import { isWhereClause, isWhereGroup } from "../../query/types";
 import { resolveWorkspaceContext } from "../../config/workspace-resolver";
 import { parseComparisonDate } from "../../query/date-resolver";
+import { getSyncStaleness } from "../../utils/sync-staleness";
+
+/**
+ * Built-in node attributes that don't live in `field_values`. Anything else is
+ * treated as a supertag field, which delta-sync cannot keep correct on its own.
+ */
+export const CORE_FIELDS: ReadonlySet<string> = new Set([
+  "created",
+  "updated",
+  "doneAt",
+  "done",
+  "name",
+  "id",
+  "trashed",
+]);
+
+/**
+ * Return true if any where clause in the tree references a non-core field
+ * (i.e., a field_values-backed attribute like "Time Sector", "Status").
+ * Used to decide whether to emit a delta-sync field-value staleness warning.
+ */
+export function whereUsesFieldValue(
+  clauses: (WhereClause | WhereGroup)[],
+  coreFields: ReadonlySet<string> = CORE_FIELDS,
+): boolean {
+  for (const c of clauses) {
+    if (isWhereClause(c)) {
+      const name = c.field.startsWith("fields.") ? c.field.slice(7) : c.field;
+      if (!coreFields.has(name)) return true;
+    } else if (isWhereGroup(c)) {
+      if (whereUsesFieldValue(c.clauses, coreFields)) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Convert MCP input to QueryAST
@@ -114,6 +150,8 @@ export async function query(input: QueryInput): Promise<{
   hasMore: boolean;
   /** Field names included when select clause is used */
   fieldNames?: string[];
+  /** Warnings about result freshness / correctness (e.g., stale index). */
+  warnings?: string[];
 }> {
   try {
     // Resolve workspace
@@ -197,6 +235,7 @@ export async function query(input: QueryInput): Promise<{
         count: number;
         hasMore: boolean;
         fieldNames?: string[];
+        warnings?: string[];
       } = {
         workspace: wsContext.alias,
         query: ast,
@@ -208,6 +247,24 @@ export async function query(input: QueryInput): Promise<{
       // Include fieldNames when select clause is used (F-093)
       if (result.fieldNames && result.fieldNames.length > 0) {
         response.fieldNames = result.fieldNames;
+      }
+
+      // Staleness warning — surfaces an out-of-date index before the caller
+      // trusts the results. Field-filtered queries are especially sensitive
+      // because delta-sync clears field_values without repopulating them.
+      const warnings: string[] = [];
+      const staleness = getSyncStaleness(wsContext.dbPath);
+      if (staleness.isStale && staleness.staleReason) {
+        warnings.push(staleness.staleReason);
+      }
+      const hasFieldFilter = ast.where ? whereUsesFieldValue(ast.where) : false;
+      if (hasFieldFilter && staleness.lastFullSync === null) {
+        warnings.push(
+          "Query filters on field values but no full sync has ever run for this workspace — results will be incomplete. Run 'supertag sync index'."
+        );
+      }
+      if (warnings.length > 0) {
+        response.warnings = warnings;
       }
 
       return response;
