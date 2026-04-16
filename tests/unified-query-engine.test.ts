@@ -261,6 +261,28 @@ describe("Unified Query Engine", () => {
       // Custom fields in fields property
       expect(node.fields).toBeDefined();
     });
+
+    it("should handle fields.* prefix in select (MCP format)", async () => {
+      // MCP tools pass select as ["fields.Status", "id", "name"]
+      // The fields. prefix must be stripped before querying field_values table
+      const ast: QueryAST = {
+        find: "task",
+        select: ["fields.Status"],
+        limit: 1,
+      };
+      const result = await engine.execute(ast);
+      const node = result.results[0] as any;
+      // Core fields always present
+      expect(node.id).toBeDefined();
+      expect(node.name).toBeDefined();
+      // Custom fields should be in fields property (not null/empty)
+      expect(node.fields).toBeDefined();
+      // fieldNames should contain the bare name, not the prefixed version
+      expect(result.fieldNames).toBeDefined();
+      if (result.fieldNames!.length > 0) {
+        expect(result.fieldNames!.every((f) => !f.startsWith("fields."))).toBe(true);
+      }
+    });
   });
 
   describe("OR Group Execution", () => {

@@ -103,7 +103,17 @@ export class UnifiedQueryEngine {
         fieldNames = [];
       }
     } else {
-      fieldNames = ast.select!;
+      // Strip "fields." prefix — select paths use "fields.Status" but
+      // the field_values table stores bare names like "Status"
+      fieldNames = ast.select!
+        .filter((s) => s.startsWith("fields.") || s === "*")
+        .map((s) => s.startsWith("fields.") ? s.replace("fields.", "") : s);
+
+      // If no field-prefixed paths, try treating non-core names as field names
+      if (fieldNames.length === 0) {
+        const coreFields = ["id", "name", "created", "updated", "parentId", "nodeType", "doneAt"];
+        fieldNames = ast.select!.filter((s) => !coreFields.includes(s));
+      }
     }
 
     // Get node IDs

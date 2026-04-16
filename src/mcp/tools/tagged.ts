@@ -12,6 +12,7 @@ import {
   parseSelectPaths,
   applyProjectionToArray,
 } from '../../utils/select-projection.js';
+import { FieldResolver } from '../../services/field-resolver.js';
 
 export interface TaggedNodeItem {
   id: string;
@@ -54,12 +55,37 @@ export async function tagged(input: TaggedInput): Promise<TaggedResult> {
       ...dateRange,
     });
 
-    const items: TaggedNodeItem[] = nodes.map((n) => ({
+    // Build base items
+    const items: Record<string, unknown>[] = nodes.map((n) => ({
       id: n.id,
       name: n.name,
       created: n.created,
       updated: n.updated,
     }));
+
+    // Resolve field values when select includes fields.* paths or always for completeness
+    const hasFieldSelect = input.select?.some((s) => s.startsWith('fields.'));
+    if (hasFieldSelect || !input.select) {
+      const db = engine.rawDb;
+      const fieldResolver = new FieldResolver(db);
+      const nodeIds = nodes.map((n) => n.id);
+
+      // Determine which fields to resolve
+      let fieldTarget: string[] | '*';
+      if (hasFieldSelect) {
+        fieldTarget = input.select!
+          .filter((s) => s.startsWith('fields.'))
+          .map((s) => s.replace('fields.', ''));
+      } else {
+        fieldTarget = '*';
+      }
+
+      const fieldValuesMap = fieldResolver.resolveFields(nodeIds, fieldTarget);
+      for (const item of items) {
+        const fields = fieldValuesMap.get(item.id as string) ?? {};
+        item.fields = fields;
+      }
+    }
 
     // Apply field projection if select is specified
     const projection = parseSelectPaths(input.select);

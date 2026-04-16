@@ -5,6 +5,12 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-04-16
+
+### Fixed
+- **`select` with `fields.*` prefix returns null** — `tana_query` and `tana_tagged` with `select: ["fields.Status", ...]` returned empty/null field values because the `fields.` prefix was passed directly to the database query instead of being stripped. Field values now resolve correctly with both `"fields.Status"` and bare `"Status"` formats.
+- **`tana_tagged` missing field values** — `tana_tagged` tool never loaded field values from the database, so any `select` referencing `fields.*` paths found nothing to project. Field values are now resolved via `FieldResolver` before projection.
+
 ## [2.5.0] - 2026-03-20
 
 ### Added
