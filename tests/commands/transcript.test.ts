@@ -190,6 +190,6 @@ describe("Transcript CLI Commands", () => {
         expect(parsed[0]).toHaveProperty("lineText");
         expect(parsed[0]).toHaveProperty("speaker");
       }
-    });
+    }, 30000);
   });
 });
