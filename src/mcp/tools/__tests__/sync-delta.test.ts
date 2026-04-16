@@ -71,6 +71,7 @@ describe("MCP tana_sync delta mode (T-3.3)", () => {
           nodesInserted: 3,
           nodesUpdated: 9,
           nodesSkipped: 0,
+          fieldValuesCleared: 0,
           embeddingsGenerated: 12,
           embeddingsSkipped: false,
           watermarkBefore: 1000000,

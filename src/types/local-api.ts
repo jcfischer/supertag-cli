@@ -376,6 +376,8 @@ export interface DeltaSyncResult {
   nodesUpdated: number;
   /** Nodes skipped (e.g., trash nodes with no useful data) */
   nodesSkipped: number;
+  /** Field values cleared for updated nodes (re-populated on next full sync) */
+  fieldValuesCleared: number;
   /** Number of embeddings generated */
   embeddingsGenerated: number;
   /** Whether embedding generation was skipped entirely */

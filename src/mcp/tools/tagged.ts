@@ -8,10 +8,6 @@ import { TanaQueryEngine } from '../../query/tana-query-engine.js';
 import { resolveWorkspaceContext } from '../../config/workspace-resolver.js';
 import type { TaggedInput } from '../schemas.js';
 import { parseDateRange } from '../schemas.js';
-import {
-  parseSelectPaths,
-  applyProjectionToArray,
-} from '../../utils/select-projection.js';
 import { FieldResolver } from '../../services/field-resolver.js';
 
 export interface TaggedNodeItem {
@@ -24,7 +20,7 @@ export interface TaggedNodeItem {
 export interface TaggedResult {
   workspace: string;
   tagname: string;
-  nodes: Partial<Record<string, unknown>>[];
+  nodes: Record<string, unknown>[];
   count: number;
 }
 
@@ -55,37 +51,82 @@ export async function tagged(input: TaggedInput): Promise<TaggedResult> {
       ...dateRange,
     });
 
-    // Build base items
+    // Build base items with all fields resolved
+    const db = engine.rawDb;
+    const fieldResolver = new FieldResolver(db);
+    const nodeIds = nodes.map((n) => n.id);
+    const fieldValuesMap = fieldResolver.resolveFields(nodeIds, '*');
+
     const items: Record<string, unknown>[] = nodes.map((n) => ({
       id: n.id,
       name: n.name,
       created: n.created,
       updated: n.updated,
+      fields: fieldValuesMap.get(n.id) ?? {},
     }));
 
-    // Always resolve all field values — using '*' avoids SQL field-name matching
-    // issues (case sensitivity, encoding). Projection handles filtering.
-    {
-      const db = engine.rawDb;
-      const fieldResolver = new FieldResolver(db);
-      const nodeIds = nodes.map((n) => n.id);
-
-      const fieldValuesMap = fieldResolver.resolveFields(nodeIds, '*');
-      for (const item of items) {
-        const fields = fieldValuesMap.get(item.id as string) ?? {};
-        item.fields = fields;
+    // Apply explicit projection if select is specified
+    if (input.select && input.select.length > 0) {
+      const coreFields = new Set<string>();
+      const requestedFieldNames: string[] = [];
+      for (const s of input.select) {
+        if (s.startsWith("fields.")) {
+          requestedFieldNames.push(s.slice(7));
+        } else {
+          coreFields.add(s);
+        }
       }
-    }
 
-    // Apply field projection if select is specified
-    const projection = parseSelectPaths(input.select);
-    const projectedItems = applyProjectionToArray(items, projection);
+      const projected = items.map((item) => {
+        const result: Record<string, unknown> = {};
+
+        // Copy requested core fields
+        for (const key of coreFields) {
+          if (key in item) {
+            result[key] = item[key];
+          }
+        }
+
+        // Build filtered fields object
+        const sourceFields = item.fields as Record<string, unknown> | undefined;
+        if (sourceFields && requestedFieldNames.length > 0) {
+          const filteredFields: Record<string, unknown> = {};
+          for (const fname of requestedFieldNames) {
+            if (fname in sourceFields) {
+              filteredFields[fname] = sourceFields[fname];
+            } else {
+              const lower = fname.toLowerCase();
+              const match = Object.keys(sourceFields).find(
+                (k) => k.toLowerCase() === lower
+              );
+              filteredFields[fname] = match ? sourceFields[match] : null;
+            }
+          }
+          result.fields = filteredFields;
+        } else if (requestedFieldNames.length > 0) {
+          const nullFields: Record<string, unknown> = {};
+          for (const fname of requestedFieldNames) {
+            nullFields[fname] = null;
+          }
+          result.fields = nullFields;
+        }
+
+        return result;
+      });
+
+      return {
+        workspace: workspace.alias,
+        tagname: tagName,
+        nodes: projected,
+        count: projected.length,
+      };
+    }
 
     return {
       workspace: workspace.alias,
       tagname: tagName,
-      nodes: projectedItems,
-      count: projectedItems.length,
+      nodes: items,
+      count: items.length,
     };
   } finally {
     engine.close();

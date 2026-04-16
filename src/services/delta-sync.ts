@@ -141,10 +141,10 @@ export class DeltaSyncService {
    * Merge a single node from the API into the local database.
    *
    * - New nodes: INSERT with id, name, node_type, created, updated
-   * - Existing nodes: UPDATE name, node_type, updated
+   * - Existing nodes: UPDATE name, node_type, updated + clear stale field_values
    * - PRESERVES: parent_id, done_at, raw_data (never overwritten by delta)
    */
-  mergeNode(node: SearchResultNode): { inserted: boolean; updated: boolean } {
+  mergeNode(node: SearchResultNode): { inserted: boolean; updated: boolean; fieldValuesCleared: number } {
     const existing = this.db
       .query("SELECT id FROM nodes WHERE id = ?")
       .get(node.id) as { id: string } | null;
@@ -157,7 +157,25 @@ export class DeltaSyncService {
         "UPDATE nodes SET name = ?, node_type = ?, updated = ? WHERE id = ?",
         [node.name, node.docType, now, node.id]
       );
-      return { inserted: false, updated: true };
+
+      // Clear stale field_values for this node — delta sync lacks the tuple
+      // structure needed to re-extract field values, so clearing ensures
+      // stale values (e.g., cleared option fields) don't persist.
+      // A subsequent full sync will re-populate field values from the export.
+      let cleared = 0;
+      try {
+        const row = this.db.query(
+          "SELECT COUNT(*) as cnt FROM field_values WHERE parent_id = ?"
+        ).get(node.id) as { cnt: number } | null;
+        cleared = row?.cnt ?? 0;
+        if (cleared > 0) {
+          this.db.run("DELETE FROM field_values WHERE parent_id = ?", [node.id]);
+        }
+      } catch {
+        // field_values table may not exist if full sync hasn't run yet
+      }
+
+      return { inserted: false, updated: true, fieldValuesCleared: cleared };
     }
 
     // INSERT: new node
@@ -166,7 +184,7 @@ export class DeltaSyncService {
       "INSERT INTO nodes (id, name, node_type, created, updated) VALUES (?, ?, ?, ?, ?)",
       [node.id, node.name, node.docType, created, now]
     );
-    return { inserted: true, updated: false };
+    return { inserted: true, updated: false, fieldValuesCleared: 0 };
   }
 
   /**
@@ -267,6 +285,7 @@ export class DeltaSyncService {
         nodesInserted: 0,
         nodesUpdated: 0,
         nodesSkipped: 0,
+        fieldValuesCleared: 0,
         embeddingsGenerated: 0,
         embeddingsSkipped: true,
         watermarkBefore: 0,
@@ -299,6 +318,7 @@ export class DeltaSyncService {
       let nodesInserted = 0;
       let nodesUpdated = 0;
       let nodesSkipped = 0;
+      let fieldValuesCleared = 0;
       let pages = 0;
       const changedNodeIds: string[] = [];
 
@@ -310,6 +330,7 @@ export class DeltaSyncService {
           const result = this.mergeNode(node);
           if (result.inserted) nodesInserted++;
           if (result.updated) nodesUpdated++;
+          if (result.fieldValuesCleared) fieldValuesCleared += result.fieldValuesCleared;
 
           this.reconcileTags(node.id, node.tags);
           changedNodeIds.push(node.id);
@@ -344,6 +365,7 @@ export class DeltaSyncService {
         nodesInserted,
         nodesUpdated,
         nodesSkipped,
+        fieldValuesCleared,
         embeddingsGenerated,
         embeddingsSkipped,
         watermarkBefore: sinceMs,

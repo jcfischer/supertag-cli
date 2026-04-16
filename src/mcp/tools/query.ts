@@ -12,10 +12,6 @@ import { UnifiedQueryEngine } from "../../query/unified-query-engine";
 import type { QueryAST, WhereClause } from "../../query/types";
 import { resolveWorkspaceContext } from "../../config/workspace-resolver";
 import { parseComparisonDate } from "../../query/date-resolver";
-import {
-  parseSelectPaths,
-  applyProjectionToArray,
-} from "../../utils/select-projection";
 
 /**
  * Convert MCP input to QueryAST
@@ -133,9 +129,66 @@ export async function query(input: QueryInput): Promise<{
     try {
       const result = await engine.execute(ast);
 
-      // Apply projection when select clause is specified
-      const projection = parseSelectPaths(input.select);
-      const projectedResults = applyProjectionToArray(result.results, projection);
+      // Apply explicit field projection — avoids generic nested-path traversal
+      // which can fail on some platforms/configurations
+      let finalResults = result.results;
+      if (input.select && input.select.length > 0) {
+        // Determine which core fields and field.* paths are requested
+        const coreFields = new Set<string>();
+        const requestedFieldNames: string[] = [];
+        for (const s of input.select) {
+          if (s.startsWith("fields.")) {
+            requestedFieldNames.push(s.slice(7)); // strip "fields."
+          } else {
+            coreFields.add(s);
+          }
+        }
+
+        finalResults = result.results.map((r) => {
+          const projected: Record<string, unknown> = {};
+
+          // Copy requested core fields
+          for (const key of coreFields) {
+            if (key in r) {
+              projected[key] = r[key];
+            }
+          }
+
+          // Build fields object from the resolved fields on the result
+          const sourceFields = r.fields as Record<string, unknown> | undefined;
+          if (sourceFields && requestedFieldNames.length > 0) {
+            const filteredFields: Record<string, unknown> = {};
+            for (const fname of requestedFieldNames) {
+              // Exact match first, then case-insensitive fallback
+              if (fname in sourceFields) {
+                filteredFields[fname] = sourceFields[fname];
+              } else {
+                const lower = fname.toLowerCase();
+                const match = Object.keys(sourceFields).find(
+                  (k) => k.toLowerCase() === lower
+                );
+                if (match) {
+                  filteredFields[fname] = sourceFields[match];
+                } else {
+                  filteredFields[fname] = null;
+                }
+              }
+            }
+            projected.fields = filteredFields;
+          } else if (sourceFields && requestedFieldNames.length === 0) {
+            // No field paths requested but fields exist — omit fields from output
+          } else if (requestedFieldNames.length > 0) {
+            // Fields requested but not resolved — return nulls
+            const nullFields: Record<string, unknown> = {};
+            for (const fname of requestedFieldNames) {
+              nullFields[fname] = null;
+            }
+            projected.fields = nullFields;
+          }
+
+          return projected;
+        });
+      }
 
       const response: {
         workspace: string;
@@ -147,8 +200,8 @@ export async function query(input: QueryInput): Promise<{
       } = {
         workspace: wsContext.alias,
         query: ast,
-        results: projectedResults as Record<string, unknown>[],
-        count: projectedResults.length,
+        results: finalResults,
+        count: finalResults.length,
         hasMore: result.hasMore,
       };
 
