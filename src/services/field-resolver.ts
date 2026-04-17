@@ -7,7 +7,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { stripHtml } from "../utils/html";
+import { resolveInlineRefsBatch } from "../utils/resolve-inline-refs";
 
 /**
  * Field value map: field_name -> value (comma-joined if multiple)
@@ -182,7 +182,16 @@ export class FieldResolver {
         value_order: number;
       }[];
 
-      for (const row of rows) {
+      // v2.5.7 fix: resolve <span data-inlineref-node="..."></span> and
+      // data-inlineref-date spans to their display text before stripping
+      // HTML. Tana stores references/dates as empty spans, so plain stripHtml
+      // collapsed pure-reference values to empty strings (symptom:
+      // "Context": "" in query output despite the reference being set).
+      const rawTexts = rows.map((r) => r.value_text);
+      const resolvedTexts = resolveInlineRefsBatch(rawTexts, this.db);
+
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx];
         let nodeMap = result.get(row.parent_id);
         if (!nodeMap) {
           nodeMap = new Map();
@@ -195,7 +204,7 @@ export class FieldResolver {
           nodeMap.set(row.field_name, values);
         }
 
-        values.push(stripHtml(row.value_text));
+        values.push(resolvedTexts[idx]);
       }
     }
 

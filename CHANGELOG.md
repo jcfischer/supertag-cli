@@ -5,6 +5,11 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.7] - 2026-04-17
+
+### Fixed
+- **Reference-type field values returned empty string** — `tana_query`, `tana_tagged`, and any code path through `FieldResolver` returned `""` for fields whose value is a reference to another node (e.g., `"Context": ""` where Context pointed to `Pr MB2`). Root cause: Tana stores inline references as empty `<span data-inlineref-node="NODE_ID"></span>` tags; the resolver ran `stripHtml()` which removed the span, leaving the empty content behind. The resolver now parses those spans, looks up the referenced node's name (batched, single SQL query per unique set), and substitutes the resolved display text before stripping residual HTML. Also resolves `data-inlineref-date` spans to their `dateTimeString` value.
+
 ## [2.5.6] - 2026-04-16
 
 ### Fixed
