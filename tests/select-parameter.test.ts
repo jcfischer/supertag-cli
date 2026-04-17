@@ -116,6 +116,8 @@ describe("--select parameter support", () => {
   });
 
   describe("nodes refs --select", () => {
+    // Spawns three `bun run src/index.ts` subprocesses — cold start puts this
+    // above the default 15s when the test cache is cold. 45s timeout.
     testFn("should filter Unix output to selected fields only", async () => {
       // First get a node ID
       const searchResult = await $`bun run src/index.ts search "a" --json --limit 1`.text();
@@ -136,7 +138,7 @@ describe("--select parameter support", () => {
           expect(selectCols).toBeLessThanOrEqual(2);
         }
       }
-    });
+    }, 45000);
   });
 
   describe("nodes recent --select", () => {
