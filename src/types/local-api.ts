@@ -362,6 +362,13 @@ export interface DeltaSyncOptions {
     warn(message: string, data?: Record<string, unknown>): void;
     error(message: string, data?: Record<string, unknown>): void;
   };
+  /**
+   * Explicit override for the abort cap on pages fetched per delta-sync.
+   * When omitted, the cap auto-scales from `sync_metadata.total_nodes`
+   * (25% of the graph). Guards against runaway loops when the Local API
+   * ignores `edited.since` and returns the entire workspace as "changed".
+   */
+  maxPages?: number;
 }
 
 /**

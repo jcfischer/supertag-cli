@@ -158,6 +158,7 @@ async function runDeltaSync(dbPath: string): Promise<DeltaSyncResult> {
   const deltaSyncService = new DeltaSyncService({
     dbPath,
     localApiClient: client,
+    logger,
   });
 
   try {
@@ -706,6 +707,7 @@ export function registerSyncCommands(program: Command): void {
       const deltaSyncService = new DeltaSyncService({
         dbPath: resolvedPaths.dbPath,
         localApiClient: client,
+        logger,
       });
 
       const watchOptions = {
