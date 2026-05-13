@@ -22,6 +22,30 @@ import type {
 const PAGE_SIZE = 100;
 
 /**
+ * Fraction of `sync_metadata.total_nodes` that a single delta is allowed to
+ * exceed before we abort. The failure mode we guard against (Local API
+ * ignoring `edited.since`) returns ~100% of the workspace, so any threshold
+ * below 100% catches it — and the lower the threshold, the less work wasted
+ * before the abort fires. 25% is well below any plausible real delta yet
+ * still allows for months of accumulated edits; a real delta exceeding this
+ * is better served by a full re-sync anyway.
+ */
+const MAX_PAGES_RATIO = 0.25;
+
+/**
+ * Fallback cap if `total_nodes` is unavailable (e.g. malformed metadata).
+ * Conservative — equivalent to a ~400K-node workspace under the ratio.
+ */
+const FALLBACK_MAX_PAGES = 1000;
+
+/**
+ * Log a progress line on page 1 and every Nth page thereafter. Avoids
+ * one-info-line-per-page noise on normal deltas while still proving liveness
+ * on long runs.
+ */
+const PROGRESS_INTERVAL_PAGES = 10;
+
+/**
  * DeltaSyncService handles incremental sync of Tana nodes
  * from the local API into the SQLite database.
  */
@@ -31,6 +55,8 @@ export class DeltaSyncService {
   private localApiClient: DeltaSyncOptions["localApiClient"];
   private embeddingConfig?: DeltaSyncOptions["embeddingConfig"];
   private logger: NonNullable<DeltaSyncOptions["logger"]>;
+  /** Explicit override from constructor options; if undefined, auto-scaled per sync from `sync_metadata.total_nodes`. */
+  private maxPagesOverride: number | undefined;
   private syncing = false;
 
   constructor(options: DeltaSyncOptions) {
@@ -44,6 +70,28 @@ export class DeltaSyncService {
       warn: () => {},
       error: () => {},
     };
+    this.maxPagesOverride = options.maxPages;
+  }
+
+  /**
+   * Compute the per-sync abort cap.
+   * - If the constructor was given an explicit `maxPages`, that wins.
+   * - Otherwise scale against `sync_metadata.total_nodes`: cap at
+   *   `MAX_PAGES_RATIO` of the graph.
+   * - If `total_nodes` is missing or zero, fall back to `FALLBACK_MAX_PAGES`.
+   *
+   * Note: for very small workspaces the scaled cap may round down to 1 page;
+   * that's inherent to page-quantized pagination, not a bug — the broken-API
+   * signature still trips at page 2.
+   */
+  private resolveMaxPages(): number {
+    if (this.maxPagesOverride !== undefined) return this.maxPagesOverride;
+    const row = this.db
+      .query("SELECT total_nodes FROM sync_metadata WHERE id = 1")
+      .get() as { total_nodes: number } | undefined;
+    const totalNodes = row?.total_nodes ?? 0;
+    if (totalNodes <= 0) return FALLBACK_MAX_PAGES;
+    return Math.ceil((totalNodes * MAX_PAGES_RATIO) / PAGE_SIZE);
   }
 
   /**
@@ -325,6 +373,9 @@ export class DeltaSyncService {
       // Use 0 as fallback watermark if null (first delta after full sync with no delta timestamp)
       const sinceMs = watermarkBefore ?? 0;
 
+      // Resolve the per-sync abort cap from current workspace size.
+      const maxPages = this.resolveMaxPages();
+
       // Step 3: Page through changed nodes
       let nodesFound = 0;
       let nodesInserted = 0;
@@ -336,7 +387,29 @@ export class DeltaSyncService {
 
       for await (const page of this.fetchChangedNodes(sinceMs)) {
         pages++;
+
+        if (pages > maxPages) {
+          // Rows merged on pages 1..maxPages are already committed to SQLite;
+          // the watermark is NOT advanced because we throw before Step 5.
+          // The next delta-sync will replay from the same `sinceMs` and
+          // re-merge those rows idempotently. Recovery is `supertag sync index`.
+          // Check fires BEFORE merging this page, so we don't do work we're
+          // about to throw away.
+          throw new Error(
+            `Delta-sync aborted after ${maxPages} pages (${nodesFound} nodes merged so far; watermark NOT advanced). ` +
+              `This usually means the Local API is not honoring 'edited.since' ` +
+              `and is returning the entire workspace. Run 'supertag sync index' ` +
+              `for a full sync instead, or raise maxPages if this is a legitimately large delta.`,
+          );
+        }
+
         nodesFound += page.length;
+
+        if (pages === 1 || pages % PROGRESS_INTERVAL_PAGES === 0) {
+          this.logger.info(
+            `delta-sync progress: ${pages} page(s), ${nodesFound} nodes (latest page: ${page.length})`,
+          );
+        }
 
         for (const node of page) {
           const result = this.mergeNode(node);

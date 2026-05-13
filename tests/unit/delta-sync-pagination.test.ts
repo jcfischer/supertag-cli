@@ -50,9 +50,11 @@ function createDbWithFullSync(dbPath: string): void {
       total_nodes INTEGER NOT NULL DEFAULT 0
     )
   `);
-  // Insert a full sync record so delta-sync can proceed
+  // Insert a full sync record so delta-sync can proceed. total_nodes is set high
+  // enough that the auto-scaled abort cap (25% * total / PAGE_SIZE) doesn't trip
+  // unrelated tests that happen to page through dozens of results.
   db.run(
-    "INSERT INTO sync_metadata (id, last_export_file, last_sync_timestamp, total_nodes) VALUES (1, 'export.json', ?, 1000)",
+    "INSERT INTO sync_metadata (id, last_export_file, last_sync_timestamp, total_nodes) VALUES (1, 'export.json', ?, 1000000)",
     [Date.now() - 60000]
   );
   db.close();
@@ -379,6 +381,184 @@ describe("DeltaSyncService - Pagination + Sync Orchestration (T-2.2)", () => {
       const result = await service.sync();
       expect(result.embeddingsSkipped).toBe(true);
       expect(result.embeddingsGenerated).toBe(0);
+    });
+
+    it("logs a progress line on page 1 (Bug 6)", async () => {
+      const page1 = Array.from({ length: 100 }, (_, i) => createTestNode(`p1-${i}`, `Page1 Node ${i}`));
+      const page2 = Array.from({ length: 50 }, (_, i) => createTestNode(`p2-${i}`, `Page2 Node ${i}`));
+      const logs: string[] = [];
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (_query, options) => {
+            const offset = options?.offset ?? 0;
+            if (offset === 0) return page1;
+            if (offset === 100) return page2;
+            return [];
+          },
+          health: async () => true,
+        },
+        logger: {
+          info: (msg) => logs.push(msg),
+          warn: () => {},
+          error: () => {},
+        },
+      });
+
+      await service.sync();
+
+      const progress = logs.filter((m) => m.startsWith("delta-sync progress:"));
+      // 2 pages total: page 1 logs, page 2 does not (< interval).
+      expect(progress).toHaveLength(1);
+      expect(progress[0]).toContain("1 page(s)");
+      expect(progress[0]).toContain("100 nodes");
+    });
+
+    it("emits a progress line every 10 pages (Bug 6)", async () => {
+      const logs: string[] = [];
+      let calls = 0;
+      const TOTAL_PAGES = 25;
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async () => {
+            calls++;
+            if (calls > TOTAL_PAGES) return [];
+            // Distinct ids per call so DB doesn't collide
+            return Array.from({ length: 100 }, (_, i) => createTestNode(`hb-${calls}-${i}`, `Heartbeat ${calls}-${i}`));
+          },
+          health: async () => true,
+        },
+        logger: {
+          info: (msg) => logs.push(msg),
+          warn: () => {},
+          error: () => {},
+        },
+      });
+
+      await service.sync();
+
+      const progress = logs.filter((m) => m.startsWith("delta-sync progress:"));
+      // Pages 1, 10, 20 — page 25 doesn't hit the interval.
+      expect(progress).toHaveLength(3);
+      expect(progress[0]).toContain("1 page(s)");
+      expect(progress[1]).toContain("10 page(s)");
+      expect(progress[2]).toContain("20 page(s)");
+    });
+
+    it("auto-scales the abort cap from total_nodes when no override is given (Bug 6)", async () => {
+      // total_nodes = 24000 → cap = ceil(24000 * 0.25 / 100) = 60 pages.
+      const reseedDb = new Database(dbPath);
+      reseedDb.run("UPDATE sync_metadata SET total_nodes = 24000 WHERE id = 1");
+      reseedDb.close();
+
+      let calls = 0;
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async () => {
+            calls++;
+            return Array.from({ length: 100 }, (_, i) =>
+              createTestNode(`scale-${calls}-${i}`, `Scale ${calls}-${i}`),
+            );
+          },
+          health: async () => true,
+        },
+        // no maxPages — let it auto-scale
+      });
+
+      await expect(service.sync()).rejects.toThrow(/aborted after 60 pages/);
+    });
+
+    it("auto-scaled cap scales down to small workspaces without a floor (Bug 6)", async () => {
+      // Small workspace: total_nodes = 4000 → cap = ceil(4000 * 0.25 / 100) = 10 pages.
+      // Critically the cap stays proportional rather than being raised to a floor;
+      // the broken-API failure mode (whole-workspace return = 40 pages here) trips.
+      const reseedDb = new Database(dbPath);
+      reseedDb.run("UPDATE sync_metadata SET total_nodes = 4000 WHERE id = 1");
+      reseedDb.close();
+
+      let calls = 0;
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async () => {
+            calls++;
+            return Array.from({ length: 100 }, (_, i) =>
+              createTestNode(`tiny-${calls}-${i}`, `Tiny ${calls}-${i}`),
+            );
+          },
+          health: async () => true,
+        },
+      });
+
+      await expect(service.sync()).rejects.toThrow(/aborted after 10 pages/);
+    });
+
+    it("explicit maxPages overrides the auto-scaled cap (Bug 6)", async () => {
+      // Even with total_nodes=24000 (auto-scaled cap would be 60), the explicit override wins.
+      const reseedDb = new Database(dbPath);
+      reseedDb.run("UPDATE sync_metadata SET total_nodes = 24000 WHERE id = 1");
+      reseedDb.close();
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async () => {
+            return Array.from({ length: 100 }, (_, i) =>
+              createTestNode(`ov-${i}`, `Override ${i}`),
+            );
+          },
+          health: async () => true,
+        },
+        maxPages: 3,
+      });
+
+      await expect(service.sync()).rejects.toThrow(/aborted after 3 pages/);
+    });
+
+    it("aborts with a clear error when maxPages is hit and leaves watermark unchanged (Bug 6)", async () => {
+      // Capture watermark from the test-db seed so we can assert it is NOT advanced on abort.
+      const seedDb = new Database(dbPath);
+      const watermarkBefore = (seedDb.query(
+        "SELECT last_sync_timestamp FROM sync_metadata WHERE id = 1",
+      ).get() as { last_sync_timestamp: number }).last_sync_timestamp;
+      seedDb.close();
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (_q, options) => {
+            const offset = options?.offset ?? 0;
+            // Always return a full page → loop never stops naturally
+            return Array.from({ length: 100 }, (_, i) =>
+              createTestNode(`cap-${offset}-${i}`, `Cap ${offset}-${i}`),
+            );
+          },
+          health: async () => true,
+        },
+        maxPages: 3,
+      });
+
+      await expect(service.sync()).rejects.toThrow(
+        /Delta-sync aborted after 3 pages.*watermark NOT advanced.*supertag sync index/s,
+      );
+
+      // Watermark must NOT have advanced — next delta should replay from the same point.
+      const verifyDb = new Database(dbPath);
+      const watermarkAfter = (verifyDb.query(
+        "SELECT last_sync_timestamp FROM sync_metadata WHERE id = 1",
+      ).get() as { last_sync_timestamp: number }).last_sync_timestamp;
+      verifyDb.close();
+      expect(watermarkAfter).toBe(watermarkBefore);
+
+      // And rows from the pages that did complete should have been merged (idempotently replayable).
+      const verifyDb2 = new Database(dbPath);
+      const rowCount = (verifyDb2.query("SELECT COUNT(*) as c FROM nodes").get() as { c: number }).c;
+      verifyDb2.close();
+      expect(rowCount).toBeGreaterThan(0);
     });
 
     it("paginates through multiple pages", async () => {
