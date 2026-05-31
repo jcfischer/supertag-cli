@@ -106,22 +106,43 @@ jobs:
             codesign --verify --verbose "$bin"
           done
 
-      # Verification gate: actually EXECUTE the binaries. This is the check that
-      # would have caught #84 in CI instead of a month later. macos-latest is
-      # arm64, so the arm64 matrix binaries run natively; x64 binaries run under
-      # Rosetta when available, otherwise we skip the run and rely on --verify.
+      # Verification gate: actually EXECUTE every binary. This is the check that
+      # would have caught #84 in CI instead of a month later. An unsigned Mach-O
+      # is SIGKILLed by the kernel at exec (exit 137) on Apple Silicon, so we
+      # only need to prove each binary *starts*. supertag/-lite/-export exit
+      # cleanly on --version; supertag-mcp ignores the flag and runs as a stdio
+      # server, so we use a background guard (no GNU `timeout` on macOS runners):
+      # launch, wait 2s, and if it's still alive it execed fine (kill = pass);
+      # otherwise the only failure we care about is 137 (kernel SIGKILL).
       - name: Smoke-test binaries
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          RUNNER=""
           if [ "${{ matrix.target }}" = "bun-darwin-arm64" ]; then
-            ./supertag --version
-            ./supertag-lite --version
+            RUNNER=""                       # native arm64 on macos-latest
           elif arch -x86_64 true 2>/dev/null; then
-            arch -x86_64 ./supertag --version
-            arch -x86_64 ./supertag-lite --version
+            RUNNER="arch -x86_64"           # x64 via Rosetta
           else
-            echo "Rosetta unavailable; skipping x64 execution (signature verified above)"
+            echo "Rosetta unavailable; skipping x64 execution (signatures verified above)"
+            exit 0
           fi
+          smoke() {
+            local bin="$1"
+            $RUNNER "./$bin" --version </dev/null >/dev/null 2>&1 &
+            local pid=$!
+            sleep 2
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+              echo "ok: $bin started (long-running; killed after 2s)"
+            else
+              wait "$pid"; local rc=$?
+              if [ "$rc" -eq 137 ]; then
+                echo "FAIL: $bin was SIGKILLed (exit 137) — invalid/missing code signature"; exit 1
+              fi
+              echo "ok: $bin exited $rc"
+            fi
+          }
+          for b in supertag supertag-lite supertag-mcp supertag-export; do smoke "$b"; done
 
       - name: Create distribution package
         run: |
