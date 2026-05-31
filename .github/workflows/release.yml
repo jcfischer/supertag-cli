@@ -89,6 +89,40 @@ jobs:
             bun build export/index.ts --compile --target=${{ matrix.target }} $EXTERNAL_FLAGS --outfile=supertag-export
           fi
 
+      # Apple Silicon (and increasingly x64 on macOS 26+) kills any Mach-O that
+      # lacks a valid code signature with SIGKILL (exit 137) at exec — no
+      # Gatekeeper dialog, quarantine removal does nothing. Bun's --compile
+      # *usually* ad-hoc signs, but some Bun versions (and cross-compiled
+      # targets) ship UNSIGNED binaries, which is exactly how #84 escaped for a
+      # month. Re-sign explicitly here so we never depend on Bun's auto-signing.
+      # --remove-signature first clears any malformed/partial signature that
+      # would otherwise make `codesign --force` fail with "invalid format".
+      - name: Codesign macOS binaries (ad-hoc)
+        run: |
+          set -euo pipefail
+          for bin in supertag supertag-lite supertag-mcp supertag-export; do
+            codesign --remove-signature "$bin" 2>/dev/null || true
+            codesign --force --sign - --timestamp=none "$bin"
+            codesign --verify --verbose "$bin"
+          done
+
+      # Verification gate: actually EXECUTE the binaries. This is the check that
+      # would have caught #84 in CI instead of a month later. macos-latest is
+      # arm64, so the arm64 matrix binaries run natively; x64 binaries run under
+      # Rosetta when available, otherwise we skip the run and rely on --verify.
+      - name: Smoke-test binaries
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.target }}" = "bun-darwin-arm64" ]; then
+            ./supertag --version
+            ./supertag-lite --version
+          elif arch -x86_64 true 2>/dev/null; then
+            arch -x86_64 ./supertag --version
+            arch -x86_64 ./supertag-lite --version
+          else
+            echo "Rosetta unavailable; skipping x64 execution (signature verified above)"
+          fi
+
       - name: Create distribution package
         run: |
           DIST_NAME="supertag-cli-${{ matrix.suffix }}"
