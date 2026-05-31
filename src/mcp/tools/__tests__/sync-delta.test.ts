@@ -78,6 +78,7 @@ describe("MCP tana_sync delta mode (T-3.3)", () => {
           watermarkAfter: 2000000,
           durationMs: 2340,
           pages: 3,
+          poisonNodesSkipped: 0,
         },
       };
 

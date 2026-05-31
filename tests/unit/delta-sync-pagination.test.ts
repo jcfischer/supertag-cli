@@ -184,6 +184,115 @@ describe("DeltaSyncService - Pagination + Sync Orchestration (T-2.2)", () => {
       expect(q.edited.since).toBe(1);
     });
 
+    it("isolates and skips a single poison node that 500s (v2.6)", async () => {
+      // Simulate Tana serializing fine for every node EXCEPT the one at
+      // absolute offset 1. Any request whose [offset, offset+limit) window
+      // includes offset 1 returns HTTP 500; otherwise it returns real nodes.
+      const POISON_OFFSET = 1;
+      const TOTAL = 3;
+      const calls: Array<{ offset: number; limit: number }> = [];
+
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (_query, options) => {
+            const offset = options?.offset ?? 0;
+            const limit = options?.limit ?? 100;
+            calls.push({ offset, limit });
+            const windowEnd = offset + limit;
+            if (POISON_OFFSET >= offset && POISON_OFFSET < windowEnd) {
+              throw Object.assign(new Error("Local API returned HTTP 500"), {
+                details: { status: 500 },
+              });
+            }
+            // Return nodes for [offset, min(windowEnd, TOTAL)) excluding poison.
+            const out: SearchResultNode[] = [];
+            for (let i = offset; i < Math.min(windowEnd, TOTAL); i++) {
+              if (i === POISON_OFFSET) continue;
+              out.push(createTestNode(`n-${i}`, `Node ${i}`));
+            }
+            return out;
+          },
+          health: async () => true,
+        },
+      });
+
+      const stats = { poisonNodesSkipped: 0 };
+      const collected: SearchResultNode[] = [];
+      for await (const page of service.fetchChangedNodes(1000, stats)) {
+        collected.push(...page);
+      }
+
+      // Poison node skipped exactly once; the good nodes still come through.
+      expect(stats.poisonNodesSkipped).toBe(1);
+      const ids = collected.map((n) => n.id).sort();
+      expect(ids).toEqual(["n-0", "n-2"]);
+    });
+
+    it("propagates non-500 errors instead of skipping (v2.6)", async () => {
+      // A 400/auth/network error is a real failure and must NOT be silently
+      // skipped as a poison node.
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async () => {
+            throw Object.assign(new Error("Local API returned HTTP 400"), {
+              details: { status: 400 },
+            });
+          },
+          health: async () => true,
+        },
+      });
+
+      const iterate = async () => {
+        for await (const _page of service.fetchChangedNodes(1000)) {
+          // drain
+        }
+      };
+      await expect(iterate()).rejects.toThrow("HTTP 400");
+    });
+
+    it("advances watermark past a poison node so sync un-wedges (v2.6)", async () => {
+      // Every cycle's changed-set contains one poison node at offset 0.
+      // Pre-v2.6 this 500'd the whole sync, watermark never moved, and the
+      // next cycle re-requested the same poison forever. Now sync skips it and
+      // advances the watermark.
+      service = new DeltaSyncService({
+        dbPath,
+        localApiClient: {
+          searchNodes: async (_query, options) => {
+            const offset = options?.offset ?? 0;
+            const limit = options?.limit ?? 100;
+            // Poison is the only node, at offset 0.
+            if (offset === 0 && limit >= 1) {
+              throw Object.assign(new Error("Local API returned HTTP 500"), {
+                details: { status: 500 },
+              });
+            }
+            return [];
+          },
+          health: async () => true,
+        },
+      });
+
+      const before = Date.now();
+      const result = await service.sync();
+
+      expect(result.poisonNodesSkipped).toBe(1);
+      expect(result.nodesFound).toBe(0);
+      // Watermark must advance even with zero nodes found, because progress
+      // was made past the poison node.
+      expect(result.watermarkAfter).toBeGreaterThanOrEqual(before);
+      expect(result.watermarkAfter).toBeGreaterThan(result.watermarkBefore);
+
+      const checkDb = new Database(dbPath, { readonly: true });
+      const row = checkDb
+        .query("SELECT delta_sync_timestamp FROM sync_metadata WHERE id = 1")
+        .get() as { delta_sync_timestamp: number };
+      expect(row.delta_sync_timestamp).toBeGreaterThanOrEqual(before);
+      checkDb.close();
+    });
+
     it("handles single partial page", async () => {
       const nodes = [createTestNode("n-1", "Node 1"), createTestNode("n-2", "Node 2")];
 

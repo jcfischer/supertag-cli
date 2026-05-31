@@ -390,6 +390,13 @@ export interface DeltaSyncResult {
   durationMs: number;
   /** Number of API pages fetched */
   pages: number;
+  /**
+   * Number of nodes skipped because Tana's Local API returned HTTP 500 while
+   * serializing them (v2.6 poison-node isolation). A subsequent full
+   * `sync index` re-captures them from the export. >0 means delta sync made
+   * progress past a node that would otherwise have wedged it indefinitely.
+   */
+  poisonNodesSkipped: number;
 }
 
 /**

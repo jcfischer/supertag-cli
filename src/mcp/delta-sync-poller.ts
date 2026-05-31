@@ -80,6 +80,15 @@ export class DeltaSyncPoller {
   private wasHealthy = true;
   private lastResult: DeltaSyncResult | null = null;
   private tickCount = 0;
+  private consecutiveFailures = 0;
+  private lastErrorMessage: string | null = null;
+
+  /**
+   * After this many consecutive failures, escalate from a per-cycle error log
+   * to a loud, actionable warning. Catches the "silently wedged for days"
+   * failure mode (e.g. Tana Local API 500 on every cycle).
+   */
+  private static readonly FAILURE_ALERT_THRESHOLD = 3;
 
   constructor(private options: DeltaSyncPollerOptions) {
     this.service = new DeltaSyncService({
@@ -125,6 +134,8 @@ export class DeltaSyncPoller {
   async triggerNow(): Promise<DeltaSyncResult> {
     const result = await this.service.sync();
     this.lastResult = result;
+    this.consecutiveFailures = 0;
+    this.lastErrorMessage = null;
     return result;
   }
 
@@ -188,6 +199,19 @@ export class DeltaSyncPoller {
       const result = await this.service.sync();
       this.lastResult = result;
 
+      // A completed cycle (even one that only skipped poison nodes) clears the
+      // failure streak — sync is unwedged and making progress again.
+      this.consecutiveFailures = 0;
+      this.lastErrorMessage = null;
+
+      if (result.poisonNodesSkipped > 0) {
+        this.options.logger?.warn(
+          "Delta-sync skipped node(s) that crash Tana Local API search (HTTP 500). " +
+            "Run 'supertag sync index' for a full re-sync to capture them.",
+          { poisonNodesSkipped: result.poisonNodesSkipped }
+        );
+      }
+
       if (result.nodesFound > 0) {
         this.options.logger?.info("Delta-sync cycle complete", {
           nodesFound: result.nodesFound,
@@ -197,11 +221,37 @@ export class DeltaSyncPoller {
         });
       }
     } catch (error) {
+      this.consecutiveFailures++;
+      this.lastErrorMessage = String(error);
       this.options.logger?.error("Delta-sync cycle failed", {
         error: String(error),
+        consecutiveFailures: this.consecutiveFailures,
       });
+
+      // Escalate once the streak crosses the threshold so a persistent wedge
+      // (e.g. Tana 500 on every cycle) can't run unnoticed for days.
+      if (this.consecutiveFailures >= DeltaSyncPoller.FAILURE_ALERT_THRESHOLD) {
+        this.options.logger?.error(
+          `Delta-sync has failed ${this.consecutiveFailures} cycles in a row. ` +
+            "Tana's Local API may be rejecting the request (e.g. HTTP 500). " +
+            "Run 'supertag sync index' for a full re-sync to recover.",
+          { consecutiveFailures: this.consecutiveFailures }
+        );
+      }
       // Never crash - just log and continue polling
     }
+  }
+
+  /**
+   * Failure-streak state for status reporting. `consecutiveFailures` resets to
+   * 0 on any completed cycle; a non-zero value means delta-sync is currently
+   * wedged and `lastErrorMessage` holds the most recent failure.
+   */
+  getFailureState(): { consecutiveFailures: number; lastErrorMessage: string | null } {
+    return {
+      consecutiveFailures: this.consecutiveFailures,
+      lastErrorMessage: this.lastErrorMessage,
+    };
   }
 }
 
