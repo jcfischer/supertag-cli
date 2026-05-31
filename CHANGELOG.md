@@ -5,9 +5,10 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.8] - 2026-05-31
 
 ### Fixed
+- **Pre-built macOS binaries were unsigned and killed on launch (CRITICAL, #84)** — All macOS binaries (`supertag`, `supertag-lite`, `supertag-mcp`, `supertag-export`) shipped **completely unsigned**, so Apple Silicon (and macOS 26+) killed them with `SIGKILL` (exit 137) immediately at exec — no Gatekeeper dialog, and quarantine removal had no effect. Confirmed against the v2.5.7 asset (`codesign -dv` → "code object is not signed at all"). Root cause: the release workflow relied on Bun's `--compile` to ad-hoc-sign automatically, some Bun versions stopped doing so, and nothing in CI executed or signature-checked the output. The release workflow now explicitly ad-hoc codesigns every macOS binary, verifies the signature, and **executes `--version` as a CI gate** so a broken binary fails the release instead of shipping. Users on an older download can self-fix: `codesign --remove-signature <bin>; codesign --force --sign - <bin>`.
 - **Delta-sync could wedge indefinitely on a single bad node (HTTP 500)** — When Tana's Local API `/nodes/search` returns HTTP 500 while serializing one node in the changed set (a Tana-side serializer bug), the whole page failed. Because the watermark only advanced on a fully successful sync, the same poisoned request was retried every cycle and never recovered — observed stuck 8+ days. `DeltaSyncService` now isolates the offending node via offset/limit bisection, skips just that node (`poisonNodesSkipped` in the result), and advances the watermark so sync keeps making progress. A subsequent full `supertag sync index` re-captures any skipped node from the export. 500 is treated as a skippable poison node; 400/401/404/network errors still propagate as real failures.
 
 ### Added
