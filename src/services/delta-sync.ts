@@ -22,6 +22,38 @@ import type {
 const PAGE_SIZE = 100;
 
 /**
+ * Hard cap on outer pagination iterations. Guards against an infinite loop if
+ * the API keeps returning full pages without ever emptying (or pathological
+ * poison-skip crawling). 100k iterations * PAGE_SIZE covers any realistic graph.
+ */
+const MAX_PAGE_ITERATIONS = 100_000;
+
+/**
+ * Detect a Tana Local API HTTP 500 "poison page" error.
+ *
+ * The Local API occasionally 500s while serializing the response for a
+ * specific changed node (a known class of Tana-side serializer bug). Because
+ * `edited.since` returns the whole changed set, a single such node poisons the
+ * entire page — and since the delta watermark only advances on a fully
+ * successful sync, the same poisoned request is retried forever, wedging sync
+ * indefinitely (observed: stuck 8+ days).
+ *
+ * We detect 500 specifically (not 502/503/504, which the client already retries
+ * as transient, nor 400/401/404, which are real client-side errors that must
+ * propagate). Shape-tolerant so it works with both the real LocalApiClient
+ * (StructuredError with `details.status`) and test doubles that throw plain
+ * Errors with "HTTP 500" in the message.
+ */
+function isPoisonPageError(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const status = (error as { details?: { status?: unknown } }).details?.status;
+    if (status === 500) return true;
+  }
+  if (error instanceof Error && /\bHTTP 500\b/.test(error.message)) return true;
+  return false;
+}
+
+/**
  * DeltaSyncService handles incremental sync of Tana nodes
  * from the local API into the SQLite database.
  */
@@ -251,27 +283,102 @@ export class DeltaSyncService {
    * no-op after its first run. We keep watermarks in ms internally (for
    * backward-compat with existing databases) and convert at this boundary.
    */
-  async *fetchChangedNodes(sinceMs: number): AsyncGenerator<SearchResultNode[]> {
+  async *fetchChangedNodes(
+    sinceMs: number,
+    stats: { poisonNodesSkipped: number } = { poisonNodesSkipped: 0 }
+  ): AsyncGenerator<SearchResultNode[]> {
     // Convert ms → seconds. Floor so we don't skip edits that happened
     // within the sub-second of the previous watermark. Clamp to min 1
     // because the API rejects `since=0` with a validation error.
     const sinceSec = Math.max(1, Math.floor(sinceMs / 1000));
 
     let offset = 0;
+    let iterations = 0;
 
     while (true) {
-      const page = await this.localApiClient.searchNodes(
+      if (++iterations > MAX_PAGE_ITERATIONS) {
+        this.logger.error(
+          "Delta-sync pagination exceeded safety limit; stopping",
+          { offset, iterations }
+        );
+        break;
+      }
+
+      const result = await this.fetchPageResilient(sinceSec, offset, PAGE_SIZE, stats);
+
+      // null = the single node at `offset` crashes Tana's serializer (HTTP 500).
+      // Skip exactly that node and keep going so it can't wedge the whole sync.
+      if (result === null) {
+        offset += 1;
+        continue;
+      }
+
+      const { nodes, reduced } = result;
+
+      if (nodes.length === 0) break;
+
+      yield nodes;
+
+      offset += nodes.length;
+
+      // Normal end-of-results short-circuit: a full-size request that returned a
+      // partial page means we've reached the end. We must NOT trust a short page
+      // when it was produced by bisection (reduced=true) — more nodes may follow.
+      if (!reduced && nodes.length < PAGE_SIZE) break;
+    }
+  }
+
+  /**
+   * Fetch one page, isolating poison nodes via offset/limit bisection.
+   *
+   * On HTTP 500, the page contains a node Tana's search serializer crashes on.
+   * We can't tell which from a failed request, so we halve the window and retry
+   * at the same offset, recursively narrowing until either the window succeeds
+   * (the poison node is past it) or we reach limit=1 — at which point the single
+   * node at `offset` IS the poison node, so we skip it (return null) and let the
+   * caller advance past it. This keeps the watermark moving instead of retrying
+   * the same poisoned request forever.
+   *
+   * Non-500 errors (400 validation, 401 auth, network) are real failures and
+   * propagate unchanged — only 500 is treated as a skippable poison node.
+   *
+   * @returns `{ nodes, reduced }` where `reduced` is true if the window was
+   *          narrowed below PAGE_SIZE; or `null` to signal "skip one node".
+   */
+  private async fetchPageResilient(
+    sinceSec: number,
+    offset: number,
+    limit: number,
+    stats: { poisonNodesSkipped: number }
+  ): Promise<{ nodes: SearchResultNode[]; reduced: boolean } | null> {
+    try {
+      const nodes = await this.localApiClient.searchNodes(
         { edited: { since: sinceSec } },
-        { limit: PAGE_SIZE, offset }
+        { limit, offset }
       );
+      return { nodes, reduced: limit < PAGE_SIZE };
+    } catch (error) {
+      // Real client-side error (400/401/404/network) — propagate, do not skip.
+      if (!isPoisonPageError(error)) throw error;
 
-      if (page.length === 0) break;
+      if (limit <= 1) {
+        // The single node at this offset crashes Tana's search serializer.
+        // Skip it; a full `sync index` will re-capture it from the export.
+        this.logger.warn(
+          "Skipping a node that crashes Tana Local API search (HTTP 500). " +
+            "Run 'supertag sync index' for a full re-sync to capture it.",
+          { offset, sinceSec }
+        );
+        stats.poisonNodesSkipped++;
+        return null;
+      }
 
-      yield page;
-
-      if (page.length < PAGE_SIZE) break;
-
-      offset += PAGE_SIZE;
+      const half = Math.max(1, Math.floor(limit / 2));
+      this.logger.warn(
+        "Delta-sync page returned HTTP 500; bisecting to isolate the bad node",
+        { offset, limit, retryLimit: half }
+      );
+      return this.fetchPageResilient(sinceSec, offset, half, stats);
     }
   }
 
@@ -304,6 +411,7 @@ export class DeltaSyncService {
         watermarkAfter: 0,
         durationMs: 0,
         pages: 0,
+        poisonNodesSkipped: 0,
       };
     }
 
@@ -333,8 +441,9 @@ export class DeltaSyncService {
       let fieldValuesCleared = 0;
       let pages = 0;
       const changedNodeIds: string[] = [];
+      const stats = { poisonNodesSkipped: 0 };
 
-      for await (const page of this.fetchChangedNodes(sinceMs)) {
+      for await (const page of this.fetchChangedNodes(sinceMs, stats)) {
         pages++;
         nodesFound += page.length;
 
@@ -363,9 +472,13 @@ export class DeltaSyncService {
         embeddingsGenerated = 0;
       }
 
-      // Step 5: Update watermark
+      // Step 5: Update watermark.
+      // Advance when we found nodes OR skipped poison nodes — skipping past a
+      // poison node is real progress, and advancing the watermark stops the
+      // next cycle from re-requesting (and re-skipping) the same bad node.
       const watermarkAfter = Date.now();
-      if (nodesFound > 0) {
+      const madeProgress = nodesFound > 0 || stats.poisonNodesSkipped > 0;
+      if (madeProgress) {
         this.updateWatermark(watermarkAfter, nodesFound);
       }
 
@@ -381,9 +494,10 @@ export class DeltaSyncService {
         embeddingsGenerated,
         embeddingsSkipped,
         watermarkBefore: sinceMs,
-        watermarkAfter: nodesFound > 0 ? watermarkAfter : sinceMs,
+        watermarkAfter: madeProgress ? watermarkAfter : sinceMs,
         durationMs,
         pages,
+        poisonNodesSkipped: stats.poisonNodesSkipped,
       };
     } finally {
       // T-2.3: Always release lock

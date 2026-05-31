@@ -5,6 +5,14 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Delta-sync could wedge indefinitely on a single bad node (HTTP 500)** — When Tana's Local API `/nodes/search` returns HTTP 500 while serializing one node in the changed set (a Tana-side serializer bug), the whole page failed. Because the watermark only advanced on a fully successful sync, the same poisoned request was retried every cycle and never recovered — observed stuck 8+ days. `DeltaSyncService` now isolates the offending node via offset/limit bisection, skips just that node (`poisonNodesSkipped` in the result), and advances the watermark so sync keeps making progress. A subsequent full `supertag sync index` re-captures any skipped node from the export. 500 is treated as a skippable poison node; 400/401/404/network errors still propagate as real failures.
+
+### Added
+- **Delta-sync failure-streak escalation** — `DeltaSyncPoller` now tracks consecutive failed cycles and emits a loud, actionable warning ("failed N cycles in a row… run `supertag sync index`") once the streak crosses a threshold, instead of logging an identical per-cycle error that's easy to miss. Exposed via `getFailureState()`. Catches the "silently wedged for days" failure mode.
+
 ## [2.5.7] - 2026-04-17
 
 ### Fixed
