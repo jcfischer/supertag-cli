@@ -74,9 +74,9 @@ beforeEach(() => {
       updated INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS tag_applications (
-      node_id TEXT NOT NULL,
+      data_node_id TEXT NOT NULL,
       tag_name TEXT NOT NULL,
-      PRIMARY KEY (node_id, tag_name)
+      PRIMARY KEY (data_node_id, tag_name)
     );
   `);
 });
@@ -364,7 +364,7 @@ describe("WatchService - filter tag", () => {
     // Nodes with tag "meeting" and without
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('meeting1', 'Meeting', 1000)`);
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('other1', 'Other', 1000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('meeting1', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('meeting1', 'meeting')`);
 
     const capturedEvents: string[] = [];
     const eventLogger = {
@@ -379,7 +379,7 @@ describe("WatchService - filter tag", () => {
         syncCalled = true;
         // Add a new meeting node
         db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('meeting2', 'Meeting 2', 2000)`);
-        db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('meeting2', 'meeting')`);
+        db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('meeting2', 'meeting')`);
         // Add non-meeting node (should be ignored)
         db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('other2', 'Other 2', 2000)`);
       },

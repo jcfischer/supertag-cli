@@ -11,15 +11,31 @@
  * Key: Uses channel: 'chromium' without automation flags to avoid Google detection.
  */
 
-import { chromium, type BrowserContext } from 'playwright';
+// Playwright is imported lazily inside performExport() so the compiled
+// standalone binary can run --help / non-export commands without the
+// 'playwright' package present (it fails to resolve from /$bunfs/root).
+import type { BrowserContext } from 'playwright';
 import { parseArgs } from 'util';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 
-// Import logger using absolute path
+// Import logger using absolute path. Falls back to a console shim when the
+// KAI logger is not present (clean install / non-PAI environment), so the
+// binary still loads for --help and other commands.
 const loggerPath = join(homedir(), 'work/DA/KAI/lib/logger.ts');
-const { Logger } = await import(loggerPath);
+let Logger: any;
+try {
+  ({ Logger } = await import(loggerPath));
+} catch {
+  Logger = class {
+    constructor(private scope: string) {}
+    info(...a: any[]) { console.log(`[${this.scope}]`, ...a); }
+    warn(...a: any[]) { console.warn(`[${this.scope}]`, ...a); }
+    error(...a: any[]) { console.error(`[${this.scope}]`, ...a); }
+    debug(...a: any[]) { console.error(`[${this.scope}]`, ...a); }
+  };
+}
 
 // Import workspace resolution
 import { getConfig } from '../config/manager';
@@ -92,6 +108,17 @@ async function performExport(options: ExportOptions): Promise<string | null> {
   await ensureDirectories(exportDir);
 
   if (verbose) logger.debug('Launching browser with persistent context...');
+
+  // Lazy-load Playwright only when an export is actually requested.
+  let chromium;
+  try {
+    ({ chromium } = await import('playwright'));
+  } catch {
+    logger.error('Playwright is not available — the browser export path requires it.');
+    logger.error("Install with: bunx playwright install chromium  (and `bun add playwright` for the bundled build)");
+    logger.error('Note: under PAI, the browser export is disallowed; use Local-API delta-sync instead (supertag sync index --delta).');
+    return null;
+  }
 
   // Use persistent context to preserve login (with anti-detection flags)
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
