@@ -5,7 +5,7 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.9] - 2026-06-09
 
 ### Fixed
 - **`sync watch` failed every poll with `no such column: ta.node_id`** — The watch snapshot query in `src/watch/snapshot.ts` referenced `tag_applications.node_id`, but the real column produced by the indexer is `data_node_id`. The bug was masked because the watch test fixtures created their own `tag_applications` table with a `node_id` column instead of the production schema, so tests passed while every live poll failed and the watcher backed off toward its 10-failure exit. Query and test fixtures now use `data_node_id`. (Reported by Ryan/Claude; delta-sync `index --delta` was always unaffected.)
