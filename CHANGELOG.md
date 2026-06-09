@@ -5,6 +5,12 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`sync watch` failed every poll with `no such column: ta.node_id`** — The watch snapshot query in `src/watch/snapshot.ts` referenced `tag_applications.node_id`, but the real column produced by the indexer is `data_node_id`. The bug was masked because the watch test fixtures created their own `tag_applications` table with a `node_id` column instead of the production schema, so tests passed while every live poll failed and the watcher backed off toward its 10-failure exit. Query and test fixtures now use `data_node_id`. (Reported by Ryan/Claude; delta-sync `index --delta` was always unaffected.)
+- **`supertag-export` standalone binary crashed on every invocation, including `--help`** — Playwright is linked `--external`, so the compiled binary resolves it at runtime from `/$bunfs/root` and fails (`Cannot find package 'playwright'`). The top-level `import { chromium } from 'playwright'` crashed the binary at module load before any command could run. Playwright is now imported lazily inside `performExport()` (type-only import at the top, erased at compile), so `--help` and other commands load cleanly; when an export is actually requested and Playwright is missing, a clear actionable message is printed (including the note that under PAI the browser export is disallowed — use Local-API delta-sync). The KAI logger import also falls back to a console shim on clean installs.
+
 ## [2.5.8] - 2026-05-31
 
 ### Fixed

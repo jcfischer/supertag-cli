@@ -33,8 +33,8 @@ export function takeSnapshot(db: Database, filterTag?: string): Map<string, Node
       SELECT n.id, n.name, n.updated,
         GROUP_CONCAT(ta2.tag_name, ',') as tags
       FROM nodes n
-      JOIN tag_applications ta ON n.id = ta.node_id AND ta.tag_name = ?
-      LEFT JOIN tag_applications ta2 ON n.id = ta2.node_id
+      JOIN tag_applications ta ON n.id = ta.data_node_id AND ta.tag_name = ?
+      LEFT JOIN tag_applications ta2 ON n.id = ta2.data_node_id
       GROUP BY n.id
     `).all(filterTag);
   } else {
@@ -43,7 +43,7 @@ export function takeSnapshot(db: Database, filterTag?: string): Map<string, Node
       SELECT n.id, n.name, n.updated,
         GROUP_CONCAT(ta.tag_name, ',') as tags
       FROM nodes n
-      LEFT JOIN tag_applications ta ON n.id = ta.node_id
+      LEFT JOIN tag_applications ta ON n.id = ta.data_node_id
       GROUP BY n.id
     `).all();
   }

@@ -22,9 +22,9 @@ function setupDb(): void {
       updated INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS tag_applications (
-      node_id TEXT NOT NULL,
+      data_node_id TEXT NOT NULL,
       tag_name TEXT NOT NULL,
-      PRIMARY KEY (node_id, tag_name)
+      PRIMARY KEY (data_node_id, tag_name)
     );
   `);
 }
@@ -81,7 +81,7 @@ describe("takeSnapshot - nodes with tags", () => {
 
   test("returns node with single tag", () => {
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n1', 'Meeting 1', 2000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'meeting')`);
 
     const snapshot = takeSnapshot(db);
     const node = snapshot.get('n1');
@@ -91,8 +91,8 @@ describe("takeSnapshot - nodes with tags", () => {
 
   test("returns node with multiple tags", () => {
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n1', 'Project Alpha', 3000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'project')`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'active')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'project')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'active')`);
 
     const snapshot = takeSnapshot(db);
     const node = snapshot.get('n1');
@@ -103,8 +103,8 @@ describe("takeSnapshot - nodes with tags", () => {
   test("tag filter returns only matching nodes", () => {
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n1', 'Meeting 1', 1000)`);
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n2', 'Project 1', 2000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'meeting')`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n2', 'project')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n2', 'project')`);
 
     const snapshot = takeSnapshot(db, "meeting");
     expect(snapshot.size).toBe(1);
@@ -116,9 +116,9 @@ describe("takeSnapshot - nodes with tags", () => {
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n1', 'Meeting 1', 1000)`);
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n2', 'Meeting 2', 2000)`);
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n3', 'Project', 3000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'meeting')`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n2', 'meeting')`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n3', 'project')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n2', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n3', 'project')`);
 
     const snapshot = takeSnapshot(db, "meeting");
     expect(snapshot.size).toBe(2);
@@ -129,8 +129,8 @@ describe("takeSnapshot - nodes with tags", () => {
 
   test("filtered node includes all its tags (not just the filter tag)", () => {
     db.exec(`INSERT INTO nodes (id, name, updated) VALUES ('n1', 'Meeting+Project', 1000)`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'meeting')`);
-    db.exec(`INSERT INTO tag_applications (node_id, tag_name) VALUES ('n1', 'project')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'meeting')`);
+    db.exec(`INSERT INTO tag_applications (data_node_id, tag_name) VALUES ('n1', 'project')`);
 
     const snapshot = takeSnapshot(db, "meeting");
     const node = snapshot.get('n1');
