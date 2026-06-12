@@ -10,9 +10,10 @@
  *
  * The supertag tables the schema-service reads (`supertag_metadata`,
  * `supertag_fields`, …) are built with the PRODUCTION migration functions so
- * the fixture can't drift from the real schema. Only the two indexer-owned
- * tables the builder may touch (`nodes`, `tag_applications`) are declared here,
- * matching `src/db/indexer.ts`. Seeds `todo`/`meeting` so tag resolution works.
+ * the fixture can't drift from the real schema. The two indexer-owned tables
+ * (`nodes`, `tag_applications`) are declared here as a minimal local subset —
+ * not a verified mirror of `src/db/indexer.ts`; they exist only so the builder
+ * can open the DB without `SQLITE_CANTOPEN`. Seeds `todo`/`meeting`.
  */
 import { Database } from "bun:sqlite";
 import { mkdirSync, rmSync } from "fs";
@@ -84,4 +85,21 @@ export function createSeededDb(label = "seeded"): SeededDb {
     dbPath,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
+}
+
+/**
+ * Run `fn` with a fresh seeded database path, guaranteeing cleanup afterwards.
+ * Use in the individual tests that need a DB so throw-before-DB / import-only
+ * tests in the same describe don't pay for fixture setup.
+ */
+export async function withSeededDb<T>(
+  label: string,
+  fn: (dbPath: string) => Promise<T>
+): Promise<T> {
+  const seeded = createSeededDb(label);
+  try {
+    return await fn(seeded.dbPath);
+  } finally {
+    seeded.cleanup();
+  }
 }

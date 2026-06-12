@@ -10,7 +10,7 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createSeededDb } from './helpers/seeded-db';
+import { withSeededDb } from './helpers/seeded-db';
 
 // T-1.1: Test that types and service skeleton exist
 describe('batch-operations types', () => {
@@ -529,46 +529,37 @@ describe('batchCreateNodes validation', () => {
       name: `Task ${i}`,
     }));
 
-    const seeded = createSeededDb('batch-validation');
-    try {
-      const result = await batchCreateNodes(maxNodes, { dryRun: true, _dbPathOverride: seeded.dbPath });
+    await withSeededDb('batch-validation', async (dbPath) => {
+      const result = await batchCreateNodes(maxNodes, { dryRun: true, _dbPathOverride: dbPath });
       expect(result).toBeDefined();
       expect(result).toHaveLength(BATCH_CREATE_MAX_NODES);
-    } finally {
-      seeded.cleanup();
-    }
+    });
   });
 
   it('should validate node structure: supertag required', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    const seeded = createSeededDb('batch-validation');
-    try {
+    await withSeededDb('batch-validation', async (dbPath) => {
       const results = await batchCreateNodes([
         { supertag: '', name: 'No tag' },
-      ] as any, { dryRun: true, _dbPathOverride: seeded.dbPath });
+      ] as any, { dryRun: true, _dbPathOverride: dbPath });
 
       expect(results[0].error).toBeDefined();
       expect(results[0].error).toContain('supertag');
-    } finally {
-      seeded.cleanup();
-    }
+    });
   });
 
   it('should validate node structure: name required', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    const seeded = createSeededDb('batch-validation');
-    try {
+    await withSeededDb('batch-validation', async (dbPath) => {
       const results = await batchCreateNodes([
         { supertag: 'todo', name: '' },
-      ], { dryRun: true, _dbPathOverride: seeded.dbPath });
+      ], { dryRun: true, _dbPathOverride: dbPath });
 
       expect(results[0].error).toBeDefined();
       expect(results[0].error).toContain('name');
-    } finally {
-      seeded.cleanup();
-    }
+    });
   });
 
   it('should include suggestion in validation error', async () => {

@@ -15,7 +15,7 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { getUniqueTestDir } from './test-utils';
-import { createSeededDb, type SeededDb } from './helpers/seeded-db';
+import { withSeededDb } from './helpers/seeded-db';
 
 describe('createBatchCommand', () => {
   it('should create a command named "batch"', () => {
@@ -286,11 +286,9 @@ describe('batch create subcommand', () => {
 });
 
 describe('executeBatchCreate', () => {
-  // Inject a seeded DB so dry-run payload building doesn't resolve the real
-  // workspace DB (slow / CI-skip via SQLITE_CANTOPEN).
-  let seeded: SeededDb;
-  beforeEach(() => { seeded = createSeededDb('batch-cli-create'); });
-  afterEach(() => { seeded.cleanup(); });
+  // The DB-backed tests inject a seeded DB via withSeededDb so dry-run payload
+  // building doesn't resolve the real workspace DB (slow / CI-skip via
+  // SQLITE_CANTOPEN). The import-only test below needs no DB.
 
   it('should export executeBatchCreate function', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
@@ -300,27 +298,31 @@ describe('executeBatchCreate', () => {
   it('should accept nodes array and return results', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
 
-    const result = await executeBatchCreate([
-      { supertag: 'todo', name: 'Task 1' },
-      { supertag: 'todo', name: 'Task 2' },
-    ], { dryRun: true, _dbPath: seeded.dbPath });
+    await withSeededDb('batch-cli-create', async (dbPath) => {
+      const result = await executeBatchCreate([
+        { supertag: 'todo', name: 'Task 1' },
+        { supertag: 'todo', name: 'Task 2' },
+      ], { dryRun: true, _dbPath: dbPath });
 
-    expect(result).toHaveProperty('success');
-    expect(result).toHaveProperty('results');
-    expect(result).toHaveProperty('errors');
-    expect(result).toHaveProperty('dryRun', true);
+      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('results');
+      expect(result).toHaveProperty('errors');
+      expect(result).toHaveProperty('dryRun', true);
+    });
   });
 
   it('should return errors for invalid nodes', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
 
-    const result = await executeBatchCreate([
-      { supertag: 'todo', name: 'Valid' },
-      { supertag: '', name: 'Invalid - no supertag' },
-    ], { dryRun: true, _dbPath: seeded.dbPath });
+    await withSeededDb('batch-cli-create', async (dbPath) => {
+      const result = await executeBatchCreate([
+        { supertag: 'todo', name: 'Valid' },
+        { supertag: '', name: 'Invalid - no supertag' },
+      ], { dryRun: true, _dbPath: dbPath });
 
-    expect(result.success).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.success).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
   });
 
   it('should read nodes from stdin content', async () => {
@@ -330,14 +332,16 @@ describe('executeBatchCreate', () => {
       { supertag: 'todo', name: 'Task from stdin' },
     ]);
 
-    const result = await executeBatchCreate([], {
-      dryRun: true,
-      stdin: true,
-      _stdinContent: stdinContent,
-      _dbPath: seeded.dbPath,
-    });
+    await withSeededDb('batch-cli-create', async (dbPath) => {
+      const result = await executeBatchCreate([], {
+        dryRun: true,
+        stdin: true,
+        _stdinContent: stdinContent,
+        _dbPath: dbPath,
+      });
 
-    expect(result.results.length).toBe(1);
+      expect(result.results.length).toBe(1);
+    });
   });
 });
 
