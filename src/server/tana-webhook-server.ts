@@ -1267,27 +1267,32 @@ export class TanaWebhookServer {
     const rows = (results.results as unknown as SemanticSearchResultItem[]).map((item) => {
       const similarity = Math.round(item.similarity * 100);
 
+      // Node names are nullable (source/container nodes); coalesce before any
+      // string op so a null name can't crash the renderer (matches the FTS path).
+      const name = item.name || "(unnamed)";
+
       // If the name already contains a [[...]] reference, extract just the reference
       // Names may have leading "  - " that we need to strip
       let nodeRef: string;
-      if (item.name.includes("[[") && item.name.includes("]]")) {
+      if (name.includes("[[") && name.includes("]]")) {
         // Extract the [[...]] part, stripping any leading whitespace/dashes
-        const match = item.name.match(/\[\[.+?\]\]/);
-        nodeRef = match ? match[0] : item.name.trim();
+        const match = name.match(/\[\[.+?\]\]/);
+        nodeRef = match ? match[0] : name.trim();
       } else {
-        nodeRef = `[[${item.name}^${item.nodeId}]]`;
+        nodeRef = `[[${name}^${item.nodeId}]]`;
       }
 
       let row = `  - ${nodeRef}`;
 
       // Add ancestor if available (same logic for ancestor names)
       if (item.ancestor) {
+        const ancestorName = item.ancestor.name || "(unnamed)";
         let ancestorRef: string;
-        if (item.ancestor.name.includes("[[") && item.ancestor.name.includes("]]")) {
-          const match = item.ancestor.name.match(/\[\[.+?\]\]/);
-          ancestorRef = match ? match[0] : item.ancestor.name.trim();
+        if (ancestorName.includes("[[") && ancestorName.includes("]]")) {
+          const match = ancestorName.match(/\[\[.+?\]\]/);
+          ancestorRef = match ? match[0] : ancestorName.trim();
         } else {
-          ancestorRef = `[[${item.ancestor.name}^${item.ancestor.id}]]`;
+          ancestorRef = `[[${ancestorName}^${item.ancestor.id}]]`;
         }
         row += `\n    - Ancestor:: ${ancestorRef}`;
       }

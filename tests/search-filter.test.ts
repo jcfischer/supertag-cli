@@ -63,5 +63,13 @@ describe("Search Filter", () => {
       expect(isReferenceSyntax("Normal text")).toBe(false);
       expect(isReferenceSyntax("Text with [single brackets]")).toBe(false);
     });
+
+    // Regression: null/undefined names (source/container nodes) must not crash
+    // ("null is not an object (evaluating 'name.includes')") — reported bug.
+    it("should treat null/undefined/empty names as non-reference (no crash)", () => {
+      expect(isReferenceSyntax(null)).toBe(false);
+      expect(isReferenceSyntax(undefined)).toBe(false);
+      expect(isReferenceSyntax("")).toBe(false);
+    });
   });
 });

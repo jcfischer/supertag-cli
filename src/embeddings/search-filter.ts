@@ -29,7 +29,8 @@ export interface EnrichedSearchResult extends RawSearchResult {
  * Check if a name looks like reference syntax (e.g., "[[Something]]")
  * These are text artifacts, not actual content nodes
  */
-export function isReferenceSyntax(name: string): boolean {
+export function isReferenceSyntax(name: string | null | undefined): boolean {
+  if (!name) return false;
   return name.includes("[[") && name.includes("]]");
 }
 
@@ -63,7 +64,7 @@ export function enrichSearchResults(
       () =>
         db
           .query("SELECT name FROM nodes WHERE id = ?")
-          .get(r.nodeId) as { name: string } | null,
+          .get(r.nodeId) as { name: string | null } | null,
       "enrichSearchResults getNode"
     );
 
@@ -84,7 +85,10 @@ export function enrichSearchResults(
         nodeId: r.nodeId,
         distance: r.distance,
         similarity: 1 - r.distance,
-        name: node.name,
+        // nodes.name is nullable in the DB (source/container nodes); the
+        // EnrichedSearchResult.name contract is string, so coalesce here to
+        // stop null propagating into isReferenceSyntax/getDeduplicationKey.
+        name: node.name ?? "",
         tags: tags.length > 0 ? tags.map((t) => t.name) : undefined,
       });
     }
