@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../../../../tests/helpers/integration-gate";
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import { getDatabasePath, resolveWorkspace } from "../../../config/paths";
@@ -20,7 +21,7 @@ import {
   transcriptSearchSchema,
 } from "../../schemas";
 
-describe("MCP Transcript Tools", () => {
+describeIntegration("MCP Transcript Tools", () => {
   let hasTranscripts: boolean = false;
   let dbExists: boolean = false;
   let dbPath: string;

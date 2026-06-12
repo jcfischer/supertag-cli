@@ -16,6 +16,7 @@ import {
   createNode,
 } from './node-builder';
 import { getSchemaRegistry } from '../commands/schema';
+import { describeIntegration } from '../../tests/helpers/integration-gate';
 import { SCHEMA_CACHE_FILE } from '../config/paths';
 import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from '../db/migrate';
 import type { ChildNodeInput, CreateNodeInput } from '../types';
@@ -27,7 +28,7 @@ describe('Node Builder Service', () => {
   // =========================================================================
   // validateSupertags() Tests (1-3)
   // =========================================================================
-  describe('validateSupertags()', () => {
+  describeIntegration('validateSupertags()', () => {
     const testFn = hasSchema ? it : it.skip;
 
     // Test 1: Valid single tag
@@ -160,7 +161,7 @@ describe('Node Builder Service', () => {
   // =========================================================================
   // buildNodePayload() Tests (8-10)
   // =========================================================================
-  describe('buildNodePayload()', () => {
+  describeIntegration('buildNodePayload()', () => {
     const testFn = hasSchema ? it : it.skip;
 
     // Test 8: Basic node with supertag
@@ -262,7 +263,7 @@ describe('Node Builder Service', () => {
   // =========================================================================
   // createNode() Tests (11-12)
   // =========================================================================
-  describe('createNode()', () => {
+  describeIntegration('createNode()', () => {
     const testFn = hasSchema ? it : it.skip;
 
     // Test 11: Dry run mode returns payload
@@ -327,7 +328,7 @@ describe('Node Builder Service', () => {
   // =========================================================================
   // Database-backed createNode() Tests (T-1, T-3)
   // =========================================================================
-  describe('createNode() with database field types', () => {
+  describeIntegration('createNode() with database field types', () => {
     let testDir: string;
     let dbPath: string;
     let db: Database;

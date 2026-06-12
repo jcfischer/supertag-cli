@@ -4,15 +4,17 @@
  */
 
 import { describe, it, expect } from "bun:test";
+import { describeIntegration, RUN_INTEGRATION } from "../../../../tests/helpers/integration-gate";
 import { existsSync } from "fs";
 import { fieldValues } from "../field-values";
 import { getDatabasePath } from "../../../config/paths";
 
-// Check if we have a database to test against
-const dbPath = getDatabasePath();
-const hasDatabase = existsSync(dbPath);
+// Resolve the workspace DB path only in integration mode, so importing this
+// file in the fast suite stays hermetic (the real-DB describe is gated anyway).
+const dbPath = RUN_INTEGRATION ? getDatabasePath() : "";
+const hasDatabase = RUN_INTEGRATION ? existsSync(dbPath) : false;
 
-describe("tana_field_values MCP Tool", () => {
+describeIntegration("tana_field_values MCP Tool", () => {
   // Skip integration tests if no database exists
   const testFn = hasDatabase ? it : it.skip;
 

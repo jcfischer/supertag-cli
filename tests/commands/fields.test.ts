@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
@@ -196,7 +197,7 @@ describe("Fields CLI Commands", () => {
     });
   });
 
-  describe("Integration Tests (with real database)", () => {
+  describeIntegration("Integration Tests (with real database)", () => {
     // These tests require a real database with indexed field values
     // Skip if no database exists or if it's locked by other tests
     const realDbPath =
