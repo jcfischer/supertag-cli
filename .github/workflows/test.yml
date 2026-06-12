@@ -23,7 +23,10 @@ jobs:
         run: bun install
 
       - name: Run tests
-        run: bun run test --timeout 30000
+        # RUN_INTEGRATION=1 includes the CLI-subprocess e2e suites (gated out of
+        # the local pre-push fast suite for speed). Real-DB-only suites still
+        # self-skip on CI since no workspace database is built here.
+        run: RUN_INTEGRATION=1 bun run test
 
       - name: Type check
         run: bun run typecheck

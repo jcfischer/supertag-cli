@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
+import { describeIntegration } from "./helpers/integration-gate";
 import { $ } from "bun";
 import { existsSync } from "fs";
 import { getDatabasePath } from "../src/config/paths";
@@ -14,7 +15,7 @@ import { getDatabasePath } from "../src/config/paths";
 const dbPath = getDatabasePath();
 const hasDatabase = existsSync(dbPath);
 
-describe("--select parameter support", () => {
+describeIntegration("--select parameter support", () => {
   const testFn = hasDatabase ? it : it.skip;
 
   describe("tags list --select", () => {

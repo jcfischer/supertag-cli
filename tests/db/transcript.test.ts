@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, setDefaultTimeout } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 
 // Transcript queries can be slow due to JSON extraction on large datasets
 setDefaultTimeout(30000);
@@ -25,7 +26,10 @@ import {
   type TranscriptSearchResult,
 } from "../../src/db/transcript";
 
-describe("Transcript Data Access", () => {
+// Live-DB integration coverage. The deterministic, CI-running version of these
+// queries lives in transcript-fixture.test.ts; this suite exercises them against
+// the real workspace database and only runs under RUN_INTEGRATION=1.
+describeIntegration("Transcript Data Access", () => {
   let db: Database | null = null;
   let hasTranscripts: boolean = false;
 

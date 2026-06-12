@@ -6,13 +6,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { mkdirSync, rmSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { $ } from "bun";
 import { Database } from "bun:sqlite";
 import { migrateSupertagMetadataSchema } from "../../src/db/migrate";
 
-describe("Search Field Filter CLI Commands", () => {
+describeIntegration("Search Field Filter CLI Commands", () => {
   const testDir = join(process.cwd(), "tmp-test-search-field-filter");
   const dbPath = join(testDir, "main", "tana-index.db");
   const configPath = join(testDir, "config.json");
