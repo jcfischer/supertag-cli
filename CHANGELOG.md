@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **`tana_semantic_search` crashed on nodes with a null name** (`null is not an object (evaluating 'name.includes')`). `enrichSearchResults` copied the nullable `nodes.name` column straight into the result, then `isReferenceSyntax()` called `.includes()` on it — so any result set containing an unnamed source/container node failed the **entire** search (retrying with a different query sometimes dodged the bad node). Fixed at the source (coalesce null name → `""` during enrichment) and hardened `isReferenceSyntax()` to treat null/undefined/empty as non-reference. Shared by the CLI, MCP tool, and webhook server, so all three are covered. (Reported via Claude Code.)
+- **`tana_semantic_search` crashed on nodes with a null name** (`null is not an object (evaluating 'name.includes')`). `enrichSearchResults` copied the nullable `nodes.name` column straight into the result, then `isReferenceSyntax()` called `.includes()` on it — so any result set containing an unnamed source/container node failed the **entire** search (retrying with a different query sometimes dodged the bad node). Fixed at the source (coalesce null name → `""` during enrichment) and hardened `isReferenceSyntax()` to treat null/undefined/empty as non-reference. The shared enrichment/filter (`src/embeddings/search-filter.ts`) is used by the MCP `tana_semantic_search` tool and the CLI (`search`, `embed`), so both are covered. Also guarded the webhook server's semantic-result renderer (`convertSemanticResultsToTana`), which had the same unguarded `.includes` on a nullable node/ancestor name. (Reported via Claude Code.)
 
 ## [2.5.9] - 2026-06-09
 
