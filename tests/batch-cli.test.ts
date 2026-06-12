@@ -15,6 +15,7 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { getUniqueTestDir } from './test-utils';
+import { createSeededDb, type SeededDb } from './helpers/seeded-db';
 
 describe('createBatchCommand', () => {
   it('should create a command named "batch"', () => {
@@ -285,6 +286,12 @@ describe('batch create subcommand', () => {
 });
 
 describe('executeBatchCreate', () => {
+  // Inject a seeded DB so dry-run payload building doesn't resolve the real
+  // workspace DB (slow / CI-skip via SQLITE_CANTOPEN).
+  let seeded: SeededDb;
+  beforeEach(() => { seeded = createSeededDb('batch-cli-create'); });
+  afterEach(() => { seeded.cleanup(); });
+
   it('should export executeBatchCreate function', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
     expect(typeof executeBatchCreate).toBe('function');
@@ -293,37 +300,27 @@ describe('executeBatchCreate', () => {
   it('should accept nodes array and return results', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
 
-    try {
-      const result = await executeBatchCreate([
-        { supertag: 'todo', name: 'Task 1' },
-        { supertag: 'todo', name: 'Task 2' },
-      ], { dryRun: true });
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Task 1' },
+      { supertag: 'todo', name: 'Task 2' },
+    ], { dryRun: true, _dbPath: seeded.dbPath });
 
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('results');
-      expect(result).toHaveProperty('errors');
-      expect(result).toHaveProperty('dryRun', true);
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return; // No workspace database available
-      throw e;
-    }
+    expect(result).toHaveProperty('success');
+    expect(result).toHaveProperty('results');
+    expect(result).toHaveProperty('errors');
+    expect(result).toHaveProperty('dryRun', true);
   });
 
   it('should return errors for invalid nodes', async () => {
     const { executeBatchCreate } = await import('../src/commands/batch');
 
-    try {
-      const result = await executeBatchCreate([
-        { supertag: 'todo', name: 'Valid' },
-        { supertag: '', name: 'Invalid - no supertag' },
-      ], { dryRun: true });
+    const result = await executeBatchCreate([
+      { supertag: 'todo', name: 'Valid' },
+      { supertag: '', name: 'Invalid - no supertag' },
+    ], { dryRun: true, _dbPath: seeded.dbPath });
 
-      expect(result.success).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return;
-      throw e;
-    }
+    expect(result.success).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   it('should read nodes from stdin content', async () => {
@@ -333,18 +330,14 @@ describe('executeBatchCreate', () => {
       { supertag: 'todo', name: 'Task from stdin' },
     ]);
 
-    try {
-      const result = await executeBatchCreate([], {
-        dryRun: true,
-        stdin: true,
-        _stdinContent: stdinContent,
-      });
+    const result = await executeBatchCreate([], {
+      dryRun: true,
+      stdin: true,
+      _stdinContent: stdinContent,
+      _dbPath: seeded.dbPath,
+    });
 
-      expect(result.results.length).toBe(1);
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return;
-      throw e;
-    }
+    expect(result.results.length).toBe(1);
   });
 });
 

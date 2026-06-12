@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
+import { describeIntegration } from "../../../../tests/helpers/integration-gate";
 import { existsSync } from "fs";
 import { fieldValues } from "../field-values";
 import { getDatabasePath } from "../../../config/paths";
@@ -12,7 +13,7 @@ import { getDatabasePath } from "../../../config/paths";
 const dbPath = getDatabasePath();
 const hasDatabase = existsSync(dbPath);
 
-describe("tana_field_values MCP Tool", () => {
+describeIntegration("tana_field_values MCP Tool", () => {
   // Skip integration tests if no database exists
   const testFn = hasDatabase ? it : it.skip;
 

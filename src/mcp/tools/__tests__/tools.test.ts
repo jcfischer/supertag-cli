@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describeIntegration } from '../../../../tests/helpers/integration-gate';
 import { existsSync } from 'fs';
 import { Database } from 'bun:sqlite';
 import { stats } from '../stats';
@@ -21,7 +22,7 @@ import { getDatabasePath } from '../../../config/paths';
 const dbPath = getDatabasePath();
 const hasDatabase = existsSync(dbPath);
 
-describe('MCP Tools Integration', () => {
+describeIntegration('MCP Tools Integration', () => {
   // Skip all tests if no database exists
   const testFn = hasDatabase ? it : it.skip;
 

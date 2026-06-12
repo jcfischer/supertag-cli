@@ -9,11 +9,12 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { $ } from "bun";
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 
-describe("Create Command Field Validation", () => {
+describeIntegration("Create Command Field Validation", () => {
   const testDir = join(process.cwd(), "tmp-test-create-validation");
   const configDir = join(testDir, "config", "supertag");
   const dataDir = join(testDir, "data", "supertag", "workspaces", "main");

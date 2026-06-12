@@ -10,6 +10,7 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { createSeededDb, type SeededDb } from './helpers/seeded-db';
 
 // T-1.1: Test that types and service skeleton exist
 describe('batch-operations types', () => {
@@ -492,6 +493,12 @@ describe('batchCreateNodes', () => {
 // =============================================================================
 
 describe('batchCreateNodes validation', () => {
+  // Inject a seeded DB so the tests that get past size validation and into
+  // payload-building don't resolve the real workspace DB (slow / CI-skip).
+  let seeded: SeededDb;
+  beforeEach(() => { seeded = createSeededDb('batch-validation'); });
+  afterEach(() => { seeded.cleanup(); });
+
   it('should throw VALIDATION_ERROR when more than 50 nodes provided', async () => {
     const { batchCreateNodes, BATCH_CREATE_MAX_NODES } = await import(
       '../src/services/batch-operations'
@@ -523,45 +530,31 @@ describe('batchCreateNodes validation', () => {
       name: `Task ${i}`,
     }));
 
-    try {
-      const result = await batchCreateNodes(maxNodes, { dryRun: true });
-      expect(result).toBeDefined();
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return; // No workspace database available
-      throw e;
-    }
+    const result = await batchCreateNodes(maxNodes, { dryRun: true, _dbPathOverride: seeded.dbPath });
+    expect(result).toBeDefined();
+    expect(result).toHaveLength(BATCH_CREATE_MAX_NODES);
   });
 
   it('should validate node structure: supertag required', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    try {
-      const results = await batchCreateNodes([
-        { supertag: '', name: 'No tag' },
-      ] as any, { dryRun: true });
+    const results = await batchCreateNodes([
+      { supertag: '', name: 'No tag' },
+    ] as any, { dryRun: true, _dbPathOverride: seeded.dbPath });
 
-      expect(results[0].error).toBeDefined();
-      expect(results[0].error).toContain('supertag');
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return;
-      throw e;
-    }
+    expect(results[0].error).toBeDefined();
+    expect(results[0].error).toContain('supertag');
   });
 
   it('should validate node structure: name required', async () => {
     const { batchCreateNodes } = await import('../src/services/batch-operations');
 
-    try {
-      const results = await batchCreateNodes([
-        { supertag: 'todo', name: '' },
-      ], { dryRun: true });
+    const results = await batchCreateNodes([
+      { supertag: 'todo', name: '' },
+    ], { dryRun: true, _dbPathOverride: seeded.dbPath });
 
-      expect(results[0].error).toBeDefined();
-      expect(results[0].error).toContain('name');
-    } catch (e: any) {
-      if (e?.code === 'SQLITE_CANTOPEN') return;
-      throw e;
-    }
+    expect(results[0].error).toBeDefined();
+    expect(results[0].error).toContain('name');
   });
 
   it('should include suggestion in validation error', async () => {
