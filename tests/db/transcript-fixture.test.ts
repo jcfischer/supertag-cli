@@ -6,9 +6,11 @@
  *
  * Scope note: searchTranscripts here exercises the LIKE fallback path (the
  * fixture intentionally creates no `nodes_fts` table). The FTS search path and
- * the full live-data behaviour remain covered by transcript.test.ts, which is
- * gated behind RUN_INTEGRATION — so this is not a full equivalent of that
- * integration suite, just deterministic coverage of the core query shapes.
+ * full live-data behaviour are exercised only by transcript.test.ts, which is
+ * gated behind RUN_INTEGRATION and self-skips unless a real workspace DB with
+ * transcript data is present — so that coverage is opportunistic/local, NOT
+ * guaranteed on CI. This file is therefore the only CI-guaranteed coverage of
+ * these queries, and only of the LIKE/core-shape path.
  */
 import { describe, it, expect } from "bun:test";
 import {
