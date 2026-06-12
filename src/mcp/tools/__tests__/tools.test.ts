@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { describeIntegration } from '../../../../tests/helpers/integration-gate';
+import { describeIntegration, RUN_INTEGRATION } from '../../../../tests/helpers/integration-gate';
 import { existsSync } from 'fs';
 import { Database } from 'bun:sqlite';
 import { stats } from '../stats';
@@ -18,9 +18,10 @@ import { create } from '../create';
 import { sync } from '../sync';
 import { getDatabasePath } from '../../../config/paths';
 
-// Check if we have a database to test against
-const dbPath = getDatabasePath();
-const hasDatabase = existsSync(dbPath);
+// Resolve the workspace DB path only in integration mode, so importing this
+// file in the fast suite stays hermetic (the real-DB describe is gated anyway).
+const dbPath = RUN_INTEGRATION ? getDatabasePath() : '';
+const hasDatabase = RUN_INTEGRATION ? existsSync(dbPath) : false;
 
 describeIntegration('MCP Tools Integration', () => {
   // Skip all tests if no database exists

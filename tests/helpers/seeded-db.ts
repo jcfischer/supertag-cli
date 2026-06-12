@@ -8,13 +8,21 @@
  * `buildNodePayloadFromDatabase(db.dbPath, …)` — so the test is deterministic
  * and runs on CI instead of depending on a real workspace database.
  *
- * Schema mirrors the columns the node-builder / schema-service read; it seeds a
- * couple of supertags (`todo`, `meeting`) so tag resolution succeeds.
+ * The supertag tables the schema-service reads (`supertag_metadata`,
+ * `supertag_fields`, …) are built with the PRODUCTION migration functions so
+ * the fixture can't drift from the real schema. Only the two indexer-owned
+ * tables the builder may touch (`nodes`, `tag_applications`) are declared here,
+ * matching `src/db/indexer.ts`. Seeds `todo`/`meeting` so tag resolution works.
  */
 import { Database } from "bun:sqlite";
 import { mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import {
+  migrateSupertagMetadataSchema,
+  migrateSchemaConsolidation,
+  migrateFieldValuesSchema,
+} from "../../src/db/migrate";
 
 export interface SeededDb {
   /** Absolute path to the seeded SQLite database. */
@@ -34,72 +42,29 @@ export function createSeededDb(label = "seeded"): SeededDb {
   const dbPath = join(dir, "test.db");
 
   const db = new Database(dbPath);
+
+  // Schema-service tables via the real production migrations (no drift).
+  migrateSupertagMetadataSchema(db);
+  migrateSchemaConsolidation(db);
+  migrateFieldValuesSchema(db);
+
+  // Indexer-owned tables the node builder may read (mirror src/db/indexer.ts).
   db.run(`
-    CREATE TABLE nodes (
+    CREATE TABLE IF NOT EXISTS nodes (
       id TEXT PRIMARY KEY,
       name TEXT,
       parent_id TEXT,
-      node_type TEXT,
       created INTEGER,
       updated INTEGER,
       raw_data TEXT
     )
   `);
   db.run(`
-    CREATE TABLE supertags (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      color TEXT
-    )
-  `);
-  db.run(`
-    CREATE TABLE tag_applications (
-      tag_node_id TEXT,
-      data_node_id TEXT,
-      tag_name TEXT,
-      PRIMARY KEY (tag_node_id, data_node_id)
-    )
-  `);
-  db.run(`
-    CREATE TABLE field_definitions (
-      id TEXT PRIMARY KEY,
-      supertag_id TEXT,
-      name TEXT,
-      field_type TEXT
-    )
-  `);
-  db.run(`
-    CREATE TABLE supertag_metadata (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tag_id TEXT NOT NULL UNIQUE,
-      tag_name TEXT NOT NULL,
-      normalized_name TEXT NOT NULL,
-      description TEXT,
-      color TEXT,
-      created_at INTEGER
-    )
-  `);
-  db.run(`
-    CREATE TABLE supertag_fields (
-      tag_id TEXT NOT NULL,
-      field_name TEXT NOT NULL,
-      field_label_id TEXT NOT NULL,
-      field_order INTEGER DEFAULT 0,
-      normalized_name TEXT,
-      description TEXT,
-      inferred_data_type TEXT,
-      target_supertag_id TEXT,
-      target_supertag_name TEXT,
-      default_value_id TEXT,
-      default_value_text TEXT,
-      PRIMARY KEY (tag_id, field_label_id)
-    )
-  `);
-  db.run(`
-    CREATE TABLE supertag_parents (
-      child_tag_id TEXT NOT NULL,
-      parent_tag_id TEXT NOT NULL,
-      PRIMARY KEY (child_tag_id, parent_tag_id)
+    CREATE TABLE IF NOT EXISTS tag_applications (
+      tuple_node_id TEXT NOT NULL,
+      data_node_id TEXT NOT NULL,
+      tag_id TEXT,
+      tag_name TEXT
     )
   `);
 
@@ -107,7 +72,6 @@ export function createSeededDb(label = "seeded"): SeededDb {
     ["tag_todo", "todo", "#FF0000"],
     ["tag_meeting", "meeting", "#00FF00"],
   ] as const) {
-    db.run(`INSERT INTO supertags (id, name, color) VALUES (?, ?, ?)`, [id, name, color]);
     db.run(
       `INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name, color) VALUES (?, ?, ?, ?)`,
       [id, name, name, color]
