@@ -1,9 +1,14 @@
 /**
  * Deterministic, hermetic tests for the transcript data-access layer.
  *
- * Replaces the live-DB integration coverage (see transcript.test.ts, which is
- * now gated behind RUN_INTEGRATION) with an in-memory fixture so these queries
- * run fast and on CI. Pure helpers are covered here too.
+ * Covers the query *logic* of getMeetingsWithTranscripts and searchTranscripts
+ * against an in-memory fixture so it runs fast and on CI. Pure helpers too.
+ *
+ * Scope note: searchTranscripts here exercises the LIKE fallback path (the
+ * fixture intentionally creates no `nodes_fts` table). The FTS search path and
+ * the full live-data behaviour remain covered by transcript.test.ts, which is
+ * gated behind RUN_INTEGRATION — so this is not a full equivalent of that
+ * integration suite, just deterministic coverage of the core query shapes.
  */
 import { describe, it, expect } from "bun:test";
 import {
