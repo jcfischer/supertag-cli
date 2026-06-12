@@ -405,6 +405,11 @@ jobs:
           head -20 Formula/supertag.rb
 
       - name: Commit and push
+        id: push
+        # Non-blocking: a lapsed/under-scoped HOMEBREW_TAP_TOKEN must not mark
+        # the whole release red — the binaries are already published by the
+        # `release` job. On failure the next step prints a manual-bump recipe.
+        continue-on-error: true
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           cd homebrew-tap
@@ -414,3 +419,33 @@ jobs:
           git add Formula/supertag.rb
           git commit -m "chore: bump to v${VERSION}"
           git push
+
+      - name: Homebrew bump failed — manual recipe
+        if: steps.push.outcome == 'failure'
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          ARM64="${{ steps.sha256.outputs.SHA_ARM64 }}"
+          X64="${{ steps.sha256.outputs.SHA_X64 }}"
+          {
+            echo "## ⚠️ Homebrew formula NOT bumped"
+            echo ""
+            echo "\`update-homebrew\` could not push to \`jcfischer/homebrew-supertag\` —"
+            echo "the \`HOMEBREW_TAP_TOKEN\` secret is most likely expired or under-scoped."
+            echo "The v${VERSION} **binaries are published**; only the tap formula is stale."
+            echo ""
+            echo "### Fix the token (permanent)"
+            echo "Mint a fine-grained PAT (repo \`jcfischer/homebrew-supertag\`, Contents: read+write), then:"
+            echo '```'
+            echo "gh secret set HOMEBREW_TAP_TOKEN --repo jcfischer/supertag-cli"
+            echo '```'
+            echo ""
+            echo "### Bump the formula now (manual)"
+            echo '```bash'
+            echo "gh repo clone jcfischer/homebrew-supertag /tmp/tap && cd /tmp/tap"
+            echo "sed -i '' 's/version \"[^\"]*\"/version \"${VERSION}\"/' Formula/supertag.rb"
+            echo "sed -i '' '/on_arm do/,/end/{s/sha256 \"[a-f0-9]*\"/sha256 \"${ARM64}\"/;}' Formula/supertag.rb"
+            echo "sed -i '' '/on_intel do/,/end/{s/sha256 \"[a-f0-9]*\"/sha256 \"${X64}\"/;}' Formula/supertag.rb"
+            echo "git commit -am 'supertag ${VERSION}' && git push"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Homebrew formula not bumped — token likely expired. See run summary for the manual recipe."
