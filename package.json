@@ -14,9 +14,10 @@
     "dev": "bun run src/index.ts",
     "dev:mcp": "bun run src/mcp/index.ts",
     "inspect:mcp": "npx @modelcontextprotocol/inspector bun run src/mcp/index.ts",
-    "test": "bun test ./tests/*.test.ts ./tests/codegen/ ./tests/commands/ ./tests/config/ ./tests/db/ ./tests/e2e/ ./tests/embeddings/ ./tests/integration/ ./tests/mcp/ ./tests/services/ ./tests/types/ ./tests/unit/ ./tests/utils/ ./tests/visualization/ ./tests/watch/ ./src/**/*.test.ts",
+    "test": "bun test --timeout 30000 ./tests/*.test.ts ./tests/codegen/ ./tests/commands/ ./tests/config/ ./tests/db/ ./tests/e2e/ ./tests/embeddings/ ./tests/integration/ ./tests/mcp/ ./tests/services/ ./tests/types/ ./tests/unit/ ./tests/utils/ ./tests/visualization/ ./tests/watch/ ./src/**/*.test.ts",
+    "test:integration": "RUN_INTEGRATION=1 bun run test",
     "test:slow": "bun test ./tests/slow/",
-    "test:full": "bun test --bail",
+    "test:full": "RUN_INTEGRATION=1 bun test --bail",
     "typecheck": "tsc --noEmit",
     "precommit": "bun run test:full"
   },

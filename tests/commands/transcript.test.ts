@@ -5,13 +5,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { $ } from "bun";
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import { getDatabasePath, resolveWorkspace } from "../../src/config/paths";
 import { ConfigManager } from "../../src/config/manager";
 
-describe("Transcript CLI Commands", () => {
+describeIntegration("Transcript CLI Commands", () => {
   let hasTranscripts: boolean = false;
   let dbPath: string;
   let dbAvailable: boolean = false;

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { mkdirSync, rmSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { $ } from "bun";
@@ -12,7 +13,7 @@ import { Database } from "bun:sqlite";
 import { migrateSupertagMetadataSchema, migrateSchemaConsolidation } from "../../src/db/migrate";
 import { migrateSystemFieldSources } from "../../src/db/system-fields";
 
-describe("Tags Metadata CLI Commands", () => {
+describeIntegration("Tags Metadata CLI Commands", () => {
   const testDir = join(process.cwd(), "tmp-test-tags-metadata");
   const dbPath = join(testDir, "main", "tana-index.db");
   const configPath = join(testDir, "config.json");

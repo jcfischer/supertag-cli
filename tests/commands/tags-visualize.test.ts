@@ -5,13 +5,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describeIntegration } from "../helpers/integration-gate";
 import { $ } from "bun";
 import { Database } from "bun:sqlite";
 import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { getUniqueTestDir } from "../test-utils";
 
-describe("tags visualize command", () => {
+describeIntegration("tags visualize command", () => {
   const testDir = getUniqueTestDir("visualize");
   const testDbPath = join(testDir, "tana-index.db");
 
