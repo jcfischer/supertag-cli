@@ -54,11 +54,11 @@ export interface CapabilitiesResponse {
 
 /** Category descriptions for capabilities response */
 export const CATEGORY_DESCRIPTIONS: Record<CategoryName, string> = {
-  query: 'Find and search nodes',
-  explore: 'Explore workspace structure',
-  transcript: 'Meeting transcript operations',
-  mutate: 'Create and modify data',
-  system: 'System and meta operations',
+  query: 'Find nodes',
+  explore: 'Explore structure',
+  transcript: 'Transcripts',
+  mutate: 'Modify data',
+  system: 'System',
 };
 
 /** Quick actions for common operations */
@@ -71,7 +71,7 @@ export const TOOL_METADATA: ToolMetadata[] = [
     name: 'tana_search',
     description: 'Full-text search on node names',
     category: 'query',
-    example: 'Find all notes mentioning TypeScript',
+    example: 'Search TypeScript notes',
   },
   {
     name: 'tana_tagged',
@@ -83,7 +83,7 @@ export const TOOL_METADATA: ToolMetadata[] = [
     name: 'tana_semantic_search',
     description: 'Vector similarity search',
     category: 'query',
-    example: 'Find conceptually related content',
+    example: 'Find related content',
   },
   {
     name: 'tana_field_values',
@@ -95,25 +95,25 @@ export const TOOL_METADATA: ToolMetadata[] = [
     name: 'tana_batch_get',
     description: 'Fetch multiple nodes by ID',
     category: 'query',
-    example: 'Get 5 nodes in a single request',
+    example: 'Get 5 nodes',
   },
   {
     name: 'tana_query',
     description: 'Unified query with tag, field, and date filtering',
     category: 'query',
-    example: 'Find active tasks with parent project',
+    example: 'Find active tasks',
   },
   {
     name: 'tana_aggregate',
-    description: 'Aggregate nodes with grouping and counting',
+    description: 'Group and count nodes',
     category: 'query',
-    example: 'Count tasks by Status: { find: "task", groupBy: ["Status"] }',
+    example: 'Count tasks by Status',
   },
   {
     name: 'tana_timeline',
-    description: 'Time-bucketed activity over a date range',
+    description: 'Time-bucketed activity',
     category: 'query',
-    example: 'View last 30 days: { granularity: "week" }',
+    example: 'Last 30 days by week',
   },
   {
     name: 'tana_recent',
@@ -123,9 +123,9 @@ export const TOOL_METADATA: ToolMetadata[] = [
   },
   {
     name: 'tana_table',
-    description: 'Export all instances of a supertag as a table with resolved field values',
+    description: 'Export supertag instances as a table',
     category: 'query',
-    example: 'Export all books: { supertag: "book" }',
+    example: 'Export #book table',
   },
   {
     name: 'tana_resolve',
@@ -135,9 +135,9 @@ export const TOOL_METADATA: ToolMetadata[] = [
   },
   {
     name: 'tana_graph_query',
-    description: 'Graph-aware query with relationship traversal (FIND/CONNECTED TO/RETURN)',
+    description: 'Graph query with traversal',
     category: 'query',
-    example: 'FIND person CONNECTED TO project RETURN name, project.name',
+    example: 'FIND person CONNECTED TO project',
   },
 
   // Explore tools
@@ -173,15 +173,15 @@ export const TOOL_METADATA: ToolMetadata[] = [
   },
   {
     name: 'tana_context',
-    description: 'Assemble structured context from the knowledge graph for a topic or node',
+    description: 'Assemble graph context',
     category: 'explore',
-    example: 'Get AI-ready context: { query: "project X", lens: "coding", maxTokens: 8000 }',
+    example: 'Context for project X',
   },
   {
     name: 'tana_schema_audit',
-    description: 'Analyze supertag schema health: detect issues and suggest improvements',
+    description: 'Audit supertag schema health',
     category: 'explore',
-    example: 'Find orphan tags and type mismatches: { severity: "warning" }',
+    example: 'Find schema warnings',
   },
 
   // Transcript tools
@@ -207,7 +207,7 @@ export const TOOL_METADATA: ToolMetadata[] = [
   // Mutate tools
   {
     name: 'tana_create',
-    description: 'Create new node with supertag. Returns nodeId of created node for chaining.',
+    description: 'Create node with supertag',
     category: 'mutate',
     example: 'Create a new #todo item',
   },
@@ -255,7 +255,7 @@ export const TOOL_METADATA: ToolMetadata[] = [
   },
   {
     name: 'tana_set_field_option',
-    description: 'Set or append a field option (dropdown) on a node',
+    description: 'Set or append a field option',
     category: 'mutate',
     example: 'Append an option to a multi-value field',
   },
@@ -283,19 +283,19 @@ export const TOOL_METADATA: ToolMetadata[] = [
     name: 'tana_pai_sync',
     description: 'Sync PAI learnings from seed.json to Tana',
     category: 'mutate',
-    example: 'Sync confirmed learnings: { workspace: "main" }',
+    example: 'Sync learnings',
   },
   {
     name: 'tana_pai_context',
-    description: 'Get PAI context for a topic, enriched with graph data',
+    description: 'Get PAI topic context',
     category: 'query',
-    example: 'Get learnings about TypeScript: { topic: "TypeScript" }',
+    example: 'Context for TypeScript',
   },
   {
     name: 'tana_pai_freshness',
-    description: 'Assess freshness of synced PAI learnings using graph activity',
+    description: 'Assess PAI freshness',
     category: 'query',
-    example: 'Check stale learnings: { threshold: 30 }',
+    example: 'Check stale learnings',
   },
 
   // System tools
