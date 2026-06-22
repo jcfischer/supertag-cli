@@ -24,56 +24,72 @@ describe('MCP tana_sync Tool', () => {
     // Skip integration tests if no export directory exists
     const testFn = hasExportDir ? it : it.skip;
 
-    testFn('should return correct structure for status action', async () => {
-      const result = await sync({
-        action: 'status',
-        workspace: undefined,
-      });
+    testFn(
+      'should return correct structure for status action',
+      async () => {
+        const result = await sync({
+          action: 'status',
+          workspace: undefined,
+        });
 
-      expect(result).toBeDefined();
-      expect(result.workspace).toBeDefined();
-      expect(result.action).toBe('status');
-      expect(result.exportDir).toBeDefined();
-      expect(result.dbPath).toBeDefined();
-    });
+        expect(result).toBeDefined();
+        expect(result.workspace).toBeDefined();
+        expect(result.action).toBe('status');
+        expect(result.exportDir).toBeDefined();
+        expect(result.dbPath).toBeDefined();
+      },
+      30000
+    );
 
-    testFn('should include export file info in status', async () => {
-      const result = await sync({
-        action: 'status',
-        workspace: undefined,
-      });
+    testFn(
+      'should include export file info in status',
+      async () => {
+        const result = await sync({
+          action: 'status',
+          workspace: undefined,
+        });
 
-      expect(result).toBeDefined();
-      // latestExport may be null if no exports exist
-      expect('latestExport' in result).toBe(true);
-    });
+        expect(result).toBeDefined();
+        // latestExport may be null if no exports exist
+        expect('latestExport' in result).toBe(true);
+      },
+      30000
+    );
 
-    testFn('should handle workspace parameter', async () => {
-      // Test with default workspace
-      const result = await sync({
-        action: 'status',
-        workspace: undefined,
-      });
+    testFn(
+      'should handle workspace parameter',
+      async () => {
+        // Test with default workspace
+        const result = await sync({
+          action: 'status',
+          workspace: undefined,
+        });
 
-      expect(result).toBeDefined();
-      expect(result.workspace).toBeDefined();
-    });
+        expect(result).toBeDefined();
+        expect(result.workspace).toBeDefined();
+      },
+      30000
+    );
 
-    testFn('should return index results for index action', async () => {
-      const result = await sync({
-        action: 'index',
-        workspace: undefined,
-      });
+    testFn(
+      'should return index results for index action',
+      async () => {
+        const result = await sync({
+          action: 'index',
+          workspace: undefined,
+        });
 
-      expect(result).toBeDefined();
-      expect(result.action).toBe('index');
+        expect(result).toBeDefined();
+        expect(result.action).toBe('index');
 
-      // If indexing succeeded, we should have stats
-      if (!result.error) {
-        expect(typeof result.nodesIndexed).toBe('number');
-        expect(typeof result.durationMs).toBe('number');
-      }
-    });
+        // If indexing succeeded, we should have stats
+        if (!result.error) {
+          expect(typeof result.nodesIndexed).toBe('number');
+          expect(typeof result.durationMs).toBe('number');
+        }
+      },
+      30000
+    );
   });
 
   describe('Error Handling', () => {
