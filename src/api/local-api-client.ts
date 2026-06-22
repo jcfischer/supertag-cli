@@ -254,6 +254,19 @@ export class LocalApiClient {
           throw lastError;
         }
 
+        if (this.isBodyAlreadyUsedError(error)) {
+          lastError = new StructuredError('API_ERROR', 'Local API response body was already consumed before parsing.', {
+            details: { endpoint: url, method, originalError: error instanceof Error ? error.message : String(error), attempt },
+            recovery: { canRetry: true, retryable: true, retryStrategy: 'exponential', maxRetries: MAX_RETRIES },
+            cause: error instanceof Error ? error : undefined,
+          });
+          if (attempt < MAX_RETRIES) {
+            await this.backoff(attempt);
+            continue;
+          }
+          throw lastError;
+        }
+
         // Zod validation errors or unexpected errors -- do not retry
         throw new StructuredError('API_ERROR', `Local API response validation failed: ${error instanceof Error ? error.message : String(error)}`, {
           details: { endpoint: url, method, originalError: error instanceof Error ? error.message : String(error) },
@@ -632,6 +645,13 @@ export class LocalApiClient {
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
       return msg.includes('econnrefused') || msg.includes('econnreset') || msg.includes('enotfound') || msg.includes('etimedout');
+    }
+    return false;
+  }
+
+  private isBodyAlreadyUsedError(error: unknown): boolean {
+    if (error instanceof Error) {
+      return error.message.toLowerCase().includes('body already used');
     }
     return false;
   }
