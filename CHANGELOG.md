@@ -5,6 +5,11 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.11] - 2026-06-22
+
+### Added
+- **Field updates can append to multi-value fields** — `supertag set-field` now exposes Tana Local API's native append mode via `--append`, and MCP callers can pass `mode: "append"` to both `tana_set_field` and `tana_set_field_option`. Text/content updates and option-field updates now forward `mode: "replace" | "append"` directly to the Local API. Option updates no longer require a dummy positional value when `--option-id` is used.
+
 ## [2.5.10] - 2026-06-12
 
 ### Fixed
