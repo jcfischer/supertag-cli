@@ -180,21 +180,26 @@ export type TagOperationResponse = z.infer<typeof TagOperationResponseSchema>;
 // Field Types
 // =============================================================================
 
+export const FieldSetModeSchema = z.enum(["replace", "append"]);
+export type FieldSetMode = z.infer<typeof FieldSetModeSchema>;
+
 export const FieldContentRequestSchema = z.object({
-  content: z.string(),
+  content: z.string().nullable(),
+  mode: FieldSetModeSchema.optional(),
 });
 export type FieldContentRequest = z.infer<typeof FieldContentRequestSchema>;
 
 export const FieldContentResponseSchema = z.object({
   nodeId: z.string(),
   attributeId: z.string(),
-  content: z.string(),
+  content: z.string().nullable(),
   message: z.string(),
 });
 export type FieldContentResponse = z.infer<typeof FieldContentResponseSchema>;
 
 export const FieldOptionRequestSchema = z.object({
   optionId: z.string(),
+  mode: FieldSetModeSchema.optional(),
 });
 export type FieldOptionRequest = z.infer<typeof FieldOptionRequestSchema>;
 

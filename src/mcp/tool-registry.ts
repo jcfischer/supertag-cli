@@ -249,15 +249,15 @@ export const TOOL_METADATA: ToolMetadata[] = [
   },
   {
     name: 'tana_set_field',
-    description: 'Set a field value on a node',
+    description: 'Set or append a field value on a node',
     category: 'mutate',
-    example: 'Set Status field to "Done"',
+    example: 'Append a note to a multi-value field',
   },
   {
     name: 'tana_set_field_option',
-    description: 'Set a field option (dropdown) on a node',
+    description: 'Set or append a field option (dropdown) on a node',
     category: 'mutate',
-    example: 'Set Priority to a specific option',
+    example: 'Append an option to a multi-value field',
   },
   {
     name: 'tana_trash_node',

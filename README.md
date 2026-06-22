@@ -191,7 +191,9 @@ supertag tag create "sprint" --description "Sprint supertag"
 
 # Set field values
 supertag set-field <nodeId> <attributeId> "value"
-supertag set-field <nodeId> <attributeId> --option-id <optionId>
+supertag set-field <nodeId> <attributeId> "additional value" --append
+supertag set-field <nodeId> <attributeId> _ --option-id <optionId>
+supertag set-field <nodeId> <attributeId> _ --option-id <optionId> --append
 
 # Check/uncheck and trash
 supertag done <nodeId>

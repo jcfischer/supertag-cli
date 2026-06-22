@@ -10,6 +10,7 @@ export async function handleSetField(args: {
   nodeId: string;
   attributeId: string;
   content: string;
+  mode?: 'replace' | 'append';
 }) {
   try {
     const backend = await resolveBackend();
@@ -20,9 +21,10 @@ export async function handleSetField(args: {
       };
     }
 
-    const result = await backend.setFieldContent(args.nodeId, args.attributeId, args.content);
+    const mode = args.mode ?? 'replace';
+    const result = await backend.setFieldContent(args.nodeId, args.attributeId, args.content, mode);
     return {
-      content: [{ type: 'text' as const, text: `Set field ${result.attributeId} on node ${result.nodeId}: ${result.content}` }],
+      content: [{ type: 'text' as const, text: `${mode === 'append' ? 'Appended to' : 'Set'} field ${result.attributeId} on node ${result.nodeId}: ${result.content}` }],
     };
   } catch (error) {
     return handleMcpError(error);
@@ -33,6 +35,7 @@ export async function handleSetFieldOption(args: {
   nodeId: string;
   attributeId: string;
   optionId: string;
+  mode?: 'replace' | 'append';
 }) {
   try {
     const backend = await resolveBackend();
@@ -43,9 +46,10 @@ export async function handleSetFieldOption(args: {
       };
     }
 
-    const result = await backend.setFieldOption(args.nodeId, args.attributeId, args.optionId);
+    const mode = args.mode ?? 'replace';
+    const result = await backend.setFieldOption(args.nodeId, args.attributeId, args.optionId, mode);
     return {
-      content: [{ type: 'text' as const, text: `Set option field ${result.attributeId} on node ${result.nodeId}: ${result.optionName}` }],
+      content: [{ type: 'text' as const, text: `${mode === 'append' ? 'Appended option to' : 'Set option field'} ${result.attributeId} on node ${result.nodeId}: ${result.optionName}` }],
     };
   } catch (error) {
     return handleMcpError(error);

@@ -21,6 +21,7 @@ import type {
   TagOperationResponse,
   FieldContentResponse,
   FieldOptionResponse,
+  FieldSetMode,
   DoneResponse,
   TrashResponse,
 } from '../types/local-api';
@@ -284,16 +285,18 @@ export class LocalApiBackend implements TanaBackend {
     nodeId: string,
     attributeId: string,
     content: string,
+    mode?: FieldSetMode,
   ): Promise<FieldContentResponse> {
-    return this.client.setFieldContent(nodeId, attributeId, content);
+    return this.client.setFieldContent(nodeId, attributeId, content, mode);
   }
 
   async setFieldOption(
     nodeId: string,
     attributeId: string,
     optionId: string,
+    mode?: FieldSetMode,
   ): Promise<FieldOptionResponse> {
-    return this.client.setFieldOption(nodeId, attributeId, optionId);
+    return this.client.setFieldOption(nodeId, attributeId, optionId, mode);
   }
 
   async checkNode(nodeId: string): Promise<DoneResponse> {

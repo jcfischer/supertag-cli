@@ -15,6 +15,7 @@ import {
   TagOperationResponseSchema, type TagOperationResponse,
   FieldContentResponseSchema, type FieldContentResponse,
   FieldOptionResponseSchema, type FieldOptionResponse,
+  type FieldSetMode,
   UpdateResponseSchema, type UpdateResponse,
   DoneResponseSchema, type DoneResponse,
   TrashResponseSchema, type TrashResponse,
@@ -414,9 +415,18 @@ export class LocalApiClient {
    * Set a field's content value.
    * POST /nodes/{nodeId}/fields/{attributeId}/content
    */
-  async setFieldContent(nodeId: string, attributeId: string, content: string): Promise<FieldContentResponse> {
+  async setFieldContent(
+    nodeId: string,
+    attributeId: string,
+    content: string,
+    mode?: FieldSetMode,
+  ): Promise<FieldContentResponse> {
     return this.request(
-      { method: 'POST', path: `/nodes/${encodeURIComponent(nodeId)}/fields/${encodeURIComponent(attributeId)}/content`, body: { content } },
+      {
+        method: 'POST',
+        path: `/nodes/${encodeURIComponent(nodeId)}/fields/${encodeURIComponent(attributeId)}/content`,
+        body: mode ? { content, mode } : { content },
+      },
       FieldContentResponseSchema,
     );
   }
@@ -425,9 +435,18 @@ export class LocalApiClient {
    * Set a field's selected option.
    * POST /nodes/{nodeId}/fields/{attributeId}/option
    */
-  async setFieldOption(nodeId: string, attributeId: string, optionId: string): Promise<FieldOptionResponse> {
+  async setFieldOption(
+    nodeId: string,
+    attributeId: string,
+    optionId: string,
+    mode?: FieldSetMode,
+  ): Promise<FieldOptionResponse> {
     return this.request(
-      { method: 'POST', path: `/nodes/${encodeURIComponent(nodeId)}/fields/${encodeURIComponent(attributeId)}/option`, body: { optionId } },
+      {
+        method: 'POST',
+        path: `/nodes/${encodeURIComponent(nodeId)}/fields/${encodeURIComponent(attributeId)}/option`,
+        body: mode ? { optionId, mode } : { optionId },
+      },
       FieldOptionResponseSchema,
     );
   }
