@@ -30,22 +30,23 @@ describeIntegration("Transcript CLI Commands", () => {
 
     try {
       const db = new Database(dbPath, { readonly: true });
-      const transcriptCount = db
+      const transcript = db
         .query(`
-          SELECT COUNT(*) as count
+          SELECT 1 as found
           FROM nodes
           WHERE json_extract(raw_data, '$.props._docType') = 'transcript'
+          LIMIT 1
         `)
-        .get() as { count: number };
+        .get() as { found: number } | null;
 
-      hasTranscripts = transcriptCount.count > 0;
+      hasTranscripts = transcript !== null;
       dbAvailable = true;
       db.close();
     } catch (error) {
       // Database may be locked by another test - skip gracefully
       console.log(`Skipping transcript CLI tests - database unavailable (likely locked)`);
     }
-  });
+  }, 30000);
 
   describe("T-3.1: transcript list", () => {
     it("should display list of meetings with transcripts", async () => {
@@ -144,7 +145,7 @@ describeIntegration("Transcript CLI Commands", () => {
       expect(parsed).toHaveProperty("meeting");
       expect(parsed).toHaveProperty("lines");
       expect(Array.isArray(parsed.lines)).toBe(true);
-    }, 15000); // CLI compilation is slow, need 15s timeout
+    }, 30000); // CLI compilation and live transcript queries are slow
   });
 
   describe("T-3.3: transcript search", () => {
