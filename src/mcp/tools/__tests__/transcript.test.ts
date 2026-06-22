@@ -95,7 +95,7 @@ describeIntegration("MCP Transcript Tools", () => {
 
       const result = await transcriptList({ workspace: undefined, limit: 2 });
       expect(result.meetings.length).toBeLessThanOrEqual(2);
-    }, 15000); // May be slow with 90K+ transcript lines
+    }, 30000); // May be slow with large live transcript workspaces
   });
 
   describe("tana_transcript_show", () => {
@@ -137,7 +137,7 @@ describeIntegration("MCP Transcript Tools", () => {
         expect(line).toHaveProperty("text");
         expect(line).toHaveProperty("order");
       }
-    }, 15000); // Two sequential queries - may be slow
+    }, 30000); // Two sequential live transcript queries may be slow
 
     it("should return empty lines for non-existent ID", async () => {
       if (!dbExists) {
@@ -179,7 +179,7 @@ describeIntegration("MCP Transcript Tools", () => {
       expect(result).toHaveProperty("query");
       expect(result).toHaveProperty("results");
       expect(result.results).toEqual([]);
-    });
+    }, 30000);
 
     it("should find matching transcript lines", async () => {
       if (!hasTranscripts) {
@@ -198,7 +198,7 @@ describeIntegration("MCP Transcript Tools", () => {
         expect(match).toHaveProperty("lineId");
         expect(match).toHaveProperty("lineText");
       }
-    });
+    }, 30000);
 
     it("should respect limit parameter", async () => {
       if (!hasTranscripts) {
@@ -208,6 +208,6 @@ describeIntegration("MCP Transcript Tools", () => {
 
       const result = await transcriptSearch({ query: "the", workspace: undefined, limit: 3 });
       expect(result.results.length).toBeLessThanOrEqual(3);
-    });
+    }, 30000);
   });
 });
