@@ -570,6 +570,7 @@ describe("F-094: Local API Integration", () => {
       expect(result).toContain("set-field");
       expect(result).toContain("nodeId");
       expect(result).toContain("fieldName");
+      expect(result).toContain("[value]");
       expect(result).toContain("--append");
     }, CLI_TIMEOUT);
 
