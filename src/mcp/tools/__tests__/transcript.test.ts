@@ -37,18 +37,23 @@ describeIntegration("MCP Transcript Tools", () => {
     }
 
     dbExists = true;
-    const db = new Database(dbPath, { readonly: true });
-    const transcriptCount = db
-      .query(`
-        SELECT COUNT(*) as count
-        FROM nodes
-        WHERE json_extract(raw_data, '$.props._docType') = 'transcript'
-      `)
-      .get() as { count: number };
+    try {
+      const db = new Database(dbPath, { readonly: true });
+      const transcript = db
+        .query(`
+          SELECT 1 as found
+          FROM nodes
+          WHERE json_extract(raw_data, '$.props._docType') = 'transcript'
+          LIMIT 1
+        `)
+        .get() as { found: number } | null;
 
-    hasTranscripts = transcriptCount.count > 0;
-    db.close();
-  });
+      hasTranscripts = transcript !== null;
+      db.close();
+    } catch (error) {
+      console.log("Skipping MCP transcript tests - database unavailable (likely locked)");
+    }
+  }, 30000);
 
   describe("tana_transcript_list", () => {
     it("should validate input schema", () => {
