@@ -59,7 +59,7 @@ describeIntegration("Transcript CLI Commands", () => {
 
       // Should show some output
       expect(result.length).toBeGreaterThan(0);
-    }, 30000); // CLI compilation is slow
+    }, 60000); // CLI subprocess startup and live transcript queries can be slow
 
     it(
       "should support --json output",
@@ -82,7 +82,7 @@ describeIntegration("Transcript CLI Commands", () => {
           expect(parsed[0]).toHaveProperty("lineCount");
         }
       },
-      30000
+      60000
     );
   });
 
@@ -120,7 +120,7 @@ describeIntegration("Transcript CLI Commands", () => {
 
       // Should show transcript lines
       expect(result.length).toBeGreaterThan(0);
-    }, 30000); // CLI compilation is slow
+    }, 60000); // CLI subprocess startup and live transcript queries can be slow
 
     it("should support --json output", async () => {
       if (!dbAvailable || !hasTranscripts) {
@@ -145,7 +145,7 @@ describeIntegration("Transcript CLI Commands", () => {
       expect(parsed).toHaveProperty("meeting");
       expect(parsed).toHaveProperty("lines");
       expect(Array.isArray(parsed.lines)).toBe(true);
-    }, 30000); // CLI compilation and live transcript queries are slow
+    }, 60000); // CLI subprocess startup and live transcript queries can be slow
   });
 
   describe("T-3.3: transcript search", () => {
@@ -174,7 +174,7 @@ describeIntegration("Transcript CLI Commands", () => {
       const parsed = JSON.parse(result.trim());
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed.length).toBe(0);
-    });
+    }, 60000);
 
     it("should find transcript lines matching query", async () => {
       if (!dbAvailable || !hasTranscripts) {
@@ -192,6 +192,6 @@ describeIntegration("Transcript CLI Commands", () => {
         expect(parsed[0]).toHaveProperty("lineText");
         expect(parsed[0]).toHaveProperty("speaker");
       }
-    }, 30000);
+    }, 60000);
   });
 });
