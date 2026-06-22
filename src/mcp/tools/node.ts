@@ -18,6 +18,7 @@ import {
 } from '../../utils/select-projection.js';
 import { resolveEffectiveDepth } from '../../commands/show.js';
 import { resolveWorkspaceContext } from '../../config/workspace-resolver.js';
+import { StructuredError } from '../../utils/structured-errors.js';
 
 // ---------------------------------------------------------------------------
 // Exported types (backward compatibility for batch-operations.ts)
@@ -77,24 +78,14 @@ function mapReadNodeContentToOutput(content: ReadNodeContent): Record<string, un
 // ---------------------------------------------------------------------------
 
 export async function showNode(input: NodeInput): Promise<Partial<Record<string, unknown>> | null> {
-  const readBackend = await resolveReadBackend({ workspace: input.workspace });
+  let readBackend = await resolveReadBackend({ workspace: input.workspace });
   const requestedDepth = input.depth || 0;
   const depthExplicitlySet = input.depth !== undefined && input.depth !== null;
 
   // Smart depth: calendar/day pages auto-expand to depth 1 (SQLite backend only)
   let depth = requestedDepth;
   if (!readBackend.isLive() && !depthExplicitlySet) {
-    try {
-      const ws = resolveWorkspaceContext({ workspace: input.workspace });
-      const db = new Database(ws.dbPath, { readonly: true });
-      try {
-        depth = resolveEffectiveDepth(db, input.nodeId, requestedDepth, depthExplicitlySet);
-      } finally {
-        db.close();
-      }
-    } catch {
-      // DB unavailable — use requested depth
-    }
+    depth = resolveSqliteDepth(input, requestedDepth, depthExplicitlySet);
   }
 
   try {
@@ -108,6 +99,56 @@ export async function showNode(input: NodeInput): Promise<Partial<Record<string,
     if ((error as Error).message?.includes('not found')) {
       return null;
     }
-    throw error;
+    if (!readBackend.isLive() || !isRetryableReadFailure(error)) {
+      throw error;
+    }
+
+    readBackend = await resolveReadBackend({ workspace: input.workspace, offline: true });
+    const fallbackDepth = depthExplicitlySet
+      ? requestedDepth
+      : resolveSqliteDepth(input, requestedDepth, depthExplicitlySet);
+
+    try {
+      const nodeContent = await readBackend.readNode(input.nodeId, fallbackDepth);
+      const result = mapReadNodeContentToOutput(nodeContent);
+
+      const projection = parseSelectPaths(input.select);
+      return applyProjection(result, projection);
+    } catch (fallbackError) {
+      if ((fallbackError as Error).message?.includes('not found')) {
+        return null;
+      }
+      throw fallbackError;
+    }
   }
+}
+
+function resolveSqliteDepth(
+  input: NodeInput,
+  requestedDepth: number,
+  depthExplicitlySet: boolean,
+): number {
+  try {
+    const ws = resolveWorkspaceContext({ workspace: input.workspace });
+    const db = new Database(ws.dbPath, { readonly: true });
+    try {
+      return resolveEffectiveDepth(db, input.nodeId, requestedDepth, depthExplicitlySet);
+    } finally {
+      db.close();
+    }
+  } catch {
+    return requestedDepth;
+  }
+}
+
+function isRetryableReadFailure(error: unknown): boolean {
+  if (error instanceof StructuredError) {
+    return (
+      error.code === 'LOCAL_API_UNAVAILABLE' ||
+      error.code === 'TIMEOUT' ||
+      error.recovery?.retryable === true
+    );
+  }
+
+  return false;
 }
