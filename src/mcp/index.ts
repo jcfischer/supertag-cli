@@ -322,13 +322,13 @@ const allTools = [
       {
         name: 'tana_set_field',
         description:
-          'Set a text field value on a node. Requires Local API.',
+          'Set or append a text field value on a node. Use mode="append" for multi-value fields. Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.setFieldSchema),
       },
       {
         name: 'tana_set_field_option',
         description:
-          'Set a field option (dropdown/select value) on a node. Requires Local API.',
+          'Set or append a field option (dropdown/select value) on a node. Use mode="append" for multi-value option fields. Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.setFieldOptionSchema),
       },
       {

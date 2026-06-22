@@ -831,6 +831,7 @@ export const setFieldSchema = z.object({
   nodeId: z.string().min(1).describe('Tana node ID to set field on'),
   attributeId: z.string().min(1).describe('Field attribute ID'),
   content: z.string().describe('Field value content'),
+  mode: z.enum(['replace', 'append']).default('replace').describe('Replace the field value or append to a multi-value field'),
 });
 export type SetFieldInput = z.infer<typeof setFieldSchema>;
 
@@ -839,6 +840,7 @@ export const setFieldOptionSchema = z.object({
   nodeId: z.string().min(1).describe('Tana node ID to set field option on'),
   attributeId: z.string().min(1).describe('Field attribute ID'),
   optionId: z.string().min(1).describe('Option ID to set'),
+  mode: z.enum(['replace', 'append']).default('replace').describe('Replace the selected option or append to a multi-value option field'),
 });
 export type SetFieldOptionInput = z.infer<typeof setFieldOptionSchema>;
 

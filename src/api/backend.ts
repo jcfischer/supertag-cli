@@ -16,6 +16,7 @@ import type {
   DoneResponse,
   TrashResponse,
   ImportResponse,
+  FieldSetMode,
 } from '../types/local-api';
 
 /**
@@ -99,6 +100,7 @@ export interface TanaBackend {
     nodeId: string,
     attributeId: string,
     content: string,
+    mode?: FieldSetMode,
   ): Promise<FieldContentResponse>;
 
   /**
@@ -111,6 +113,7 @@ export interface TanaBackend {
     nodeId: string,
     attributeId: string,
     optionId: string,
+    mode?: FieldSetMode,
   ): Promise<FieldOptionResponse>;
 
   /**

@@ -345,7 +345,7 @@ Create a new supertag definition. Requires Local API.
 | `description` | string | No | Optional description |
 
 ### tana_set_field
-Set a text field value on a node. Requires Local API.
+Set or append a text field value on a node. Requires Local API.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
@@ -353,9 +353,10 @@ Set a text field value on a node. Requires Local API.
 | `nodeId` | string | Yes | Tana node ID |
 | `attributeId` | string | Yes | Field attribute ID |
 | `content` | string | Yes | Field value |
+| `mode` | string | No | `replace` (default) or `append` for multi-value fields |
 
 ### tana_set_field_option
-Set a field option (dropdown) value on a node. Requires Local API.
+Set or append a field option (dropdown) value on a node. Requires Local API.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
@@ -363,6 +364,7 @@ Set a field option (dropdown) value on a node. Requires Local API.
 | `nodeId` | string | Yes | Tana node ID |
 | `attributeId` | string | Yes | Field attribute ID |
 | `optionId` | string | Yes | Option ID to set |
+| `mode` | string | No | `replace` (default) or `append` for multi-value option fields |
 
 ### tana_trash_node
 Move a node to trash. Requires Local API.

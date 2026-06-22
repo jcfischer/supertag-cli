@@ -197,7 +197,7 @@ program.addCommand(createRecentCommand());     // supertag recent --period 24h -
 // F-094: Local API mutation commands
 program.addCommand(createEditCommand());       // supertag edit <nodeId> --name --description
 program.addCommand(createTagCommand());        // supertag tag add|remove|create
-program.addCommand(createSetFieldCommand());   // supertag set-field <nodeId> <field> <value>
+program.addCommand(createSetFieldCommand());   // supertag set-field <nodeId> <field> <value> [--append]
 program.addCommand(createTrashCommand());      // supertag trash <nodeId>
 program.addCommand(createDoneCommand());       // supertag done <nodeId>
 program.addCommand(createUndoneCommand());     // supertag undone <nodeId>

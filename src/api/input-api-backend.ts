@@ -13,6 +13,7 @@ import type {
   TagOperationResponse,
   FieldContentResponse,
   FieldOptionResponse,
+  FieldSetMode,
   DoneResponse,
   TrashResponse,
 } from '../types/local-api';
@@ -97,6 +98,7 @@ export class InputApiBackend implements TanaBackend {
     _nodeId: string,
     _attributeId: string,
     _content: string,
+    _mode?: FieldSetMode,
   ): Promise<FieldContentResponse> {
     throw mutationNotSupported("setFieldContent");
   }
@@ -105,6 +107,7 @@ export class InputApiBackend implements TanaBackend {
     _nodeId: string,
     _attributeId: string,
     _optionId: string,
+    _mode?: FieldSetMode,
   ): Promise<FieldOptionResponse> {
     throw mutationNotSupported("setFieldOption");
   }

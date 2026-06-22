@@ -359,6 +359,40 @@ describe("F-094: Local API Integration", () => {
         content: "hello",
       });
       expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.mode).toBe("replace");
+      }
+
+      const append = setFieldSchema.safeParse({
+        nodeId: "n1",
+        attributeId: "attr1",
+        content: "hello",
+        mode: "append",
+      });
+      expect(append.success).toBe(true);
+
+      const invalid = setFieldSchema.safeParse({
+        nodeId: "n1",
+        attributeId: "attr1",
+        content: "hello",
+        mode: "merge",
+      });
+      expect(invalid.success).toBe(false);
+    });
+
+    it("should validate setFieldOptionSchema append mode correctly", async () => {
+      const { setFieldOptionSchema } = await import("../../src/mcp/schemas");
+
+      const result = setFieldOptionSchema.safeParse({
+        nodeId: "n1",
+        attributeId: "attr1",
+        optionId: "opt1",
+        mode: "append",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.mode).toBe("append");
+      }
     });
 
     it("should validate trashNodeSchema correctly", async () => {
@@ -536,6 +570,8 @@ describe("F-094: Local API Integration", () => {
       expect(result).toContain("set-field");
       expect(result).toContain("nodeId");
       expect(result).toContain("fieldName");
+      expect(result).toContain("[value]");
+      expect(result).toContain("--append");
     }, CLI_TIMEOUT);
 
     it("should register trash command", async () => {
