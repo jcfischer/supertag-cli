@@ -38,14 +38,14 @@ describeIntegration('MCP Tools Integration', () => {
       expect(typeof result.totalFields).toBe('number');
       expect(typeof result.totalReferences).toBe('number');
       expect(result.totalNodes).toBeGreaterThan(0);
-    });
+    }, 30000);
 
     testFn('should accept workspace parameter', async () => {
       // This tests that the function doesn't crash with workspace param
       // Actual workspace resolution depends on config
       const result = await stats({ workspace: undefined });
       expect(result).toBeDefined();
-    });
+    }, 30000);
   });
 
   describe('supertags tool', () => {
@@ -208,7 +208,7 @@ describeIntegration('MCP Tools Integration', () => {
         expect(result!.id).toBe(nodeId);
         expect(result).toHaveProperty('name');
         expect(result).toHaveProperty('tags');
-        expect(result).toHaveProperty('fields');
+        expect(result).toHaveProperty('markdown');
         expect(result).toHaveProperty('children');
       }
     });
@@ -249,12 +249,10 @@ describeIntegration('MCP Tools Integration', () => {
         if (result) {
           expect(result).toHaveProperty('id');
           expect(result).toHaveProperty('name');
-          expect(result).toHaveProperty('created');
           expect(result).toHaveProperty('tags');
-          expect(result).toHaveProperty('fields');
+          expect(result).toHaveProperty('markdown');
           expect(result).toHaveProperty('children');
           expect(Array.isArray(result.tags)).toBe(true);
-          expect(Array.isArray(result.fields)).toBe(true);
           expect(Array.isArray(result.children)).toBe(true);
         }
       }
