@@ -116,7 +116,7 @@ describe('nodeSchema', () => {
   it('should validate minimal input', () => {
     const result = nodeSchema.parse({ nodeId: 'abc123xyz' });
     expect(result.nodeId).toBe('abc123xyz');
-    expect(result.depth).toBe(0); // default
+    expect(result.depth).toBeUndefined(); // omitted depth enables smart calendar auto-depth
   });
 
   it('should validate full input', () => {
