@@ -32,6 +32,19 @@ import { UnifiedSchemaService } from './unified-schema-service';
 import { withDatabase } from '../db/with-database';
 import { normalizeFieldInput } from './field-normalizer';
 
+function isDatabaseUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const code = (error as Error & { code?: string }).code;
+  return (
+    code === 'SQLITE_CANTOPEN' ||
+    code === 'SQLITE_BUSY' ||
+    error.message.includes('Database not found') ||
+    error.message.includes('unable to open database file') ||
+    error.message.includes('database is locked')
+  );
+}
+
 /**
  * Recursively parse a child node object from unknown input
  * Used by CLI (from JSON.parse) and MCP (from Zod-validated input)
@@ -316,8 +329,15 @@ export async function createNode(
   }
 
   if (dbPath && existsSync(dbPath)) {
-    // Use database for explicit field types
-    payload = await buildNodePayloadFromDatabase(dbPath, inputToUse);
+    try {
+      // Use database for explicit field types when the resolved workspace DB is usable.
+      payload = await buildNodePayloadFromDatabase(dbPath, inputToUse);
+    } catch (error) {
+      if (inputToUse._dbPathOverride || !isDatabaseUnavailableError(error)) {
+        throw error;
+      }
+      payload = undefined;
+    }
   }
 
   // Fall back to schema registry if database not available
