@@ -16,6 +16,8 @@ import {
   parseSelectPaths,
   applyProjectionToArray,
 } from '../../utils/select-projection.js';
+import { StructuredError } from '../../utils/structured-errors.js';
+import type { ReadSearchResult } from '../../api/read-backend.js';
 
 export interface SearchResultItem {
   id: string;
@@ -41,13 +43,26 @@ export interface SearchResult {
 
 export async function search(input: SearchInput): Promise<SearchResult> {
   const workspace = resolveWorkspaceContext({ workspace: input.workspace });
-  const readBackend = await resolveReadBackend({ workspace: input.workspace });
+  let readBackend = await resolveReadBackend({ workspace: input.workspace });
 
   const dateRange = parseDateRange(input);
-  const results = await readBackend.search(input.query, {
-    limit: input.limit || 20,
-    ...dateRange,
-  });
+  let results: ReadSearchResult[];
+  try {
+    results = await readBackend.search(input.query, {
+      limit: input.limit || 20,
+      ...dateRange,
+    });
+  } catch (error) {
+    if (!readBackend.isLive() || !isRetryableReadFailure(error)) {
+      throw error;
+    }
+
+    readBackend = await resolveReadBackend({ workspace: input.workspace, offline: true });
+    results = await readBackend.search(input.query, {
+      limit: input.limit || 20,
+      ...dateRange,
+    });
+  }
 
   const includeAncestor = input.includeAncestor ?? true;
 
@@ -103,4 +118,16 @@ export async function search(input: SearchInput): Promise<SearchResult> {
     results: projectedResults,
     count: projectedResults.length,
   };
+}
+
+function isRetryableReadFailure(error: unknown): boolean {
+  if (error instanceof StructuredError) {
+    return (
+      error.code === 'LOCAL_API_UNAVAILABLE' ||
+      error.code === 'TIMEOUT' ||
+      error.recovery?.retryable === true
+    );
+  }
+
+  return false;
 }
