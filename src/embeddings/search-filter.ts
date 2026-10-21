@@ -17,6 +17,25 @@ export interface RawSearchResult {
 }
 
 /**
+ * The slice of TanaEmbeddingService that semantic search uses
+ */
+export interface SemanticEmbeddingService {
+  search(query: string, k: number): Promise<Array<RawSearchResult & { similarity: number }>>;
+  getStats(): Promise<{ totalEmbeddings: number }>;
+  close(): void;
+}
+
+/**
+ * Injection points for the semantic search surfaces (CLI and MCP)
+ */
+export interface SemanticSearchDeps {
+  /** Skip workspace resolution and use this alias and database */
+  workspace?: { alias: string; dbPath: string };
+  /** Build the embedding service for a LanceDB path */
+  openEmbeddingService?: (lanceDbPath: string) => SemanticEmbeddingService;
+}
+
+/**
  * Enriched search result with name and tags
  */
 export interface EnrichedSearchResult extends RawSearchResult {
@@ -46,7 +65,7 @@ function getDeduplicationKey(name: string, tags?: string[]): string {
     .toLowerCase();
 
   // Include sorted tags in the key so "Animal #topic" != "Animal #concept"
-  const tagKey = tags ? tags.sort().join(",") : "";
+  const tagKey = tags ? [...tags].sort().join(",") : "";
   return `${normalizedName}|${tagKey}`;
 }
 
@@ -181,4 +200,99 @@ export function filterAndDeduplicateResults(
   }
 
   return deduplicated;
+}
+
+/**
+ * Keep results at or above a similarity threshold (0 or unset keeps all)
+ */
+export function filterByMinScore<T extends { similarity: number }>(
+  results: T[],
+  minScore: number | undefined
+): T[] {
+  if (minScore === undefined || minScore === null || minScore <= 0) {
+    return results;
+  }
+  return results.filter((r) => r.similarity >= minScore);
+}
+
+/**
+ * Check if a node is deleted: it or any ancestor is owned by the trash
+ * (_ownerId ending with '_TRASH')
+ */
+export function isNodeInTrash(db: Database, nodeId: string): boolean {
+  const result = withDbRetrySync(
+    () => db
+      .query(`
+        WITH RECURSIVE ancestor_chain AS (
+          SELECT
+            id,
+            parent_id,
+            json_extract(raw_data, '$.props._ownerId') as owner_id,
+            0 as level
+          FROM nodes
+          WHERE id = ?
+
+          UNION ALL
+
+          SELECT
+            n.id,
+            n.parent_id,
+            json_extract(n.raw_data, '$.props._ownerId') as owner_id,
+            ac.level + 1
+          FROM nodes n
+          INNER JOIN ancestor_chain ac ON n.id = ac.parent_id
+          WHERE ac.parent_id IS NOT NULL AND ac.level < 50
+        )
+        SELECT COUNT(*) as has_trash
+        FROM ancestor_chain
+        WHERE owner_id LIKE '%_TRASH'
+      `)
+      .get(nodeId) as { has_trash: number } | null,
+    "isNodeInTrash"
+  );
+
+  return result ? result.has_trash > 0 : false;
+}
+
+export interface SemanticSearchPipelineOptions {
+  /** Maximum results to return */
+  limit: number;
+  /** Only keep nodes with this supertag (case-insensitive) */
+  tag?: string;
+  /** Drop results below this similarity (0-1) */
+  minSimilarity?: number;
+  /** Prefix the query with [Type: #hint] (F-104) */
+  typeHint?: string;
+}
+
+/**
+ * Semantic search shared by the CLI and the MCP tool, so both return the
+ * same nodes in the same order (#98). Callers only add presentation.
+ *
+ * Order: over-fetch -> enrich -> drop trashed -> drop reference syntax ->
+ * tag filter -> dedup by name+tags -> similarity threshold -> limit
+ */
+export async function runSemanticSearchPipeline(
+  embeddingService: Pick<SemanticEmbeddingService, "search">,
+  db: Database,
+  query: string,
+  options: SemanticSearchPipelineOptions
+): Promise<EnrichedSearchResult[]> {
+  const effectiveQuery = options.typeHint
+    ? `[Type: #${options.typeHint}] ${query}`
+    : query;
+
+  // A tag filter discards most candidates, so over-fetch harder
+  const baseOverfetch = getOverfetchLimit(options.limit);
+  const overfetchLimit = options.tag ? baseOverfetch * 3 : baseOverfetch;
+  const rawResults = await embeddingService.search(effectiveQuery, overfetchLimit);
+
+  const live = enrichSearchResults(db, rawResults).filter(
+    (r) => !isNodeInTrash(db, r.nodeId)
+  );
+  const named = filterReferenceSyntax(live);
+  const tagged = options.tag ? filterByTag(named, options.tag) : named;
+  const deduplicated = deduplicateResults(tagged);
+
+  return filterByMinScore(deduplicated, options.minSimilarity).slice(0, options.limit);
 }
