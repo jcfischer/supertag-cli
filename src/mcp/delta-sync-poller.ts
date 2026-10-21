@@ -78,7 +78,7 @@ export interface InitDeltaSyncPollerOptions {
 
 export class DeltaSyncPoller {
   private interval: ReturnType<typeof setInterval> | null = null;
-  /** Service for the cycle in progress; null while idle so no connection pins the WAL (#107) */
+  /** Service for the cycle in progress; null while idle, so no connection stays open between cycles (#107) */
   private active: DeltaSyncService | null = null;
   private paused = false;
   private wasHealthy = true;
@@ -99,9 +99,10 @@ export class DeltaSyncPoller {
   /**
    * Run one sync cycle on a connection opened for this cycle only.
    *
-   * A connection held for the life of the MCP process is one of many
-   * long-lived readers that starve the WAL checkpoint (#107), so the
-   * connection is closed before the poller goes idle again. A cycle started
+   * The connection used to live as long as the MCP process. An idle
+   * connection does not block a checkpoint, but one left inside a read
+   * transaction would, for the whole session (#107). Closing it before the
+   * poller goes idle rules that out. A cycle started
    * while another is running gets the in-progress service's skip result.
    */
   private async runCycle(): Promise<DeltaSyncResult> {

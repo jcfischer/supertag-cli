@@ -24,6 +24,10 @@ export function getWalSizeBytes(dbPath: string): number {
   }
 }
 
+/** Manual recovery when readers keep the WAL from being truncated. */
+export const WAL_RECOVERY_HINT =
+  "pkill -f supertag-mcp && sqlite3 <db> 'PRAGMA wal_checkpoint(TRUNCATE);'";
+
 /**
  * Warning text when the WAL is large enough that checkpoints are being
  * starved by long-lived readers, null otherwise.
@@ -33,7 +37,7 @@ export function walSizeWarning(walBytes: number): string | null {
   const gb = (walBytes / 1024 ** 3).toFixed(1);
   return (
     `WAL is ${gb} GB: checkpoints are being blocked by long-lived readers. ` +
-    "Recover with: pkill -f supertag-mcp && sqlite3 <db> 'PRAGMA wal_checkpoint(TRUNCATE);'"
+    `Recover with: ${WAL_RECOVERY_HINT}`
   );
 }
 
@@ -61,8 +65,9 @@ export interface WalCheckpointOptions {
 /**
  * Checkpoint the whole WAL into the database and truncate it to zero bytes.
  *
- * PASSIVE checkpoints give up whenever a reader is active, so with many
- * long-lived supertag-mcp processes the WAL never shrinks (#107). This runs
+ * The PASSIVE checkpoint on close never shrinks the WAL file and stops at
+ * the oldest snapshot an open read transaction holds, so with many
+ * supertag-mcp processes the WAL could grow without bound (#107). This runs
  * TRUNCATE on a fresh connection with busy_timeout 0 and retries with async
  * backoff, so it never blocks the event loop on another process's lock.
  * If readers still block it after the last attempt it logs a warning.
@@ -104,7 +109,7 @@ export async function checkpointWalTruncate(
     const walBytes = getWalSizeBytes(dbPath);
     options.logger?.warn(
       "WAL checkpoint blocked by active readers; the WAL could not be truncated. " +
-        "If it keeps growing, stop idle supertag-mcp processes (pkill -f supertag-mcp).",
+        `If it keeps growing, recover with: ${WAL_RECOVERY_HINT}`,
       { dbPath, attempts, walBytes }
     );
     return { ok: false, attempts, walBytes };

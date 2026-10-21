@@ -51,6 +51,35 @@ function trackingFactory() {
   return { counts, createService };
 }
 
+function enableWal(): void {
+  const db = new Database(dbPath);
+  db.run("PRAGMA journal_mode = WAL");
+  db.close();
+}
+
+/** Local API client that reports `count` changed nodes once, then none. */
+function changedNodesClient(count: number) {
+  const nodes = Array.from({ length: count }, (_, i) => ({
+    id: `wal-node-${i}`,
+    name: `Node ${i} ${"x".repeat(400)}`,
+    breadcrumb: ["Home"],
+    tags: [{ id: "tag-project", name: "project" }],
+    tagIds: ["tag-project"],
+    docType: "node",
+    created: "2025-01-15T10:00:00.000Z",
+    inTrash: false,
+  }) as SearchResultNode);
+  let served = false;
+  return {
+    searchNodes: mock(() => {
+      const page = served ? [] : nodes;
+      served = true;
+      return Promise.resolve(page);
+    }),
+    health: mock(() => Promise.resolve(true)),
+  };
+}
+
 const apiClient = {
   searchNodes: mock(() => Promise.resolve([] as SearchResultNode[])),
   health: mock(() => Promise.resolve(true)),
@@ -96,30 +125,8 @@ describe("DeltaSyncPoller connection lifetime", () => {
   });
 
   it("truncates the WAL after a delta-sync write cycle", async () => {
-    const db = new Database(dbPath);
-    db.run("PRAGMA journal_mode = WAL");
-    db.close();
-
-    const nodes: SearchResultNode[] = Array.from({ length: 50 }, (_, i) => ({
-      id: `wal-node-${i}`,
-      name: `Node ${i} ${"x".repeat(400)}`,
-      breadcrumb: ["Home"],
-      tags: [{ id: "tag-project", name: "project" }],
-      tagIds: ["tag-project"],
-      docType: "node",
-      created: "2025-01-15T10:00:00.000Z",
-      inTrash: false,
-    }) as SearchResultNode);
-    let served = false;
-    const client = {
-      searchNodes: mock(() => {
-        const page = served ? [] : nodes;
-        served = true;
-        return Promise.resolve(page);
-      }),
-      health: mock(() => Promise.resolve(true)),
-    };
-    const poller = new DeltaSyncPoller({ intervalMinutes: 5, dbPath, localApiClient: client });
+    enableWal();
+    const poller = new DeltaSyncPoller({ intervalMinutes: 5, dbPath, localApiClient: changedNodesClient(50) });
     // Another process's idle connection: stops SQLite deleting the WAL when
     // the poller's connection is the last to close
     const other = new Database(dbPath);
@@ -130,6 +137,46 @@ describe("DeltaSyncPoller connection lifetime", () => {
     expect(existsSync(`${dbPath}-wal`)).toBe(true);
     expect(getWalSizeBytes(dbPath)).toBe(0);
     other.close();
+    poller.stop();
+  });
+
+  it("truncates the WAL while many other MCP readers stay connected", async () => {
+    enableWal();
+    // The #107 setup: one connection per concurrent supertag-mcp session,
+    // each having read from the index and then gone idle
+    const readers = Array.from({ length: 10 }, () => {
+      const reader = new Database(dbPath);
+      reader.query("SELECT COUNT(*) FROM nodes").get();
+      return reader;
+    });
+    const poller = new DeltaSyncPoller({ intervalMinutes: 5, dbPath, localApiClient: changedNodesClient(50) });
+
+    const result = await poller.triggerNow();
+
+    expect(result.nodesInserted).toBe(50);
+    expect(existsSync(`${dbPath}-wal`)).toBe(true);
+    expect(getWalSizeBytes(dbPath)).toBe(0);
+    for (const reader of readers) reader.close();
+    poller.stop();
+  });
+
+  it("completes the cycle and warns when an open read transaction blocks truncation", async () => {
+    enableWal();
+    const reader = new Database(dbPath);
+    reader.run("BEGIN");
+    reader.query("SELECT COUNT(*) FROM nodes").get();
+    const warnings: string[] = [];
+    const logger = { info: () => {}, error: () => {}, warn: (msg: string) => warnings.push(msg) };
+    const poller = new DeltaSyncPoller({ intervalMinutes: 5, dbPath, localApiClient: changedNodesClient(50), logger });
+
+    const result = await poller.triggerNow();
+
+    expect(result.nodesInserted).toBe(50);
+    expect(getWalSizeBytes(dbPath)).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.includes("WAL checkpoint blocked"))).toBe(true);
+
+    reader.run("COMMIT");
+    reader.close();
     poller.stop();
   });
 

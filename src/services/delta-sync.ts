@@ -571,8 +571,9 @@ export class DeltaSyncService {
       const madeProgress = nodesFound > 0 || stats.poisonNodesSkipped > 0;
       if (madeProgress) {
         this.updateWatermark(watermarkAfter, nodesFound);
-        // Truncate the WAL this cycle grew; logs, never throws, if readers block it (#107)
-        await checkpointWalTruncate(this.dbPath, { logger: this.logger });
+        // Truncate the WAL this cycle grew; logs, never throws, if readers block it (#107).
+        // Few attempts: a blocked checkpoint is retried by the next cycle anyway.
+        await checkpointWalTruncate(this.dbPath, { attempts: 3, logger: this.logger });
       }
 
       // Step 6: Return result
