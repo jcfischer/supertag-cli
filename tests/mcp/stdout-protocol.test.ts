@@ -32,7 +32,11 @@ describe("supertag-mcp stdout carries only JSON-RPC (#97)", () => {
         workspaces: { main: { rootFileId: "_1liWSdbrpHY", enabled: true } },
       })
     );
-    const exportDir = join(home, "Documents", "Tana-Export", "main");
+    // Mirrors DEFAULT_EXPORT_DIR in src/config/paths.ts for the isolated HOME
+    const exportRoot = process.platform === "darwin" || process.platform === "win32"
+      ? join(home, "Documents", "Tana-Export")
+      : join(home, ".local", "share", "supertag", "exports");
+    const exportDir = join(exportRoot, "main");
     mkdirSync(exportDir, { recursive: true });
     copyFileSync(FIXTURE_PATH, join(exportDir, "_1liWSdbrpHY@2026-01-01.json"));
   });
@@ -119,6 +123,7 @@ describe("supertag-mcp stdout carries only JSON-RPC (#97)", () => {
     expect(nonJsonRpc).toEqual([]);
     expect(syncResponse?.result?.isError).toBeFalsy();
     const payload = JSON.parse(syncResponse!.result!.content![0].text);
+    expect(payload.error).toBeUndefined();
     expect(payload.nodesIndexed).toBeGreaterThan(0);
   }, 60000);
 });
