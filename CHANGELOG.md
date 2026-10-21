@@ -5,6 +5,16 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.13] - 2026-10-21
+
+### Fixed
+- **`sync index --delta` hung forever when the Local API ignored `edited.since` (#105)** — the pagination loop only stopped on a short page or after 100,000 requests, so an API returning the whole workspace kept it paging indefinitely with no output. When the first page comes back full, delta sync now probes with `since=now`; a full page in response means `since` is ignored, and sync aborts with a clear error and exit 1 without advancing the watermark. A page cap (25% of `total_nodes`, or 1000 pages when unknown; ported from PR #85 by @lavarius) and the old 100k safety limit now also abort instead of silently advancing. The CLI `--delta` and `sync watch` paths log progress.
+- **`sync status` reported `Last indexed: Never` after a successful index (#105)** — the value lived only in memory of the export watcher; `getStatus()` now falls back to `sync_metadata.last_sync_timestamp` (CLI and MCP).
+- **Index WAL grew to 20 GB+ with many concurrent `supertag-mcp` instances (#107)** — the only checkpoint was PASSIVE on close and the MCP delta-sync poller held one connection for the life of the process. `journal_size_limit` is now 64 MiB, a `wal_checkpoint(TRUNCATE)` with bounded retry runs on a fresh connection after every full index and every writing delta-sync cycle (warns, never throws, when readers block it), and the poller opens and closes its connection per cycle. `sync status` shows the WAL size and warns above 1 GB; the README documents recovery.
+
+### Changed
+- **Delta-sync poison-node follow-ups (#87)** — a cycle that skips more than 3 poison nodes logs one escalated "cluster" warning; the watermark trade-off after poison-only cycles is documented in code; a test covers `consecutiveFailures` resetting after a successful cycle.
+
 ## [2.5.12] - 2026-10-21
 
 ### Fixed
