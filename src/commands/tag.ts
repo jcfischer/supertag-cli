@@ -8,7 +8,41 @@
  */
 import { Command } from 'commander';
 import { resolveBackend } from '../api/backend-resolver';
+import { resolveTagIds, TAG_ACTION_LABELS, type TagMutationDeps } from '../services/tag-id-resolver';
 import { exitWithError } from '../utils/errors';
+
+/**
+ * Add or remove one tag on a node. Resolves a tag name to its ID unless
+ * --tag-id is set. Returns the exit code: 1 when the tag was not applied.
+ */
+export async function runTagChange(
+  action: 'add' | 'remove',
+  nodeId: string,
+  tagNameOrId: string,
+  options: { tagId?: boolean },
+  deps: TagMutationDeps = {},
+): Promise<number> {
+  const backend = deps.backend ?? await resolveBackend();
+  if (!backend.supportsMutations()) {
+    console.error('Error: Tag operations require the local API backend.');
+    console.error('Configure with: supertag config --bearer-token <token>');
+    return 1;
+  }
+
+  const [tagId] = options.tagId ? [tagNameOrId] : resolveTagIds([tagNameOrId], deps.dbPath);
+  const result = action === 'add'
+    ? await backend.addTags(nodeId, [tagId])
+    : await backend.removeTags(nodeId, [tagId]);
+
+  const failed = result.results.some((r) => !r.success);
+  const print = failed ? console.error : console.log;
+  const labels = TAG_ACTION_LABELS[action];
+  print(`${failed ? labels.failed : labels.done} tag ${labels.preposition} ${result.nodeName} (${result.nodeId}):`);
+  for (const r of result.results) {
+    print(`  ${r.success ? labels.mark : '!'} ${r.tagName || r.tagId}: ${r.message}`);
+  }
+  return failed ? 1 : 0;
+}
 
 export function createTagCommand(): Command {
   const tag = new Command('tag');
@@ -17,27 +51,11 @@ export function createTagCommand(): Command {
   // supertag tag add <nodeId> <tagNameOrId>
   tag
     .command('add <nodeId> <tagNameOrId>')
-    .description('Add a tag to a node')
+    .description('Add a tag to a node (by name or ID)')
     .option('--tag-id', 'Treat the second argument as a tag ID (skip name resolution)')
     .action(async (nodeId: string, tagNameOrId: string, options: { tagId?: boolean }) => {
       try {
-        const backend = await resolveBackend();
-        if (!backend.supportsMutations()) {
-          console.error('Error: Tag operations require the local API backend.');
-          console.error('Configure with: supertag config --bearer-token <token>');
-          process.exit(1);
-        }
-
-        // If --tag-id flag is set, use the value directly as a tag ID
-        // Otherwise, use as tag ID too (name resolution requires DB lookup which we'll add later)
-        const tagId = tagNameOrId;
-
-        const result = await backend.addTags(nodeId, [tagId]);
-        console.log(`Added tag to ${result.nodeName} (${result.nodeId}):`);
-        for (const r of result.results) {
-          const status = r.success ? '  +' : '  !';
-          console.log(`${status} ${r.tagName}: ${r.message}`);
-        }
+        process.exit(await runTagChange('add', nodeId, tagNameOrId, options));
       } catch (error) {
         exitWithError(error);
       }
@@ -46,25 +64,11 @@ export function createTagCommand(): Command {
   // supertag tag remove <nodeId> <tagNameOrId>
   tag
     .command('remove <nodeId> <tagNameOrId>')
-    .description('Remove a tag from a node')
+    .description('Remove a tag from a node (by name or ID)')
     .option('--tag-id', 'Treat the second argument as a tag ID (skip name resolution)')
     .action(async (nodeId: string, tagNameOrId: string, options: { tagId?: boolean }) => {
       try {
-        const backend = await resolveBackend();
-        if (!backend.supportsMutations()) {
-          console.error('Error: Tag operations require the local API backend.');
-          console.error('Configure with: supertag config --bearer-token <token>');
-          process.exit(1);
-        }
-
-        const tagId = tagNameOrId;
-
-        const result = await backend.removeTags(nodeId, [tagId]);
-        console.log(`Removed tag from ${result.nodeName} (${result.nodeId}):`);
-        for (const r of result.results) {
-          const status = r.success ? '  -' : '  !';
-          console.log(`${status} ${r.tagName}: ${r.message}`);
-        }
+        process.exit(await runTagChange('remove', nodeId, tagNameOrId, options));
       } catch (error) {
         exitWithError(error);
       }

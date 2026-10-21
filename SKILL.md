@@ -324,7 +324,7 @@ Add supertags to a node. Requires Local API.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `nodeId` | string | Yes | Tana node ID |
-| `tagIds` | array | Yes | Supertag IDs to add |
+| `tagIds` | array | Yes | Supertag IDs or names to add (`isError` if any is not applied) |
 
 ### tana_tag_remove
 Remove supertags from a node. Requires Local API.
@@ -333,7 +333,7 @@ Remove supertags from a node. Requires Local API.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `nodeId` | string | Yes | Tana node ID |
-| `tagIds` | array | Yes | Supertag IDs to remove |
+| `tagIds` | array | Yes | Supertag IDs or names to remove (`isError` if any is not removed) |
 
 ### tana_create_tag
 Create a new supertag definition. Requires Local API.

@@ -185,8 +185,9 @@ supertag edit <nodeId> --name "New name"
 supertag edit <nodeId> --description "Updated description"
 
 # Tag operations
-supertag tag add <nodeId> <tagId1> <tagId2>
-supertag tag remove <nodeId> <tagId>
+supertag tag add <nodeId> <tagName>        # name resolved via the index; exits 1 if not applied
+supertag tag add <nodeId> <tagId> --tag-id # skip name resolution
+supertag tag remove <nodeId> <tagNameOrId>
 supertag tag create "sprint" --description "Sprint supertag"
 
 # Set field values

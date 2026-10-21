@@ -309,13 +309,13 @@ const allTools = [
       {
         name: 'tana_tag_add',
         description:
-          'Add one or more supertags to a node. Requires Local API.',
+          'Add one or more supertags to a node. tagIds accepts tag IDs or names (resolved via the index). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.tagAddSchema),
       },
       {
         name: 'tana_tag_remove',
         description:
-          'Remove one or more supertags from a node. Requires Local API.',
+          'Remove one or more supertags from a node. tagIds accepts tag IDs or names (resolved via the index). Requires Local API.',
         inputSchema: schemas.zodToJsonSchema(schemas.tagRemoveSchema),
       },
       {
