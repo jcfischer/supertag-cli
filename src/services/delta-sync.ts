@@ -567,6 +567,10 @@ export class DeltaSyncService {
       // Advance when we found nodes OR skipped poison nodes — skipping past a
       // poison node is real progress, and advancing the watermark stops the
       // next cycle from re-requesting (and re-skipping) the same bad node.
+      // Trade-off (#87): in a cycle that only skipped poison nodes, advancing
+      // to now means a node edited inside that window that this cycle did not
+      // return will not reappear in a later delta unless it is edited again.
+      // Poison nodes are rare, and a full `sync index` recovers any such node.
       const watermarkAfter = Date.now();
       const madeProgress = nodesFound > 0 || stats.poisonNodesSkipped > 0;
       if (madeProgress) {

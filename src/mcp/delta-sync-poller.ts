@@ -94,6 +94,13 @@ export class DeltaSyncPoller {
    */
   private static readonly FAILURE_ALERT_THRESHOLD = 3;
 
+  /**
+   * More poison nodes than this in one cycle is a cluster, not a stray bad
+   * node: each costs its own bisection, and a cluster points at Tana Local API
+   * degradation rather than one corrupt node.
+   */
+  private static readonly POISON_CLUSTER_THRESHOLD = 3;
+
   constructor(private options: DeltaSyncPollerOptions) {}
 
   /**
@@ -230,7 +237,14 @@ export class DeltaSyncPoller {
       this.consecutiveFailures = 0;
       this.lastErrorMessage = null;
 
-      if (result.poisonNodesSkipped > 0) {
+      if (result.poisonNodesSkipped > DeltaSyncPoller.POISON_CLUSTER_THRESHOLD) {
+        this.options.logger?.warn(
+          `Delta-sync skipped a cluster of ${result.poisonNodesSkipped} nodes that crash ` +
+            "Tana Local API search (HTTP 500) in one cycle. Tana's Local API may be degraded. " +
+            "Run 'supertag sync index' for a full re-sync to capture them.",
+          { poisonNodesSkipped: result.poisonNodesSkipped }
+        );
+      } else if (result.poisonNodesSkipped > 0) {
         this.options.logger?.warn(
           "Delta-sync skipped node(s) that crash Tana Local API search (HTTP 500). " +
             "Run 'supertag sync index' for a full re-sync to capture them.",
