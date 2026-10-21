@@ -35,12 +35,22 @@ import { formatBytes } from "../utils/format";
 import { syncSchemaToPath, getSchemaRegistryFromDatabase } from "./schema";
 import { DeltaSyncService } from "../services/delta-sync";
 import { LocalApiClient } from "../api/local-api-client";
-import type { DeltaSyncResult } from "../types/local-api";
+import type { DeltaSyncOptions, DeltaSyncResult } from "../types/local-api";
 import { WatchService } from "../watch/watch-service";
 import { Database } from "bun:sqlite";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');
+
+/**
+ * DeltaSyncService logger. The simple logger stringifies each argument, so
+ * structured data is rendered as JSON instead of "[object Object]".
+ */
+const deltaSyncLogger: NonNullable<DeltaSyncOptions["logger"]> = {
+  info: (message, data) => logger.info(data ? `${message} ${JSON.stringify(data)}` : message),
+  warn: (message, data) => logger.warn(data ? `${message} ${JSON.stringify(data)}` : message),
+  error: (message, data) => logger.error(data ? `${message} ${JSON.stringify(data)}` : message),
+};
 
 // Default paths - uses XDG with legacy fallback
 const DEFAULT_DB_PATH = getDatabasePath();
@@ -158,6 +168,7 @@ async function runDeltaSync(dbPath: string): Promise<DeltaSyncResult> {
   const deltaSyncService = new DeltaSyncService({
     dbPath,
     localApiClient: client,
+    logger: deltaSyncLogger,
   });
 
   try {
@@ -706,6 +717,7 @@ export function registerSyncCommands(program: Command): void {
       const deltaSyncService = new DeltaSyncService({
         dbPath: resolvedPaths.dbPath,
         localApiClient: client,
+        logger: deltaSyncLogger,
       });
 
       const watchOptions = {

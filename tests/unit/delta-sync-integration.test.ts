@@ -667,7 +667,20 @@ describe("Delta-Sync Integration (T-6.1)", () => {
         })
       );
 
-      const client = createMockClient([page1, page2]);
+      const pagesClient = createMockClient([page1, page2]);
+      // A full first page triggers the #105 'edited.since' probe (since = now);
+      // answer it like a real API: nothing changed since now.
+      const client = {
+        ...pagesClient,
+        searchNodes: async (
+          query: Record<string, unknown>,
+          options?: { limit?: number; offset?: number }
+        ) => {
+          const since = (query.edited as { since: number }).since;
+          if (since >= Math.floor(Date.now() / 1000) - 1) return [];
+          return pagesClient.searchNodes(query, options);
+        },
+      };
       service = new DeltaSyncService({ dbPath, localApiClient: client });
 
       const result = await service.sync();
