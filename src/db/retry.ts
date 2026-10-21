@@ -184,6 +184,13 @@ export function walCheckpoint(db: Database): void {
   }
 }
 
+/**
+ * Size SQLite truncates the WAL back to after a checkpoint resets it (#107).
+ * Bounds a WAL that can be checkpointed; a WAL pinned by readers needs
+ * checkpointWalTruncate() in ./wal.
+ */
+export const JOURNAL_SIZE_LIMIT_BYTES = 64 * 1024 * 1024;
+
 export function configureDbForConcurrency(db: Database): void {
   // Skip configuration for in-memory databases
   if (isInMemoryDb(db)) {
@@ -197,6 +204,9 @@ export function configureDbForConcurrency(db: Database): void {
     // Set busy timeout to 5 seconds - wait for locks instead of failing immediately
     // This gives other processes time to complete their transactions
     db.run("PRAGMA busy_timeout = 5000");
+
+    // Truncate the WAL back to a bounded size after each checkpoint reset (#107)
+    db.run(`PRAGMA journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`);
   } catch (error) {
     // WAL mode may fail in certain scenarios (temp dirs, network drives, etc.)
     // Log but don't fail - the database will work in rollback journal mode

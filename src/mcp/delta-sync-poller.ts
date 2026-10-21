@@ -14,6 +14,7 @@
 
 import { DeltaSyncService } from "../services/delta-sync";
 import type {
+  DeltaSyncOptions,
   DeltaSyncResult,
   SearchResultNode,
 } from "../types/local-api";
@@ -46,6 +47,8 @@ export interface DeltaSyncPollerOptions {
   embeddingConfig?: { model: string; endpoint?: string };
   /** Logger (writes to stderr in MCP context) */
   logger?: PollerLogger;
+  /** Service factory, called once per sync cycle (injectable for testing) */
+  createService?: (options: DeltaSyncOptions) => DeltaSyncService;
 }
 
 /** Options for the MCP server initialization helper */
@@ -75,7 +78,8 @@ export interface InitDeltaSyncPollerOptions {
 
 export class DeltaSyncPoller {
   private interval: ReturnType<typeof setInterval> | null = null;
-  private service: DeltaSyncService;
+  /** Service for the cycle in progress; null while idle, so no connection stays open between cycles (#107) */
+  private active: DeltaSyncService | null = null;
   private paused = false;
   private wasHealthy = true;
   private lastResult: DeltaSyncResult | null = null;
@@ -90,13 +94,36 @@ export class DeltaSyncPoller {
    */
   private static readonly FAILURE_ALERT_THRESHOLD = 3;
 
-  constructor(private options: DeltaSyncPollerOptions) {
-    this.service = new DeltaSyncService({
-      dbPath: options.dbPath,
-      localApiClient: options.localApiClient,
-      embeddingConfig: options.embeddingConfig,
-      logger: options.logger,
-    });
+  constructor(private options: DeltaSyncPollerOptions) {}
+
+  /**
+   * Run one sync cycle on a connection opened for this cycle only.
+   *
+   * The connection used to live as long as the MCP process. An idle
+   * connection does not block a checkpoint, but one left inside a read
+   * transaction would, for the whole session (#107). Closing it before the
+   * poller goes idle rules that out. A cycle started
+   * while another is running gets the in-progress service's skip result.
+   */
+  private async runCycle(): Promise<DeltaSyncResult> {
+    if (this.active) return this.active.sync();
+
+    const serviceOptions: DeltaSyncOptions = {
+      dbPath: this.options.dbPath,
+      localApiClient: this.options.localApiClient,
+      embeddingConfig: this.options.embeddingConfig,
+      logger: this.options.logger,
+    };
+    const service = this.options.createService
+      ? this.options.createService(serviceOptions)
+      : new DeltaSyncService(serviceOptions);
+    this.active = service;
+    try {
+      return await service.sync();
+    } finally {
+      this.active = null;
+      service.close();
+    }
   }
 
   /**
@@ -123,7 +150,6 @@ export class DeltaSyncPoller {
       this.interval = null;
     }
     this.tickCount = 0;
-    this.service.close();
     this.options.logger?.info("Delta-sync poller stopped");
   }
 
@@ -132,7 +158,7 @@ export class DeltaSyncPoller {
    * Does not require the poller to be started.
    */
   async triggerNow(): Promise<DeltaSyncResult> {
-    const result = await this.service.sync();
+    const result = await this.runCycle();
     this.lastResult = result;
     this.consecutiveFailures = 0;
     this.lastErrorMessage = null;
@@ -143,7 +169,7 @@ export class DeltaSyncPoller {
    * Check if a sync is currently in progress.
    */
   isSyncing(): boolean {
-    return this.service.isSyncing();
+    return this.active?.isSyncing() ?? false;
   }
 
   /**
@@ -192,11 +218,11 @@ export class DeltaSyncPoller {
         this.wasHealthy = true;
       }
 
-      if (this.paused || this.service.isSyncing()) return;
+      if (this.paused || this.isSyncing()) return;
 
       this.tickCount++;
 
-      const result = await this.service.sync();
+      const result = await this.runCycle();
       this.lastResult = result;
 
       // A completed cycle (even one that only skipped poison nodes) clears the
