@@ -12,12 +12,12 @@ import { DEFAULT_LOCAL_API_ENDPOINT } from '../types/local-api';
 import { CONFIG_FILE, TANA_CONFIG_DIR, ensureDir } from './paths';
 import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from '../utils/logger';
 
-// Get logger - use global if available, otherwise create a default
+// Get logger - use global if available, otherwise a default on stderr (stdout is the MCP channel)
 function getLogger(): Logger {
   if (hasGlobalLogger()) {
     return getGlobalLogger().child("config");
   }
-  return createLogger({ level: "info", mode: "pretty" }).child("config");
+  return createLogger({ level: "info", mode: "pretty", stream: process.stderr }).child("config");
 }
 
 /**

@@ -9,12 +9,12 @@ import type { TanaApiPayload, TanaApiResponse, TanaNode, TanaApiNode } from '../
 import { tanaNodeToApiNode } from '../formatters/json';
 import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from '../utils/logger';
 
-// Get logger - use global if available, otherwise create a default
+// Get logger - use global if available, otherwise a default on stderr (stdout is the MCP channel)
 function getLogger(): Logger {
   if (hasGlobalLogger()) {
     return getGlobalLogger().child("api");
   }
-  return createLogger({ level: "debug", mode: "pretty" }).child("api");
+  return createLogger({ level: "debug", mode: "pretty", stream: process.stderr }).child("api");
 }
 
 const MAX_NODES_PER_REQUEST = 100;
