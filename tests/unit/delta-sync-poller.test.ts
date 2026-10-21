@@ -15,6 +15,7 @@ import { Database } from "bun:sqlite";
 import { unlinkSync } from "fs";
 import { DeltaSyncPoller } from "../../src/mcp/delta-sync-poller";
 import type { DeltaSyncResult, SearchResultNode } from "../../src/types/local-api";
+import type { DeltaSyncService } from "../../src/services/delta-sync";
 
 // =============================================================================
 // Test Helpers
@@ -73,6 +74,30 @@ function createMockApiClient() {
     searchNodes: mock(() => Promise.resolve([] as SearchResultNode[])),
     health: mock(() => Promise.resolve(true)),
   };
+}
+
+/** Service factory whose cycle reports the given number of skipped poison nodes */
+function poisonServiceFactory(poisonNodesSkipped: number) {
+  const result: DeltaSyncResult = {
+    nodesFound: 0,
+    nodesInserted: 0,
+    nodesUpdated: 0,
+    nodesSkipped: 0,
+    fieldValuesCleared: 0,
+    embeddingsGenerated: 0,
+    embeddingsSkipped: true,
+    watermarkBefore: 0,
+    watermarkAfter: Date.now(),
+    durationMs: 1,
+    pages: 0,
+    poisonNodesSkipped,
+  };
+  return () =>
+    ({
+      sync: () => Promise.resolve(result),
+      isSyncing: () => false,
+      close: () => {},
+    }) as unknown as DeltaSyncService;
 }
 
 /** Create a mock logger that captures calls */
@@ -503,6 +528,77 @@ describe("DeltaSyncPoller", () => {
 
       const lastResult = poller.getLastResult();
       expect(lastResult).not.toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Failure-streak reset (#87)
+  // ---------------------------------------------------------------------------
+
+  describe("getFailureState()", () => {
+    it("resets consecutiveFailures to 0 after a successful cycle", async () => {
+      mockApiClient.searchNodes.mockImplementationOnce(() =>
+        Promise.reject(new Error("API timeout"))
+      );
+
+      poller = new DeltaSyncPoller({
+        intervalMinutes: 5,
+        dbPath,
+        localApiClient: mockApiClient,
+        logger: mockLogger,
+      });
+
+      await poller.tick();
+      expect(poller.getFailureState().consecutiveFailures).toBe(1);
+      expect(poller.getFailureState().lastErrorMessage).toContain("API timeout");
+
+      await poller.tick();
+      expect(poller.getFailureState()).toEqual({
+        consecutiveFailures: 0,
+        lastErrorMessage: null,
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Poison-cluster escalation (#87)
+  // ---------------------------------------------------------------------------
+
+  describe("poison-node cluster warning", () => {
+    const clusterWarnings = () =>
+      mockLogger.warn.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("cluster")
+      );
+
+    it("escalates once when more than 3 poison nodes are skipped in one cycle", async () => {
+      poller = new DeltaSyncPoller({
+        intervalMinutes: 5,
+        dbPath,
+        localApiClient: mockApiClient,
+        logger: mockLogger,
+        createService: poisonServiceFactory(4),
+      });
+
+      await poller.tick();
+
+      expect(clusterWarnings().length).toBe(1);
+      expect(clusterWarnings()[0][1]).toEqual({ poisonNodesSkipped: 4 });
+      expect(mockLogger.warn.mock.calls.length).toBe(1);
+    });
+
+    it("does not escalate at 3 or fewer poison nodes", async () => {
+      poller = new DeltaSyncPoller({
+        intervalMinutes: 5,
+        dbPath,
+        localApiClient: mockApiClient,
+        logger: mockLogger,
+        createService: poisonServiceFactory(3),
+      });
+
+      await poller.tick();
+
+      expect(clusterWarnings().length).toBe(0);
+      expect(mockLogger.warn.mock.calls.length).toBe(1);
     });
   });
 });
