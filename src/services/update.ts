@@ -5,8 +5,8 @@
  * Spec: 058-version-update-checker
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, unlinkSync, chmodSync } from "fs";
-import { dirname, join, basename } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, chmodSync, readdirSync, renameSync, rmSync } from "fs";
+import { dirname, join, basename, extname } from "path";
 import { TANA_CACHE_DIR } from "../config/paths";
 
 // =============================================================================
@@ -598,10 +598,9 @@ export async function createTestZip(
 /**
  * Install an update from a downloaded zip file
  * 1. Validate zip exists
- * 2. Backup current binary
- * 3. Extract and replace
- * 4. Set executable permissions
- * 5. Rollback on failure
+ * 2. Extract and locate the binaries (nested release layout included)
+ * 3. Backup and replace the target, plus installed sibling binaries
+ * 4. Rollback on failure
  */
 export async function installUpdate(
   options: InstallUpdateOptions
@@ -617,34 +616,14 @@ export async function installUpdate(
     };
   }
 
-  // Generate backup path with timestamp
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const binaryName = basename(binaryPath);
-  const backupPath = join(backupDir, `${binaryName}.${timestamp}.backup`);
-
-  // Ensure backup directory exists
-  if (!existsSync(backupDir)) {
-    mkdirSync(backupDir, { recursive: true });
-  }
-
-  // Backup current binary (if it exists)
-  let hadBackup = false;
-  if (existsSync(binaryPath)) {
-    try {
-      copyFileSync(binaryPath, backupPath);
-      hadBackup = true;
-    } catch (error) {
-      return {
-        success: false,
-        installedVersion: "",
-        message: `Failed to backup current binary: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  }
-
-  // Extract zip using unzip command
   const tempExtractDir = join(dirname(zipPath), `extract-${timestamp}`);
   mkdirSync(tempExtractDir, { recursive: true });
+
+  // Targets already replaced, with their backups, so a failure can restore them
+  const replaced: Array<{ target: string; backup?: string }> = [];
+  let staged: string | undefined;
 
   try {
     const proc = Bun.spawn(["unzip", "-o", zipPath, "-d", tempExtractDir], {
@@ -655,16 +634,6 @@ export async function installUpdate(
     const exitCode = await proc.exited;
 
     if (exitCode !== 0) {
-      // Rollback if we had a backup
-      if (hadBackup && existsSync(backupPath)) {
-        copyFileSync(backupPath, binaryPath);
-      }
-
-      // Clean up temp dir
-      if (existsSync(tempExtractDir)) {
-        Bun.spawn(["rm", "-rf", tempExtractDir]);
-      }
-
       return {
         success: false,
         installedVersion: "",
@@ -672,72 +641,74 @@ export async function installUpdate(
       };
     }
 
-    // Find the extracted binary
-    const extractedBinaryPath = join(tempExtractDir, binaryName);
-    if (!existsSync(extractedBinaryPath)) {
-      // Try to find any executable in the extracted dir
-      const ls = Bun.spawn(["ls", tempExtractDir], { stdout: "pipe" });
-      const output = await new Response(ls.stdout).text();
-      const files = output.trim().split("\n").filter(Boolean);
+    // Release zips nest the binaries under supertag-cli-<platform>/, so search
+    // the whole tree, and only accept regular files.
+    const extracted = findRegularFiles(tempExtractDir);
+    const ext = extname(binaryName).toLowerCase() === ".exe" ? ".exe" : "";
+    const primarySource =
+      extracted.get(binaryName) ??
+      (isKnownBinaryName(binaryName) ? undefined : extracted.get(`supertag${ext}`));
 
-      if (files.length === 0) {
-        throw new Error("No files found in zip archive");
-      }
-
-      // Use the first file if binaryName not found
-      const fallbackPath = join(tempExtractDir, files[0]);
-      if (!existsSync(fallbackPath)) {
-        throw new Error(`Binary not found in archive: ${binaryName}`);
-      }
-
-      // Always try to unlink target first - handles symlinks, sockets, and other
-      // special files that copyFileSync cannot overwrite (ENOTSUP fix).
-      // existsSync may return false for sockets, so always try unlink.
-      try {
-        unlinkSync(binaryPath);
-      } catch {
-        // Ignore errors - file might not exist
-      }
-      // Copy the fallback
-      copyFileSync(fallbackPath, binaryPath);
-    } else {
-      // Always try to unlink target first - handles symlinks, sockets, and other
-      // special files that copyFileSync cannot overwrite (ENOTSUP fix).
-      // existsSync may return false for sockets, so always try unlink.
-      try {
-        unlinkSync(binaryPath);
-      } catch {
-        // Ignore errors - file might not exist
-      }
-      // Copy the extracted binary
-      copyFileSync(extractedBinaryPath, binaryPath);
+    if (!primarySource) {
+      return {
+        success: false,
+        installedVersion: "",
+        message: `No supertag binary found in archive: ${zipPath}`,
+      };
     }
 
-    // Set executable permissions
-    chmodSync(binaryPath, 0o755);
+    // Update sibling binaries only where they are already installed next to the target
+    const installs = [{ source: primarySource, target: binaryPath }];
+    for (const name of BINARY_NAMES) {
+      const fileName = `${name}${ext}`;
+      const source = extracted.get(fileName);
+      const target = join(dirname(binaryPath), fileName);
+      if (fileName === binaryName || !source || !existsSync(target)) continue;
+      installs.push({ source, target });
+    }
 
-    // Clean up temp dir
-    Bun.spawn(["rm", "-rf", tempExtractDir]);
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir, { recursive: true });
+    }
+
+    for (const { source, target } of installs) {
+      let backup: string | undefined;
+      if (existsSync(target)) {
+        backup = join(backupDir, `${basename(target)}.${timestamp}.backup`);
+        copyFileSync(target, backup);
+      }
+      // Copy beside the target, then rename over it: the target is never missing,
+      // and rename also replaces symlinks that copyFileSync cannot overwrite.
+      staged = `${target}.new-${timestamp}`;
+      copyFileSync(source, staged);
+      chmodSync(staged, 0o755);
+      renameSync(staged, target);
+      staged = undefined;
+      replaced.push({ target, backup });
+    }
+
+    const siblings = replaced.slice(1).map((r) => basename(r.target));
 
     return {
       success: true,
-      backupPath: hadBackup ? backupPath : undefined,
+      backupPath: replaced[0].backup,
       installedVersion: "unknown", // Would need to run binary to get version
-      message: "Update installed successfully",
+      message: siblings.length > 0
+        ? `Update installed successfully (also updated ${siblings.join(", ")})`
+        : "Update installed successfully",
     };
   } catch (error) {
-    // Rollback on any error
-    if (hadBackup && existsSync(backupPath)) {
+    if (staged) {
+      rmSync(staged, { force: true });
+    }
+    // Rollback every target already replaced
+    for (const { target, backup } of replaced) {
+      if (!backup) continue;
       try {
-        copyFileSync(backupPath, binaryPath);
+        copyFileSync(backup, target);
       } catch {
         // Rollback failed - leave backup in place
       }
-    }
-
-    // Clean up temp dir
-    if (existsSync(tempExtractDir)) {
-      Bun.spawn(["rm", "-rf", tempExtractDir]);
     }
 
     return {
@@ -745,7 +716,31 @@ export async function installUpdate(
       installedVersion: "",
       message: `Installation failed: ${error instanceof Error ? error.message : String(error)}`,
     };
+  } finally {
+    rmSync(tempExtractDir, { recursive: true, force: true });
   }
+}
+
+/** Binaries shipped together in a release zip */
+const BINARY_NAMES = ["supertag", "supertag-mcp", "supertag-export"];
+
+function isKnownBinaryName(fileName: string): boolean {
+  return BINARY_NAMES.some((name) => fileName === name || fileName === `${name}.exe`);
+}
+
+/**
+ * Map file name -> path for every regular file under dir (first match wins).
+ */
+function findRegularFiles(dir: string, found = new Map<string, string>()): Map<string, string> {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      findRegularFiles(path, found);
+    } else if (entry.isFile() && !found.has(entry.name)) {
+      found.set(entry.name, path);
+    }
+  }
+  return found;
 }
 
 // =============================================================================

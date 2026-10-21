@@ -894,6 +894,126 @@ describe("installUpdate", () => {
 });
 
 // =============================================================================
+// Issue #104: release zips nest binaries under supertag-cli-<platform>/
+// =============================================================================
+
+describe("installUpdate with nested release zip (#104)", () => {
+  let testInstallDir: string;
+  let testBinaryPath: string;
+  let testBackupDir: string;
+  let testZipPath: string;
+
+  async function createReleaseZip(files: Record<string, string>): Promise<void> {
+    const stageDir = join(testInstallDir, "stage");
+    const distDir = join(stageDir, "supertag-cli-macos-arm64");
+    mkdirSync(distDir, { recursive: true });
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(join(distDir, name), content, { mode: 0o755 });
+    }
+    const proc = Bun.spawn(["zip", "-r", testZipPath, "supertag-cli-macos-arm64"], {
+      cwd: stageDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await proc.exited).toBe(0);
+    rmSync(stageDir, { recursive: true });
+  }
+
+  beforeEach(() => {
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    testInstallDir = `/tmp/supertag-install-nested-${uniqueId}`;
+    testBinaryPath = join(testInstallDir, "bin", "supertag");
+    testBackupDir = join(testInstallDir, "backups");
+    testZipPath = join(testInstallDir, "update.zip");
+    mkdirSync(join(testInstallDir, "bin"), { recursive: true });
+    mkdirSync(testBackupDir, { recursive: true });
+    writeFileSync(testBinaryPath, "old supertag", { mode: 0o755 });
+  });
+
+  afterEach(() => {
+    if (existsSync(testInstallDir)) {
+      rmSync(testInstallDir, { recursive: true });
+    }
+  });
+
+  it("installs the supertag file from inside the nested directory", async () => {
+    const { installUpdate } = await import("../src/services/update");
+    const { lstatSync } = await import("fs");
+    await createReleaseZip({ supertag: "new supertag" });
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+    expect(lstatSync(testBinaryPath).isFile()).toBe(true);
+    expect(readFileSync(testBinaryPath, "utf-8")).toBe("new supertag");
+  });
+
+  it("replaces sibling binaries that sit next to the target, and only those", async () => {
+    const { installUpdate } = await import("../src/services/update");
+    const mcpPath = join(testInstallDir, "bin", "supertag-mcp");
+    const exportPath = join(testInstallDir, "bin", "supertag-export");
+    writeFileSync(mcpPath, "old mcp", { mode: 0o755 });
+    await createReleaseZip({
+      supertag: "new supertag",
+      "supertag-mcp": "new mcp",
+      "supertag-export": "new export",
+    });
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+    expect(readFileSync(testBinaryPath, "utf-8")).toBe("new supertag");
+    expect(readFileSync(mcpPath, "utf-8")).toBe("new mcp");
+    expect(existsSync(exportPath)).toBe(false);
+    const { readdirSync } = await import("fs");
+    const backups = readdirSync(testBackupDir);
+    expect(backups.some((f) => f.startsWith("supertag-mcp."))).toBe(true);
+  });
+
+  it("falls back to the supertag file when the installed binary has a custom name", async () => {
+    const { installUpdate } = await import("../src/services/update");
+    const customPath = join(testInstallDir, "bin", "supertag-2.5.9");
+    writeFileSync(customPath, "old custom", { mode: 0o755 });
+    await createReleaseZip({ supertag: "new supertag" });
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: customPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(true);
+    expect(readFileSync(customPath, "utf-8")).toBe("new supertag");
+  });
+
+  it("leaves the existing binary untouched when the archive has no supertag file", async () => {
+    const { installUpdate } = await import("../src/services/update");
+    const { statSync } = await import("fs");
+    await createReleaseZip({ "README.md": "not a binary" });
+    const inodeBefore = statSync(testBinaryPath).ino;
+
+    const result = await installUpdate({
+      zipPath: testZipPath,
+      binaryPath: testBinaryPath,
+      backupDir: testBackupDir,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("No supertag binary found in archive");
+    expect(statSync(testBinaryPath).ino).toBe(inodeBefore);
+    expect(readFileSync(testBinaryPath, "utf-8")).toBe("old supertag");
+  });
+});
+
+// =============================================================================
 // T-4.1: Passive Notification Logic Tests
 // =============================================================================
 
