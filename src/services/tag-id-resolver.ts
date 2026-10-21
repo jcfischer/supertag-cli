@@ -9,7 +9,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import type { TanaBackend } from "../api/backend";
-import { resolveWorkspaceContext } from "../config/workspace-resolver";
+import { defaultWorkspaceDbPath } from "../config/workspace-resolver";
 import { UnifiedSchemaService } from "./unified-schema-service";
 
 /** Injection points shared by the CLI and MCP tag mutations */
@@ -24,17 +24,6 @@ export const TAG_ACTION_LABELS = {
   add: { done: "Added", failed: "Failed to add", preposition: "to", mark: "+" },
   remove: { done: "Removed", failed: "Failed to remove", preposition: "from", mark: "-" },
 } as const;
-
-/**
- * Path of the default workspace database, or undefined when none is usable.
- */
-export function defaultWorkspaceDbPath(): string | undefined {
-  try {
-    return resolveWorkspaceContext({ requireDatabase: false }).dbPath;
-  } catch {
-    return undefined;
-  }
-}
 
 export function resolveTagIds(values: string[], dbPath: string | undefined = defaultWorkspaceDbPath()): string[] {
   if (!dbPath || !existsSync(dbPath)) {

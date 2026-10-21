@@ -190,11 +190,14 @@ supertag tag add <nodeId> <tagId> --tag-id # skip name resolution
 supertag tag remove <nodeId> <tagNameOrId>
 supertag tag create "sprint" --description "Sprint supertag"
 
-# Set field values
-supertag set-field <nodeId> <attributeId> "value"
-supertag set-field <nodeId> <attributeId> "additional value" --append
-supertag set-field <nodeId> <attributeId> --option-id <optionId>
-supertag set-field <nodeId> <attributeId> --option-id <optionId> --append
+# Set field values (field name is resolved via the index; or pass the attribute ID)
+supertag set-field <nodeId> "Status" "value"
+supertag set-field --field-id <attributeId> -- <nodeId> "Status" "value"   # skip name resolution
+supertag set-field <nodeId> <fieldNameOrId> "additional value" --append
+supertag set-field <nodeId> <fieldNameOrId> --option-id <optionId>       # no value with --option-id
+supertag set-field <nodeId> <fieldNameOrId> --option-id <optionId> --append
+# IDs starting with "-": use --option-id=-MG-xxx and put positionals after --
+supertag set-field --option-id=-MG-UldK1Pn2 -- -P11YGvsvmBb "Status"
 
 # Check/uncheck and trash
 supertag done <nodeId>
