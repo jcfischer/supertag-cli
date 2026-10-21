@@ -10,14 +10,10 @@ import { join, basename } from "path";
 import { TanaIndexer, type IndexResult } from "../db/indexer";
 import { UnifiedSchemaService } from "../services/unified-schema-service";
 import { EventEmitter } from "events";
-import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
+import { getModuleLogger, type Logger } from "../utils/logger";
 
-// Get logger - use global if available, otherwise a default on stderr (stdout is the MCP channel)
 function getLogger(): Logger {
-  if (hasGlobalLogger()) {
-    return getGlobalLogger().child("watcher");
-  }
-  return createLogger({ level: "info", mode: "pretty", stream: process.stderr }).child("watcher");
+  return getModuleLogger("watcher");
 }
 
 export interface WatcherConfig {

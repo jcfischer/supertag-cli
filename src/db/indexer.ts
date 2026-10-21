@@ -39,14 +39,10 @@ import { updateFieldTypesFromValues } from "./value-type-inference";
 import { extractFieldTypesFromDocs, updateFieldTypesFromExport, extractTargetSupertagsFromDocs, updateTargetSupertagsFromExport } from "./explicit-type-extraction";
 import { migrateSystemFieldSources, discoverSystemFieldSources, insertSystemFieldSources } from "./system-fields";
 import type { NodeDump } from "../types/tana-dump";
-import { hasGlobalLogger, getGlobalLogger, createLogger, type Logger } from "../utils/logger";
+import { getModuleLogger, type Logger } from "../utils/logger";
 
-// Get logger - use global if available, otherwise a default on stderr (stdout is the MCP channel)
 function getLogger(): Logger {
-  if (hasGlobalLogger()) {
-    return getGlobalLogger().child("indexer");
-  }
-  return createLogger({ level: "info", mode: "pretty", stream: process.stderr }).child("indexer");
+  return getModuleLogger("indexer");
 }
 
 export interface IndexResult {

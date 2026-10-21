@@ -204,6 +204,17 @@ export function hasGlobalLogger(): boolean {
 }
 
 /**
+ * Logger for a shared module: a child of the global logger when configured,
+ * otherwise a default on stderr. Never stdout: it is the MCP JSON-RPC channel (#97).
+ */
+export function getModuleLogger(name: string, level: LogLevel = "info"): Logger {
+  if (globalLogger) {
+    return globalLogger.child(name);
+  }
+  return new LoggerImpl({ level, mode: "pretty", stream: process.stderr }).child(name);
+}
+
+/**
  * Reset global logger (for testing)
  */
 export function resetGlobalLogger(): void {
