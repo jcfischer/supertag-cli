@@ -5,6 +5,11 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`tana_semantic_search` (MCP) and `supertag search --semantic` (CLI) returned different results for the same query (#98)** — the cause was not LanceDB `nprobes` (both call the same `TanaEmbeddingService.search` with no probe setting) but two diverging filter pipelines: only the MCP dropped trashed nodes, the MCP dedup key omitted tags in `raw` mode so same-named nodes merged, the MCP dropped matches whose contents failed to load, and the threshold and dedup ran in a different order. Both surfaces now call one shared `runSemanticSearchPipeline` (over-fetch, drop trashed and `[[...]]` nodes, tag filter, dedup by name+tags, threshold, limit) and keep only presentation. The CLI now also hides trashed nodes. Default limits stay 10 (CLI) and 20 (MCP); with the same `--limit`/`limit` both return the same nodes in the same order. Dedup no longer reorders a result's tag array in place.
+
 ## [2.5.13] - 2026-10-21
 
 ### Fixed

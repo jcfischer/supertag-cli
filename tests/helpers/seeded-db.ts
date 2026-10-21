@@ -55,8 +55,10 @@ export function createSeededDb(label = "seeded"): SeededDb {
       id TEXT PRIMARY KEY,
       name TEXT,
       parent_id TEXT,
+      node_type TEXT,
       created INTEGER,
       updated INTEGER,
+      done_at INTEGER,
       raw_data TEXT
     )
   `);

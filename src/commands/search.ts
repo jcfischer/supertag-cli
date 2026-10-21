@@ -52,6 +52,7 @@ import {
   formatNodeWithDepth,
 } from "./show";
 import type { ReadSearchResult } from "../api/read-backend";
+import type { SemanticEmbeddingService, SemanticSearchDeps } from "../embeddings/search-filter";
 import type { StandardOptions, SearchType } from "../types";
 
 interface SearchOptions extends StandardOptions {
@@ -125,22 +126,7 @@ export function parseMinScore(value: string | undefined): number | undefined {
   return Math.max(0, Math.min(1, score));
 }
 
-/**
- * Filter search results by minimum similarity score
- *
- * @param results - Array of search results with similarity scores
- * @param minScore - Minimum similarity threshold (0-1)
- * @returns Filtered results with similarity >= minScore
- */
-export function filterByMinScore<T extends { similarity: number }>(
-  results: T[],
-  minScore: number | undefined
-): T[] {
-  if (minScore === undefined || minScore === null || minScore <= 0) {
-    return results;
-  }
-  return results.filter((r) => r.similarity >= minScore);
-}
+export { filterByMinScore } from "../embeddings/search-filter";
 
 /**
  * Create the unified search command
@@ -439,14 +425,15 @@ async function handleFtsSearch(
 /**
  * Handle semantic (vector) search
  */
-async function handleSemanticSearch(
+export async function handleSemanticSearch(
   query: string,
   options: SearchOptions,
-  dbPath: string
+  dbPath: string,
+  deps: SemanticSearchDeps = {}
 ): Promise<void> {
   const configManager = ConfigManager.getInstance();
   const embeddingConfig = configManager.getEmbeddingConfig();
-  const wsContext = resolveWorkspaceContext({
+  const wsContext = deps.workspace ?? resolveWorkspaceContext({
     workspace: options.workspace,
     requireDatabase: false, // Check LanceDB separately below
   });
@@ -459,23 +446,28 @@ async function handleSemanticSearch(
   const includeAncestor = options.ancestor !== false;
   const minScore = parseMinScore(options.minScore);
 
-  // Check if LanceDB exists
   const lanceDbPath = wsContext.dbPath.replace(/\.db$/, ".lance");
-  if (!existsSync(lanceDbPath)) {
-    console.error(`❌ No embeddings found for workspace "${wsContext.alias}".`);
-    console.error("");
-    console.error("Run 'supertag embed generate' first to create embeddings.");
-    process.exit(1);
+  const { runSemanticSearchPipeline } = await import("../embeddings/search-filter");
+
+  let embeddingService: SemanticEmbeddingService;
+  if (deps.openEmbeddingService) {
+    embeddingService = deps.openEmbeddingService(lanceDbPath);
+  } else {
+    // Check if LanceDB exists
+    if (!existsSync(lanceDbPath)) {
+      console.error(`❌ No embeddings found for workspace "${wsContext.alias}".`);
+      console.error("");
+      console.error("Run 'supertag embed generate' first to create embeddings.");
+      process.exit(1);
+    }
+
+    // Import embedding service dynamically
+    const { TanaEmbeddingService } = await import("../embeddings/tana-embedding-service");
+    embeddingService = new TanaEmbeddingService(lanceDbPath, {
+      model: embeddingConfig.model,
+      endpoint: embeddingConfig.endpoint,
+    });
   }
-
-  // Import embedding service dynamically
-  const { TanaEmbeddingService } = await import("../embeddings/tana-embedding-service");
-  const { filterAndDeduplicateResults, getOverfetchLimit, filterByTag } = await import("../embeddings/search-filter");
-
-  const embeddingService = new TanaEmbeddingService(lanceDbPath, {
-    model: embeddingConfig.model,
-    endpoint: embeddingConfig.endpoint,
-  });
 
   try {
     // Show progress indicator for non-machine formats
@@ -484,31 +476,14 @@ async function handleSemanticSearch(
       console.log("");
     }
 
-    // Enrich query with type hint if provided (F-104 graph-aware embeddings)
-    const effectiveQuery = options.typeHint
-      ? `[Type: #${options.typeHint}] ${query}`
-      : query;
-
-    // Over-fetch for filtering (more aggressive if tag filter is specified)
-    const baseOverfetch = getOverfetchLimit(limit);
-    const overfetchLimit = options.tag ? baseOverfetch * 3 : baseOverfetch;
-    const rawResults = await embeddingService.search(effectiveQuery, overfetchLimit);
-
     await withDatabase({ dbPath, readonly: true }, async (ctx) => {
       const { db } = ctx;
-      // Don't apply limit yet - we'll apply it after tag filtering
-      const dedupedResults = filterAndDeduplicateResults(db, rawResults);
-
-      // Apply tag filter if specified
-      const tagFilteredResults = options.tag
-        ? filterByTag(dedupedResults, options.tag)
-        : dedupedResults;
-
-      // Apply min-score filter after tag filtering
-      const scoreFilteredResults = filterByMinScore(tagFilteredResults, minScore);
-
-      // Now apply limit
-      const results = scoreFilteredResults.slice(0, limit);
+      const results = await runSemanticSearchPipeline(embeddingService, db, query, {
+        limit,
+        tag: options.tag,
+        minSimilarity: minScore,
+        typeHint: options.typeHint,
+      });
       const searchTime = performance.now() - startTime;
 
       if (results.length === 0) {
