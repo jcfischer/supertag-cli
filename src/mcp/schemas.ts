@@ -807,14 +807,14 @@ export type UpdateNodeInput = z.infer<typeof updateNodeSchema>;
 // tana_tag_add
 export const tagAddSchema = z.object({
   nodeId: z.string().min(1).describe('Tana node ID to add tags to'),
-  tagIds: z.array(z.string().min(1)).min(1).describe('Array of supertag IDs to add'),
+  tagIds: z.array(z.string().min(1)).min(1).describe('Array of supertag IDs (or names, resolved via the index) to add'),
 });
 export type TagAddInput = z.infer<typeof tagAddSchema>;
 
 // tana_tag_remove
 export const tagRemoveSchema = z.object({
   nodeId: z.string().min(1).describe('Tana node ID to remove tags from'),
-  tagIds: z.array(z.string().min(1)).min(1).describe('Array of supertag IDs to remove'),
+  tagIds: z.array(z.string().min(1)).min(1).describe('Array of supertag IDs (or names, resolved via the index) to remove'),
 });
 export type TagRemoveInput = z.infer<typeof tagRemoveSchema>;
 
