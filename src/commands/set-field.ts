@@ -8,7 +8,7 @@ import { resolveBackend } from '../api/backend-resolver';
 import type { TanaBackend } from '../api/backend';
 import type { FieldSetMode } from '../types/local-api';
 import { resolveFieldId } from '../services/field-id-resolver';
-import { defaultWorkspaceDbPath } from '../services/tag-id-resolver';
+import { defaultWorkspaceDbPath } from '../config/workspace-resolver';
 import { exitWithError } from '../utils/errors';
 
 export interface SetFieldDeps {

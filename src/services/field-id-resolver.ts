@@ -54,7 +54,8 @@ export function resolveFieldId(nodeId: string, fieldName: string, dbPath: string
         .filter((field) => normalizeName(field.name) === wanted)
         .map((field) => ({ attributeId: field.attributeId, tagName: tag.tag_name }))
     );
-    if (onNode.length > 0) return fromCandidates(onNode);
+    // An indexed node only takes fields of its own supertags
+    if (nodeTags.length > 0) return fromCandidates(onNode);
 
     const everywhere = (db
       .query("SELECT field_name, field_label_id, tag_name FROM supertag_fields")

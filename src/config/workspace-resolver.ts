@@ -319,3 +319,15 @@ export async function withWorkspace<T>(
   const workspace = resolveWorkspaceContext(options);
   return fn(workspace);
 }
+
+/**
+ * Database path of the default workspace, or undefined when no workspace is
+ * configured. For optional lookups (name resolution) that must never throw.
+ */
+export function defaultWorkspaceDbPath(): string | undefined {
+  try {
+    return resolveWorkspaceContext({ requireDatabase: false }).dbPath;
+  } catch {
+    return undefined;
+  }
+}

@@ -91,6 +91,13 @@ describe("supertag set-field (#110)", () => {
     expect(calls[0].attributeId).toBe("attr_agenda");
   });
 
+  it("does not borrow another supertag's field for an indexed node", async () => {
+    const calls: Call[] = [];
+    await run("node1", "Agenda", "intro", {}, fakeBackend(calls));
+
+    expect(calls[0].attributeId).toBe("Agenda");
+  });
+
   it("rejects an ambiguous field name instead of guessing", async () => {
     const calls: Call[] = [];
     const { code, err } = await run("fresh-node", "Status", "done", {}, fakeBackend(calls));
