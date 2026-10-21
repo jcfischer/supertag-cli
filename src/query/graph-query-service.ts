@@ -54,14 +54,9 @@ export async function executeGraphQuery(
     }
 
     // Execute the query
-    const executor = new GraphQueryExecutor(db, options.dbPath, options.workspace ?? "main");
-
-    try {
-      const results = await executor.execute(plan, ast, effectiveLimit);
-      return { results };
-    } finally {
-      executor.close();
-    }
+    const executor = new GraphQueryExecutor(db);
+    const results = await executor.execute(plan, ast, effectiveLimit);
+    return { results };
   } finally {
     db.close();
   }

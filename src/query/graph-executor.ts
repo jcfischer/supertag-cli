@@ -44,10 +44,12 @@ const FIND_PAGE_SIZE = 5000;
 export class GraphQueryExecutor {
   private queryEngine: UnifiedQueryEngine;
   private fieldResolver: FieldResolver;
+  private findPageSize: number;
 
-  constructor(private db: Database, _dbPath: string, _workspace = "main") {
+  constructor(private db: Database, options: { findPageSize?: number } = {}) {
     this.queryEngine = new UnifiedQueryEngine(db);
     this.fieldResolver = new FieldResolver(db);
+    this.findPageSize = options.findPageSize ?? FIND_PAGE_SIZE;
   }
 
   /**
@@ -73,7 +75,7 @@ export class GraphQueryExecutor {
     // past the first page are not lost (#99).
     const hasTraversal = ast.connected.length > 0;
     const hasAggregates = ast.return.some((f) => f.aggregateFn);
-    const pageSize = hasTraversal ? Math.max(limit, FIND_PAGE_SIZE) : limit;
+    const pageSize = hasTraversal ? this.findPageSize : limit;
 
     for (let offset = 0; ; offset += pageSize) {
       const pageCount = await this.executePage(plan, ast, pageSize, offset, sets, joinMaps, visitedIds);
@@ -91,13 +93,6 @@ export class GraphQueryExecutor {
 
     const queryTimeMs = Date.now() - startTime;
     return this.buildResult(sets, joinMaps, ast, limit, queryTimeMs);
-  }
-
-  /**
-   * Close resources
-   */
-  close(): void {
-    // The executor borrows the caller's Database; nothing to release.
   }
 
   /**

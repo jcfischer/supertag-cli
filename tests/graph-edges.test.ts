@@ -8,6 +8,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 import { executeGraphQuery } from "../src/query/graph-query-service";
+import { parseGraphQuery } from "../src/query/graph-parser";
+import { GraphQueryPlanner } from "../src/query/graph-planner";
+import { GraphQueryExecutor } from "../src/query/graph-executor";
 import { GraphTraversalService } from "../src/services/graph-traversal";
 import { createGraphExportFixture, type GraphExportFixture } from "./helpers/graph-export-fixture";
 
@@ -71,6 +74,41 @@ describe("gquery CONNECTED TO (#99)", () => {
     // 120 newer filler logs sort ahead of log1; LIMIT 5 must still find it
     const result = await gquery("FIND log CONNECTED TO person RETURN name", 5);
     expect(result.rows.map((r) => r.name)).toEqual(["Daily log"]);
+  });
+});
+
+describe("gquery FIND paging", () => {
+  async function paged(query: string, findPageSize: number, limit = 100) {
+    const db = new Database(fixture.dbPath, { readonly: true });
+    try {
+      const ast = parseGraphQuery(query);
+      const plan = await new GraphQueryPlanner(db).plan(ast);
+      return await new GraphQueryExecutor(db, { findPageSize }).execute(plan, ast, limit);
+    } finally {
+      db.close();
+    }
+  }
+
+  it("finds a match on a later FIND page and keeps its joined projection", async () => {
+    // 123 logs, newest first: log1 (oldest) lands on the third page of 50
+    const result = await paged("FIND log CONNECTED TO person RETURN name, person.name", 50);
+    expect(result.rows.map((r) => r.name)).toEqual(["Daily log"]);
+    expect(asList(result.rows[0]["person.name"]).sort()).toEqual(["Alice", "Bob"]);
+  });
+
+  it("merges connected sets across pages", async () => {
+    // One person per page; Alice and Bob each connect to log1 from their own page
+    const result = await paged("FIND person CONNECTED TO log RETURN name, log.name", 1);
+    expect(result.rows.map((r) => r.name).sort()).toEqual(["Alice", "Bob"]);
+    for (const row of result.rows) {
+      expect(asList(row["log.name"])).toEqual(["Daily log"]);
+    }
+  });
+
+  it("stops paging once more than LIMIT rows are connected", async () => {
+    const result = await paged("FIND person CONNECTED TO log RETURN name", 1, 1);
+    expect(result.count).toBe(1);
+    expect(result.hasMore).toBe(true);
   });
 });
 
