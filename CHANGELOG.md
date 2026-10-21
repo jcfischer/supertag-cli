@@ -5,6 +5,15 @@ All notable changes to Supertag CLI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.12] - 2026-10-21
+
+### Fixed
+- **`create` (even `--dry-run`) hung at 100% CPU in `sqlite3_step` (#108)** — `UnifiedSchemaService.getAllFields` walked `supertag_parents` with a recursive CTE that had no depth cap, so a cycle in the inheritance table (including a tag recorded as its own parent) recursed forever. The CTE is now capped at depth 10 like its sibling in `SupertagMetadataService`, and the indexer no longer records a tag as its own parent. All other recursive CTEs in `src/` were already bounded.
+- **`update install --file <zip>` failed with `ENOTSUP ... copyfile` and could leave no binary behind (#104)** — release zips nest the binaries under `supertag-cli-<platform>/`, but the installer looked only at the archive root, fell back to the first entry (the directory), unlinked the installed binary and then failed to copy. It now finds the `supertag` file anywhere in the archive, fails before touching anything when none is found, stages each copy beside its target and renames it into place, and also updates `supertag-mcp` / `supertag-export` when they are installed next to `supertag`.
+- **`tana_sync` killed the `supertag-mcp` session (#97)** — the MCP server never configured the global logger, so indexer and export-watcher log lines (`[indexer] Change detection complete ...`) went to stdout and corrupted the JSON-RPC stream. The MCP server now routes the global logger to stderr, and the shared fallback loggers (`getModuleLogger`, `createSimpleLogger`) default to stderr.
+- **`supertag tag add/remove` ignored tag names and exited 0 when nothing changed (#111)** — tag names are now resolved to IDs through the local index (`--tag-id` skips resolution); when a tag is not applied the command prints a failure header and exits 1. The MCP tools `tana_tag_add` / `tana_tag_remove` accept names too and set `isError` on failure.
+- **`supertag set-field` sent field names as attribute IDs and could write the wrong option (#110)** — field names are resolved to attribute IDs from the node's supertags (or the single matching supertag when the node is not indexed yet; ambiguous names are rejected with the candidates). A positional value combined with `--option-id` is rejected, and the command exits 1 when the API applies a different option than requested. README documents `--field-id` and the `--option-id=-xxx` spelling for IDs that start with `-`.
+
 ## [2.5.11] - 2026-06-22
 
 ### Added
