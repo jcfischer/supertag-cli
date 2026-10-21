@@ -8,7 +8,7 @@
 import { watch, type FSWatcher, existsSync, readdirSync, statSync, realpathSync } from "fs";
 import { join, basename } from "path";
 import { TanaIndexer, type IndexResult } from "../db/indexer";
-import { checkpointWalTruncate } from "../db/retry";
+import { checkpointWalTruncate } from "../db/wal";
 import { UnifiedSchemaService } from "../services/unified-schema-service";
 import { EventEmitter } from "events";
 import { getModuleLogger, type Logger } from "../utils/logger";

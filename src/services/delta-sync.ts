@@ -9,7 +9,8 @@
  */
 
 import { Database } from "bun:sqlite";
-import { walCheckpoint, checkpointWalTruncate } from "../db/retry";
+import { walCheckpoint } from "../db/retry";
+import { checkpointWalTruncate } from "../db/wal";
 import { ensureDeltaSyncSchema } from "../db/delta-sync-schema";
 import type {
   DeltaSyncOptions,

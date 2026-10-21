@@ -8,12 +8,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { DeltaSyncPoller } from "../../src/mcp/delta-sync-poller";
 import { DeltaSyncService } from "../../src/services/delta-sync";
-import { getWalSizeBytes } from "../../src/db/retry";
+import { getWalSizeBytes } from "../../src/db/wal";
 import type { DeltaSyncOptions, SearchResultNode } from "../../src/types/local-api";
 
 let dir: string;
@@ -120,11 +120,16 @@ describe("DeltaSyncPoller connection lifetime", () => {
       health: mock(() => Promise.resolve(true)),
     };
     const poller = new DeltaSyncPoller({ intervalMinutes: 5, dbPath, localApiClient: client });
+    // Another process's idle connection: stops SQLite deleting the WAL when
+    // the poller's connection is the last to close
+    const other = new Database(dbPath);
 
     const result = await poller.triggerNow();
 
     expect(result.nodesInserted).toBe(50);
+    expect(existsSync(`${dbPath}-wal`)).toBe(true);
     expect(getWalSizeBytes(dbPath)).toBe(0);
+    other.close();
     poller.stop();
   });
 

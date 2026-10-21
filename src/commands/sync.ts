@@ -38,7 +38,7 @@ import { LocalApiClient } from "../api/local-api-client";
 import type { DeltaSyncOptions, DeltaSyncResult } from "../types/local-api";
 import { WatchService } from "../watch/watch-service";
 import { Database } from "bun:sqlite";
-import { getWalSizeBytes, walSizeWarning } from "../db/retry";
+import { getWalSizeBytes, walSizeWarning } from "../db/wal";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');

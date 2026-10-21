@@ -9,18 +9,17 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { TanaExportWatcher } from "../../src/monitors/tana-export-monitor";
 import { tmpdir } from "os";
 import { join } from "path";
+import { configureDbForConcurrency, JOURNAL_SIZE_LIMIT_BYTES } from "../../src/db/retry";
 import {
-  configureDbForConcurrency,
   checkpointWalTruncate,
   getWalSizeBytes,
-  JOURNAL_SIZE_LIMIT_BYTES,
   WAL_WARN_BYTES,
   walSizeWarning,
-} from "../../src/db/retry";
+} from "../../src/db/wal";
 
 let dir: string;
 let dbPath: string;
@@ -130,12 +129,17 @@ describe("full index", () => {
       JSON.stringify({ formatVersion: 1, docs, editors: [], workspaces: {} })
     );
     const watcher = new TanaExportWatcher({ exportDir, dbPath });
+    // Another process's idle connection: stops SQLite deleting the WAL when
+    // the indexer's connection is the last to close
+    const other = new Database(dbPath);
 
     const result = await watcher.indexLatest();
 
     expect(result.success).toBe(true);
+    expect(existsSync(`${dbPath}-wal`)).toBe(true);
     expect(getWalSizeBytes(dbPath)).toBe(0);
     watcher.close();
+    other.close();
   });
 });
 
