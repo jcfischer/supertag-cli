@@ -85,6 +85,9 @@ export const RelationshipMetadataSchema = z.object({
 
   /** Number of hops from source */
   distance: z.number().min(0),
+
+  /** Field name, for field relationships */
+  field: z.string().optional(),
 });
 export type RelationshipMetadata = z.infer<typeof RelationshipMetadataSchema>;
 

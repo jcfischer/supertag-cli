@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS field_values (
 
 const FIELD_VALUES_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_field_values_parent ON field_values(parent_id)",
+  "CREATE INDEX IF NOT EXISTS idx_field_values_value_node ON field_values(value_node_id)",
   "CREATE INDEX IF NOT EXISTS idx_field_values_field_name ON field_values(field_name)",
   "CREATE INDEX IF NOT EXISTS idx_field_values_field_def ON field_values(field_def_id)",
   "CREATE INDEX IF NOT EXISTS idx_field_values_created ON field_values(created)",
