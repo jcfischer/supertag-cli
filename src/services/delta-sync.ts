@@ -9,7 +9,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { walCheckpoint } from "../db/retry";
+import { walCheckpoint, checkpointWalTruncate } from "../db/retry";
 import { ensureDeltaSyncSchema } from "../db/delta-sync-schema";
 import type {
   DeltaSyncOptions,
@@ -570,6 +570,8 @@ export class DeltaSyncService {
       const madeProgress = nodesFound > 0 || stats.poisonNodesSkipped > 0;
       if (madeProgress) {
         this.updateWatermark(watermarkAfter, nodesFound);
+        // Truncate the WAL this cycle grew; logs, never throws, if readers block it (#107)
+        await checkpointWalTruncate(this.dbPath, { logger: this.logger });
       }
 
       // Step 6: Return result

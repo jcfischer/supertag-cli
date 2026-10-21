@@ -8,6 +8,7 @@
 import { watch, type FSWatcher, existsSync, readdirSync, statSync, realpathSync } from "fs";
 import { join, basename } from "path";
 import { TanaIndexer, type IndexResult } from "../db/indexer";
+import { checkpointWalTruncate } from "../db/retry";
 import { UnifiedSchemaService } from "../services/unified-schema-service";
 import { EventEmitter } from "events";
 import { getModuleLogger, type Logger } from "../utils/logger";
@@ -177,6 +178,10 @@ export class TanaExportWatcher extends EventEmitter {
           getLogger().error("Schema cache generation failed", { error: String(cacheError) });
         }
       }
+
+      // A full index appends the whole graph to the WAL; truncate it now
+      // rather than leaving it to a PASSIVE checkpoint readers can starve (#107)
+      await checkpointWalTruncate(this.config.dbPath, { logger: getLogger() });
 
       const successResult: IndexEventResult = {
         success: true,

@@ -1225,6 +1225,17 @@ Shows locations for configuration files, databases, caches, and export directori
 | "Database not found" | `supertag sync index` |
 | "Chromium not found" | `supertag-export setup` |
 
+### Large `tana-index.db-wal` file
+
+SQLite truncates the index's write-ahead log (WAL) only when no reader holds an older snapshot. supertag truncates it after every full index and every delta-sync that wrote changes, and the MCP poller no longer keeps a connection open between cycles. With many `supertag-mcp` processes running at once, a reader can still block that checkpoint. `supertag sync status` shows the WAL size and warns once it passes 1 GB.
+
+To recover the disk space (no data is lost; MCP clients restart their servers):
+
+```bash
+pkill -f supertag-mcp
+sqlite3 ~/.local/share/supertag/workspaces/main/tana-index.db 'PRAGMA wal_checkpoint(TRUNCATE);'
+```
+
 ### Debug Mode
 
 Use the `--debug` flag for verbose error output with stack traces:

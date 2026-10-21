@@ -38,6 +38,7 @@ import { LocalApiClient } from "../api/local-api-client";
 import type { DeltaSyncOptions, DeltaSyncResult } from "../types/local-api";
 import { WatchService } from "../watch/watch-service";
 import { Database } from "bun:sqlite";
+import { getWalSizeBytes, walSizeWarning } from "../db/retry";
 
 // Use simple logger for portability (no external dependencies)
 const logger = createSimpleLogger('tana-sync');
@@ -434,6 +435,8 @@ export function registerSyncCommands(program: Command): void {
             logger.info(`  Database: ${ws.dbPath}`);
             logger.info(`  Export exists: ${existsSync(ws.exportDir) ? 'Yes' : 'No'}`);
             logger.info(`  Database exists: ${existsSync(ws.dbPath) ? 'Yes' : 'No'}`);
+            const walWarning = walSizeWarning(getWalSizeBytes(ws.dbPath));
+            if (walWarning) logger.warn(`  ${walWarning}`);
             logger.info('');
             return { alias: ws.alias };
           }
@@ -471,6 +474,11 @@ export function registerSyncCommands(program: Command): void {
       logger.info(`Database: ${status.dbPath}`);
       logger.info(`Latest export: ${status.latestExport || "None found"}`);
       logger.info(`Last indexed: ${status.lastIndexed ? new Date(status.lastIndexed).toLocaleString() : "Never"}`);
+
+      const walBytes = getWalSizeBytes(paths.dbPath);
+      logger.info(`WAL size: ${formatBytes(walBytes)}`);
+      const walWarning = walSizeWarning(walBytes);
+      if (walWarning) logger.warn(walWarning);
 
       watcher.close();
 
