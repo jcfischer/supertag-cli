@@ -52,7 +52,7 @@ import { paiSync } from './tools/pai-sync.js';
 import { paiContext } from './tools/pai-context.js';
 import { paiFreshness } from './tools/pai-freshness.js';
 import { VERSION } from '../version.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger, configureGlobalLogger } from '../utils/logger.js';
 import { handleMcpError } from './error-handler.js';
 import { isToolEnabled, getToolMode, getSlimModeToolCount, getLiteModeToolCount, LITE_TOOL_MAPPING } from './tool-mode.js';
 import { initDeltaSyncPoller, type DeltaSyncPoller } from './delta-sync-poller.js';
@@ -97,11 +97,16 @@ function resetIdleTimer() {
  * MCP-safe logger - configured to write to stderr to avoid interfering with stdio JSON-RPC
  * Uses unified logger with explicit stderr stream for MCP protocol compliance
  */
-const logger = createLogger({
+const loggerConfig = {
   level: process.env.DEBUG ? 'debug' : 'info',
   mode: 'unix',  // Clean format without emojis for log processing
   stream: process.stderr,  // Required for MCP - stdout is reserved for JSON-RPC
-}).child(SERVICE_NAME);
+} as const;
+const logger = createLogger(loggerConfig).child(SERVICE_NAME);
+
+// Shared modules (indexer, watcher, config) log through the global logger;
+// route it to stderr too, or their output corrupts the JSON-RPC stream (#97)
+configureGlobalLogger(loggerConfig);
 
 const server = new Server(
   {

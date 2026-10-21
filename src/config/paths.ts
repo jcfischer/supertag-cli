@@ -103,7 +103,8 @@ export function getAllPaths(): Record<string, string> {
 
 /**
  * Simple console logger with unified logger integration
- * Uses the global unified logger when available, falls back to console
+ * Uses the global unified logger when available, falls back to console.error
+ * so it never writes to stdout (the MCP JSON-RPC channel)
  */
 export function createSimpleLogger(name: string) {
   const getLoggerInstance = () => {
@@ -119,7 +120,7 @@ export function createSimpleLogger(name: string) {
       if (logger) {
         logger.info(args.map(String).join(' '));
       } else {
-        console.log(`[${name}]`, ...args);
+        console.error(`[${name}]`, ...args);
       }
     },
     warn: (...args: unknown[]) => {
@@ -145,7 +146,7 @@ export function createSimpleLogger(name: string) {
           logger.debug(args.map(String).join(' '));
         }
       } else if (process.env.DEBUG) {
-        console.log(`[${name}]`, '[DEBUG]', ...args);
+        console.error(`[${name}]`, '[DEBUG]', ...args);
       }
     },
   };
