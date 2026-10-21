@@ -20,6 +20,7 @@ import type {
   FieldValidationResult,
 } from "../types/supertag-metadata";
 import { SYSTEM_FIELD_METADATA } from "../db/system-fields";
+import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 
 export class SupertagMetadataService {
   private db: Database;
@@ -267,28 +268,19 @@ export class SupertagMetadataService {
 
   /**
    * Find tag ID by exact tag name.
-   * When multiple tags have the same name, prefers the one with:
-   * 1. Most inheritance parents (primary criteria)
-   * 2. Most fields (secondary criteria)
-   * This matches SchemaRegistry's shouldPreferSchema() logic.
-   * Returns null if not found.
+   * When multiple tags have the same name, picks one by the shared rule in
+   * db/tag-name-preference.ts. Returns null if not found.
    */
   findTagIdByName(tagName: string): string | null {
-    // When multiple tags have the same name, prefer the one with most
-    // inheritance parents first, then most fields (matches SchemaRegistry)
     const result = this.db
       .query(`
-        SELECT
-          sf.tag_id,
-          COUNT(DISTINCT sf.field_name) as field_count,
-          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sf.tag_id) as parent_count
-        FROM supertag_fields sf
-        WHERE sf.tag_name = ?
-        GROUP BY sf.tag_id
-        ORDER BY parent_count DESC, field_count DESC
+        SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
+        FROM supertag_metadata sm
+        WHERE sm.tag_name = ?
+        ORDER BY ${tagPreferenceOrder("sm")}
         LIMIT 1
       `)
-      .get(tagName) as { tag_id: string; field_count: number; parent_count: number } | null;
+      .get(tagName) as { tag_id: string } | null;
 
     return result?.tag_id ?? null;
   }
@@ -308,15 +300,10 @@ export class SupertagMetadataService {
     // Query supertag_metadata as primary table to find supertags even with 0 fields
     const results = this.db
       .query(`
-        SELECT
-          sm.tag_id,
-          sm.tag_name,
-          (SELECT COUNT(*) FROM supertag_fields sf WHERE sf.tag_id = sm.tag_id) as field_count,
-          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sm.tag_id) as parent_count,
-          (SELECT COUNT(*) FROM tag_applications ta WHERE ta.tag_id = sm.tag_id) as usage_count
+        SELECT sm.tag_id, sm.tag_name, ${tagPreferenceColumns(this.db, "sm")}
         FROM supertag_metadata sm
         WHERE sm.tag_name = ? OR sm.normalized_name = ?
-        ORDER BY parent_count DESC, field_count DESC
+        ORDER BY ${tagPreferenceOrder("sm")}
       `)
       .all(tagName, tagName.toLowerCase()) as Array<{
         tag_id: string;

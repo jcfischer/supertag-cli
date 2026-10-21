@@ -176,7 +176,8 @@ export class TanaExportParser {
           if (sc?.props.name) superclasses.push(sc.props.name);
         }
 
-        supertags.set(tagName, { nodeId: node.id, tagName, tagId, superclasses, color: node.color });
+        // Keyed by tag ID: several tagDefs can share a name (#123)
+        supertags.set(tagId, { nodeId: node.id, tagName, tagId, superclasses, color: node.color });
         if (node.color) tagColors.set(tagName, node.color);
       } else if (hasSysT02) {
         // Field tuple

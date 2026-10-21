@@ -15,6 +15,7 @@ import type {
   VisualizationField,
 } from "./types";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
+import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 
 interface TagRow {
   tag_id: string;
@@ -136,7 +137,9 @@ export class VisualizationService {
   getSubtree(rootTagName: string, maxDepth?: number): VisualizationData | null {
     // Find root tag ID
     const rootResult = this.db.query(`
-      SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
+      SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
+      FROM supertag_metadata sm WHERE sm.tag_name = ?
+      ORDER BY ${tagPreferenceOrder("sm")} LIMIT 1
     `).get(rootTagName) as { tag_id: string } | null;
 
     if (!rootResult) {
@@ -197,7 +200,9 @@ export class VisualizationService {
   getAncestors(tagName: string, maxDepth?: number): VisualizationData | null {
     // Find tag ID
     const tagResult = this.db.query(`
-      SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
+      SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
+      FROM supertag_metadata sm WHERE sm.tag_name = ?
+      ORDER BY ${tagPreferenceOrder("sm")} LIMIT 1
     `).get(tagName) as { tag_id: string } | null;
 
     if (!tagResult) {

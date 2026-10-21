@@ -384,8 +384,8 @@ export class TanaIndexer {
       const insertSupertag = this.sqlite.prepare(
         "INSERT INTO supertags (node_id, tag_name, tag_id, color) VALUES (?, ?, ?, ?)"
       );
-      for (const [tagName, tuple] of graph.supertags) {
-        insertSupertag.run(tuple.nodeId, tagName, tuple.tagId, tuple.color || null);
+      for (const tuple of graph.supertags.values()) {
+        insertSupertag.run(tuple.nodeId, tuple.tagName, tuple.tagId, tuple.color || null);
       }
 
       // Insert all fields
@@ -712,9 +712,9 @@ export class TanaIndexer {
 
         // Supertags
         let supertagsCount = 0;
-        for (const [tagName, tuple] of graph.supertags) {
+        for (const tuple of graph.supertags.values()) {
           if (changedNodes.has(tuple.nodeId)) {
-            insertSupertag.run(tuple.nodeId, tagName, tuple.tagId, tuple.color || null);
+            insertSupertag.run(tuple.nodeId, tuple.tagName, tuple.tagId, tuple.color || null);
             supertagsCount++;
           }
         }
@@ -960,8 +960,8 @@ export class TanaIndexer {
     >();
 
     // Iterate through all supertags
-    for (const [tagName, tagInfo] of graph.supertags) {
-      const tagNode = graph.nodes.get(tagInfo.tagId);
+    for (const { tagName, tagId } of graph.supertags.values()) {
+      const tagNode = graph.nodes.get(tagId);
       if (!tagNode || !tagNode.children) continue;
 
       // Each child of a supertag definition could be a field tuple
