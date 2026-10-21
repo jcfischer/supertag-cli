@@ -45,7 +45,7 @@ Real Workspace Statistics:
     `);
 
     // Log some supertag names
-    const tagNames = Array.from(graph.supertags.keys()).slice(0, 10);
+    const tagNames = Array.from(graph.supertags.values()).map((t) => t.tagName).slice(0, 10);
     console.log(`Sample supertags: ${tagNames.join(", ")}`);
   });
 });

@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { registerTagsFromFields } from "../helpers/register-tags";
 import { Database } from "bun:sqlite";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
@@ -332,6 +333,7 @@ describe("SupertagMetadataService", () => {
     });
 
     it("should find tag ID by exact name", () => {
+      registerTagsFromFields(db);
       const tagId = service.findTagIdByName("contact");
       expect(tagId).toBe("contact-tag");
     });
@@ -363,6 +365,7 @@ describe("SupertagMetadataService", () => {
 
       // Should return the tag with most inheritance parents (todo-with-inheritance with 2 parents)
       // even though todo-large-fields has more fields (5 vs 2)
+      registerTagsFromFields(db);
       const tagId = service.findTagIdByName("todo");
       expect(tagId).toBe("todo-with-inheritance");
     });
@@ -378,6 +381,7 @@ describe("SupertagMetadataService", () => {
       `);
 
       // Both have 0 parents, so field count is the tiebreaker
+      registerTagsFromFields(db);
       const tagId = service.findTagIdByName("task");
       expect(tagId).toBe("task-many");
     });

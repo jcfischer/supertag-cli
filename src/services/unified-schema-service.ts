@@ -17,6 +17,7 @@ import { mkdirSync, existsSync, writeFileSync } from "fs";
 import { dirname } from "path";
 import { normalizeName } from "../utils/normalize-name";
 import { SYSTEM_FIELD_METADATA } from "../db/system-fields";
+import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 import type { TanaApiNode, TanaApiFieldNode } from "../types";
 
 /**
@@ -93,9 +94,7 @@ export class UnifiedSchemaService {
    * Find a supertag by name (exact or normalized match).
    *
    * When multiple supertags have the same name (can happen with Tana exports),
-   * selects the canonical one using the same logic as SchemaRegistry:
-   * 1. Prefer more inheritance parents
-   * 2. Then prefer more own fields
+   * picks one by the shared rule in db/tag-name-preference.ts.
    *
    * Excludes trashed supertags by checking the node's _ownerId in raw_data.
    *
@@ -110,25 +109,24 @@ export class UnifiedSchemaService {
     // This handles cases where duplicate entries exist in the database
     // Excludes trashed supertags when nodes table is available
     const hasNodes = this.checkNodesTable();
+    const preference = tagPreferenceColumns(this.db, "m");
     const query = hasNodes
       ? `
         SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color,
-               (SELECT COUNT(*) FROM supertag_parents p WHERE p.child_tag_id = m.tag_id) as parent_count,
-               (SELECT COUNT(*) FROM supertag_fields f WHERE f.tag_id = m.tag_id) as field_count
+               ${preference}
         FROM supertag_metadata m
         LEFT JOIN nodes n ON n.id = m.tag_id
         WHERE (m.tag_name = ? OR m.normalized_name = ?)
           AND (n.raw_data IS NULL OR COALESCE(json_extract(n.raw_data, '$.props._ownerId'), '') NOT LIKE '%TRASH%')
-        ORDER BY parent_count DESC, field_count DESC
+        ORDER BY ${tagPreferenceOrder("m")}
         LIMIT 1
       `
       : `
         SELECT m.tag_id, m.tag_name, m.normalized_name, m.description, m.color,
-               (SELECT COUNT(*) FROM supertag_parents p WHERE p.child_tag_id = m.tag_id) as parent_count,
-               (SELECT COUNT(*) FROM supertag_fields f WHERE f.tag_id = m.tag_id) as field_count
+               ${preference}
         FROM supertag_metadata m
         WHERE m.tag_name = ? OR m.normalized_name = ?
-        ORDER BY parent_count DESC, field_count DESC
+        ORDER BY ${tagPreferenceOrder("m")}
         LIMIT 1
       `;
 

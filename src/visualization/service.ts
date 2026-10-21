@@ -135,15 +135,10 @@ export class VisualizationService {
    */
   getSubtree(rootTagName: string, maxDepth?: number): VisualizationData | null {
     // Find root tag ID
-    const rootResult = this.db.query(`
-      SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
-    `).get(rootTagName) as { tag_id: string } | null;
-
-    if (!rootResult) {
+    const rootId = new SupertagMetadataService(this.db).findTagIdByName(rootTagName);
+    if (!rootId) {
       return null;
     }
-
-    const rootId = rootResult.tag_id;
 
     // Get all descendants using recursive CTE
     const depthLimit = maxDepth ?? 10;
@@ -196,15 +191,10 @@ export class VisualizationService {
    */
   getAncestors(tagName: string, maxDepth?: number): VisualizationData | null {
     // Find tag ID
-    const tagResult = this.db.query(`
-      SELECT tag_id FROM supertag_metadata WHERE tag_name = ?
-    `).get(tagName) as { tag_id: string } | null;
-
-    if (!tagResult) {
+    const tagId = new SupertagMetadataService(this.db).findTagIdByName(tagName);
+    if (!tagId) {
       return null;
     }
-
-    const tagId = tagResult.tag_id;
 
     // Get all ancestors using recursive CTE (traverse upwards via parents)
     const depthLimit = maxDepth ?? 10;

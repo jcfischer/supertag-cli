@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { registerTagsFromFields } from "./helpers/register-tags";
 import { Database } from "bun:sqlite";
 import {
   exportTable,
@@ -51,6 +52,18 @@ describe("Table Export (F-099)", () => {
         target_supertag_id TEXT,
         target_supertag_name TEXT,
         option_values TEXT
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE supertag_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_id TEXT NOT NULL UNIQUE,
+        tag_name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        created_at INTEGER
       )
     `);
 
@@ -136,6 +149,9 @@ describe("Table Export (F-099)", () => {
     // Supertag with no fields
     db.run(`INSERT INTO nodes (id, name, created) VALUES ('note1', 'Random Note', 1700500000000)`);
     db.run(`INSERT INTO tag_applications (data_node_id, tag_name, tag_id) VALUES ('note1', 'note', 'tag_note')`);
+
+    // The indexer registers every tagDef in supertag_metadata
+    registerTagsFromFields(db);
   });
 
   afterAll(() => {
@@ -285,6 +301,7 @@ describe("Table Export (F-099)", () => {
     it("returns empty rows with columns for a tag with no instances", () => {
       // Create empty tag
       db.run(`INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order) VALUES ('tag_empty', 'empty', 'Field1', 'fl1', 0)`);
+      registerTagsFromFields(db);
       const result = exportTable(db, "empty");
       expect(result.rows.length).toBe(0);
       expect(result.columns).toEqual(["Field1"]);

@@ -69,16 +69,15 @@ describe("TanaExportParser - Supertag Detection", () => {
   test("should detect supertag tuples (SYS_A13 + SYS_T01)", () => {
     expect(graph.supertags.size).toBeGreaterThan(0);
 
-    for (const [tagName, tuple] of graph.supertags) {
+    for (const [tagId, tuple] of graph.supertags) {
       expect(tuple.nodeId).toBeDefined();
-      expect(tuple.tagName).toBe(tagName);
-      expect(tuple.tagId).toBeDefined();
+      expect(tuple.tagId).toBe(tagId);
       expect(Array.isArray(tuple.superclasses)).toBe(true);
     }
   });
 
   test("should extract supertag names correctly", () => {
-    const tagNames = Array.from(graph.supertags.keys());
+    const tagNames = Array.from(graph.supertags.values()).map((t) => t.tagName);
     expect(tagNames.length).toBeGreaterThan(0);
 
     for (const tagName of tagNames) {
@@ -88,10 +87,9 @@ describe("TanaExportParser - Supertag Detection", () => {
   });
 
   test("should capture tag colors", () => {
-    for (const [tagName, tuple] of graph.supertags) {
+    for (const tuple of graph.supertags.values()) {
       if (tuple.color) {
-        expect(graph.tagColors.has(tagName)).toBe(true);
-        expect(graph.tagColors.get(tagName)).toBe(tuple.color);
+        expect(graph.tagColors.get(tuple.tagId)).toBe(tuple.color);
       }
     }
   });

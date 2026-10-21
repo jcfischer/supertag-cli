@@ -8,6 +8,7 @@
 
 import { Database } from "bun:sqlite";
 import { resolveInlineRefsBatch } from "../utils/resolve-inline-refs";
+import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 
 /**
  * Field value map: field_name -> value (comma-joined if multiple)
@@ -41,17 +42,13 @@ export class FieldResolver {
    * @returns Array of field names in order
    */
   getSupertagFields(tagName: string): string[] {
-    // Find the best matching supertag (most inheritance/fields) when duplicates exist
-    // This matches the behavior in supertag-metadata-service.ts findAllTagsByName()
+    // Pick one supertag when several share the name (db/tag-name-preference.ts)
     const tagRow = this.db
       .query(`
-        SELECT
-          sm.tag_id,
-          (SELECT COUNT(*) FROM supertag_fields sf WHERE sf.tag_id = sm.tag_id) as field_count,
-          (SELECT COUNT(*) FROM supertag_parents sp WHERE sp.child_tag_id = sm.tag_id) as parent_count
+        SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
         FROM supertag_metadata sm
         WHERE sm.tag_name = ? OR sm.normalized_name = ?
-        ORDER BY parent_count DESC, field_count DESC
+        ORDER BY ${tagPreferenceOrder("sm")}
         LIMIT 1
       `)
       .get(tagName, tagName.toLowerCase()) as { tag_id: string } | null;

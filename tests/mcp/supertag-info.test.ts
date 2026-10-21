@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { registerTagsFromFields } from "../helpers/register-tags";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { Database } from "bun:sqlite";
@@ -56,6 +57,9 @@ describe("tana_supertag_info MCP Tool", () => {
         ('employee-tag', 'employee', 'StartDate', 'l4', 1, 'startdate', 'date'),
         ('manager-tag', 'manager', 'Team', 'l5', 0, 'team', 'text')
     `);
+
+    // The indexer registers every tagDef in supertag_metadata
+    registerTagsFromFields(db);
 
     db.close();
   });

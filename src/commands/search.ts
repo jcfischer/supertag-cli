@@ -54,6 +54,7 @@ import {
 import type { ReadSearchResult } from "../api/read-backend";
 import type { SemanticEmbeddingService, SemanticSearchDeps } from "../embeddings/search-filter";
 import type { StandardOptions, SearchType } from "../types";
+import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 
 interface SearchOptions extends StandardOptions {
   semantic?: boolean;
@@ -748,8 +749,11 @@ async function queryNodesWithFieldFilter(
 function findDescendantTagIds(db: Database, rootTagName: string): string[] {
   // Find root tag ID (case-insensitive)
   const rootResult = db.query(`
-    SELECT tag_id FROM supertag_metadata
-    WHERE LOWER(tag_name) = LOWER(?)
+    SELECT sm.tag_id, ${tagPreferenceColumns(db, "sm")}
+    FROM supertag_metadata sm
+    WHERE LOWER(sm.tag_name) = LOWER(?)
+    ORDER BY ${tagPreferenceOrder("sm")}
+    LIMIT 1
   `).get(rootTagName) as { tag_id: string } | null;
 
   if (!rootResult) {

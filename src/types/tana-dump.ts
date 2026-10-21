@@ -149,9 +149,9 @@ export interface TagApplication {
 export interface TanaGraph {
   nodes: Map<string, NodeDump>;
   trash: Map<string, NodeDump>;
-  supertags: Map<string, SupertagTuple>;
+  supertags: Map<string, SupertagTuple>; // keyed by tag ID; names are not unique
   fields: Map<string, FieldTuple>;
   inlineRefs: InlineReference[];
-  tagColors: Map<string, string>;
+  tagColors: Map<string, string>; // keyed by tag ID
   tagApplications: TagApplication[];
 }
