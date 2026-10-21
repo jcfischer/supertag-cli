@@ -16,12 +16,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { TanaIndexer } from "../../src/db/indexer";
+import { TanaExportParser } from "../../src/parsers/tana-export";
 import { SupertagMetadataService } from "../../src/services/supertag-metadata-service";
 import { UnifiedSchemaService } from "../../src/services/unified-schema-service";
 import { resolveTagIds } from "../../src/services/tag-id-resolver";
 import { VisualizationService } from "../../src/visualization/service";
 
-type Doc = { id: string; props: Record<string, unknown>; children?: string[] };
+type Doc = { id: string; props: Record<string, unknown>; children?: string[]; color?: string };
 
 const T0 = 1_700_000_000_000;
 
@@ -30,12 +31,13 @@ async function indexDuplicateTagExport(dir: string): Promise<string> {
   const add = (d: Doc) => docs.push(d);
 
   // tagDef ← metanode ← tuple [SYS_A13, SYS_T01, ...parents]
-  const tag = (id: string, name: string, parentId?: string) => {
+  const tag = (id: string, name: string, parentId?: string, color?: string) => {
     add({ id, props: { name, created: T0, _docType: "tagDef", _metaNodeId: `${id}_meta` }, children: [] });
     add({ id: `${id}_meta`, props: { created: T0, _ownerId: id, _docType: "metanode" }, children: [`${id}_def`] });
     add({
       id: `${id}_def`,
       props: { created: T0, _ownerId: `${id}_meta`, _docType: "tuple" },
+      ...(color ? { color } : {}),
       children: parentId ? ["SYS_A13", "SYS_T01", parentId] : ["SYS_A13", "SYS_T01"],
     });
   };
@@ -50,9 +52,9 @@ async function indexDuplicateTagExport(dir: string): Promise<string> {
   add({ id: "ws_STASH", props: { name: "Library", created: T0 }, children: [] });
   tag("tag_source", "source");
   tag("tag_note_a", "note");
-  tag("tag_book", "book", "tag_source");
+  tag("tag_book", "book", "tag_source", "red");
   tag("tag_note_b", "note");
-  tag("tag_book_dup", "book");
+  tag("tag_book_dup", "book", undefined, "blue");
 
   for (let i = 0; i < 5; i++) node(`book${i}`, `Book ${i}`, "tag_book");
   for (let i = 0; i < 3; i++) node(`note${i}`, `Note ${i}`, "tag_note_b");
@@ -90,6 +92,13 @@ describe("supertags with duplicate names", () => {
   it("registers every same-named tagDef in supertags", () => {
     const rows = db.query("SELECT tag_id FROM supertags ORDER BY tag_id").all() as Array<{ tag_id: string }>;
     expect(rows.map(r => r.tag_id)).toEqual(["tag_book", "tag_book_dup", "tag_note_a", "tag_note_b", "tag_source"]);
+  });
+
+  it("keeps each same-named tag's color", async () => {
+    const parser = new TanaExportParser();
+    const graph = parser.buildGraph(await parser.parseFile(join(dir, "export.json")));
+    expect(graph.tagColors.get("tag_book")).toBe("red");
+    expect(graph.tagColors.get("tag_book_dup")).toBe("blue");
   });
 
   it("keeps the applications under the populated tag", () => {

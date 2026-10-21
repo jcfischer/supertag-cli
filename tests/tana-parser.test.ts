@@ -89,7 +89,7 @@ describe("TanaExportParser - Supertag Detection", () => {
   test("should capture tag colors", () => {
     for (const tuple of graph.supertags.values()) {
       if (tuple.color) {
-        expect(graph.tagColors.has(tuple.tagName)).toBe(true);
+        expect(graph.tagColors.get(tuple.tagId)).toBe(tuple.color);
       }
     }
   });

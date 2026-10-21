@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { registerTagsFromFields } from "./helpers/register-tags";
 import { Database } from "bun:sqlite";
 import {
   exportTable,
@@ -150,7 +151,7 @@ describe("Table Export (F-099)", () => {
     db.run(`INSERT INTO tag_applications (data_node_id, tag_name, tag_id) VALUES ('note1', 'note', 'tag_note')`);
 
     // The indexer registers every tagDef in supertag_metadata
-    db.run(`INSERT OR IGNORE INTO supertag_metadata (tag_id, tag_name, normalized_name) SELECT DISTINCT tag_id, tag_name, LOWER(tag_name) FROM supertag_fields`);
+    registerTagsFromFields(db);
   });
 
   afterAll(() => {
@@ -300,7 +301,7 @@ describe("Table Export (F-099)", () => {
     it("returns empty rows with columns for a tag with no instances", () => {
       // Create empty tag
       db.run(`INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order) VALUES ('tag_empty', 'empty', 'Field1', 'fl1', 0)`);
-      db.run(`INSERT OR IGNORE INTO supertag_metadata (tag_id, tag_name, normalized_name) SELECT DISTINCT tag_id, tag_name, LOWER(tag_name) FROM supertag_fields`);
+      registerTagsFromFields(db);
       const result = exportTable(db, "empty");
       expect(result.rows.length).toBe(0);
       expect(result.columns).toEqual(["Field1"]);

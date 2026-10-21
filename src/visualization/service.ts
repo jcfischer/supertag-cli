@@ -15,7 +15,6 @@ import type {
   VisualizationField,
 } from "./types";
 import { SupertagMetadataService } from "../services/supertag-metadata-service";
-import { tagPreferenceColumns, tagPreferenceOrder } from "../db/tag-name-preference";
 
 interface TagRow {
   tag_id: string;
@@ -136,17 +135,10 @@ export class VisualizationService {
    */
   getSubtree(rootTagName: string, maxDepth?: number): VisualizationData | null {
     // Find root tag ID
-    const rootResult = this.db.query(`
-      SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
-      FROM supertag_metadata sm WHERE sm.tag_name = ?
-      ORDER BY ${tagPreferenceOrder("sm")} LIMIT 1
-    `).get(rootTagName) as { tag_id: string } | null;
-
-    if (!rootResult) {
+    const rootId = new SupertagMetadataService(this.db).findTagIdByName(rootTagName);
+    if (!rootId) {
       return null;
     }
-
-    const rootId = rootResult.tag_id;
 
     // Get all descendants using recursive CTE
     const depthLimit = maxDepth ?? 10;
@@ -199,17 +191,10 @@ export class VisualizationService {
    */
   getAncestors(tagName: string, maxDepth?: number): VisualizationData | null {
     // Find tag ID
-    const tagResult = this.db.query(`
-      SELECT sm.tag_id, ${tagPreferenceColumns(this.db, "sm")}
-      FROM supertag_metadata sm WHERE sm.tag_name = ?
-      ORDER BY ${tagPreferenceOrder("sm")} LIMIT 1
-    `).get(tagName) as { tag_id: string } | null;
-
-    if (!tagResult) {
+    const tagId = new SupertagMetadataService(this.db).findTagIdByName(tagName);
+    if (!tagId) {
       return null;
     }
-
-    const tagId = tagResult.tag_id;
 
     // Get all ancestors using recursive CTE (traverse upwards via parents)
     const depthLimit = maxDepth ?? 10;

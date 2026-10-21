@@ -178,7 +178,7 @@ export class TanaExportParser {
 
         // Keyed by tag ID: several tagDefs can share a name (#123)
         supertags.set(tagId, { nodeId: node.id, tagName, tagId, superclasses, color: node.color });
-        if (node.color) tagColors.set(tagName, node.color);
+        if (node.color) tagColors.set(tagId, node.color);
       } else if (hasSysT02) {
         // Field tuple
         const fieldId = metaNode.props._ownerId;

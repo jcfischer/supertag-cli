@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { registerTagsFromFields } from "../helpers/register-tags";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { Database } from "bun:sqlite";
@@ -58,7 +59,7 @@ describe("tana_supertag_info MCP Tool", () => {
     `);
 
     // The indexer registers every tagDef in supertag_metadata
-    db.run(`INSERT OR IGNORE INTO supertag_metadata (tag_id, tag_name, normalized_name) SELECT DISTINCT tag_id, tag_name, LOWER(tag_name) FROM supertag_fields`);
+    registerTagsFromFields(db);
 
     db.close();
   });

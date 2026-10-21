@@ -152,6 +152,6 @@ export interface TanaGraph {
   supertags: Map<string, SupertagTuple>; // keyed by tag ID; names are not unique
   fields: Map<string, FieldTuple>;
   inlineRefs: InlineReference[];
-  tagColors: Map<string, string>;
+  tagColors: Map<string, string>; // keyed by tag ID
   tagApplications: TagApplication[];
 }
