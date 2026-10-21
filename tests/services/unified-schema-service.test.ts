@@ -515,6 +515,46 @@ describe("UnifiedSchemaService Field Operations (T-3.3)", () => {
     });
   });
 
+  describe("getAllFields with cyclic inheritance (#108)", () => {
+    it("should terminate and return fields from every tag in a two-tag cycle", () => {
+      db.run(`
+        INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+        VALUES ('x-id', 'X', 'x'), ('y-id', 'Y', 'y')
+      `);
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES ('x-id', 'X', 'FieldX', 'fx', 0), ('y-id', 'Y', 'FieldY', 'fy', 0)
+      `);
+      db.run(`
+        INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
+        VALUES ('x-id', 'y-id'), ('y-id', 'x-id')
+      `);
+
+      const fields = service.getAllFields("x-id");
+
+      expect(fields.map((f) => f.name).sort()).toEqual(["FieldX", "FieldY"]);
+    });
+
+    it("should terminate on a self-edge", () => {
+      db.run(`
+        INSERT INTO supertag_metadata (tag_id, tag_name, normalized_name)
+        VALUES ('s-id', 'S', 's')
+      `);
+      db.run(`
+        INSERT INTO supertag_fields (tag_id, tag_name, field_name, field_label_id, field_order)
+        VALUES ('s-id', 'S', 'FieldS', 'fs', 0)
+      `);
+      db.run(`
+        INSERT INTO supertag_parents (child_tag_id, parent_tag_id)
+        VALUES ('s-id', 's-id')
+      `);
+
+      const fields = service.getAllFields("s-id");
+
+      expect(fields.map((f) => f.name)).toEqual(["FieldS"]);
+    });
+  });
+
   describe("getFieldByNormalizedName", () => {
     beforeEach(() => {
       db.run(`

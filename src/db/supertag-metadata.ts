@@ -242,8 +242,8 @@ export function extractParentsFromTagDef(
       const potentialParentId = tuple.children[i];
       const potentialParent = nodes.get(potentialParentId);
 
-      // Only include if it's actually a tagDef node
-      if (potentialParent?.props._docType === "tagDef") {
+      // Only include if it's actually a tagDef node, and never the tag itself (#108)
+      if (potentialParent?.props._docType === "tagDef" && potentialParentId !== tagDef.id) {
         parents.push(potentialParentId);
       }
     }

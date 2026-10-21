@@ -423,6 +423,7 @@ export class UnifiedSchemaService {
           SELECT sp.parent_tag_id, a.depth + 1
           FROM ancestors a
           JOIN supertag_parents sp ON sp.child_tag_id = a.tag_id
+          WHERE a.depth < 10  -- Cycle protection
         )
         SELECT DISTINCT tag_id, MIN(depth) as depth
         FROM ancestors
