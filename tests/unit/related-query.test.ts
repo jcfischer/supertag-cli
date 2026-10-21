@@ -26,7 +26,8 @@ describe('TanaQueryEngine.getRelatedNodes', () => {
         name TEXT,
         created INTEGER,
         updated INTEGER,
-        parent_id TEXT
+        parent_id TEXT,
+        raw_data TEXT
       )
     `);
 
@@ -68,18 +69,14 @@ describe('TanaQueryEngine.getRelatedNodes', () => {
 
     // Insert references
     const insertRef = db.prepare('INSERT INTO "references" (from_node, to_node, reference_type) VALUES (?, ?, ?)');
-    // A -> B (child relationship)
-    insertRef.run('nodeA', 'nodeB', 'child');
-    // B -> A (parent relationship - reverse of child)
-    insertRef.run('nodeB', 'nodeA', 'parent');
+    // A -> B (child): the tree lives in nodes.parent_id, as the indexer writes it
+    db.run("UPDATE nodes SET parent_id = 'nodeA' WHERE id = 'nodeB'");
     // A -> C (inline reference)
     insertRef.run('nodeA', 'nodeC', 'inline_ref');
     // D -> A (inline reference - D references A)
     insertRef.run('nodeD', 'nodeA', 'inline_ref');
     // B -> E (child of B)
-    insertRef.run('nodeB', 'nodeE', 'child');
-    // E -> B (parent of E)
-    insertRef.run('nodeE', 'nodeB', 'parent');
+    db.run("UPDATE nodes SET parent_id = 'nodeB' WHERE id = 'nodeE'");
 
     // Insert tags
     const insertTag = db.prepare('INSERT INTO tag_applications (data_node_id, tag_id, tag_name) VALUES (?, ?, ?)');

@@ -3,14 +3,14 @@
  * F-102: Graph Query DSL
  *
  * Executes a QueryPlan by orchestrating the UnifiedQueryEngine (for FIND steps)
- * and GraphTraversalService (for CONNECTED TO traversal steps).
+ * and the set-based edge queries in db/graph-edges (for CONNECTED TO steps).
  *
  * Does NOT write raw SQL queries — all data access goes through existing services.
  */
 
 import { Database } from "bun:sqlite";
 import { UnifiedQueryEngine } from "./unified-query-engine";
-import { GraphTraversalService } from "../services/graph-traversal";
+import { findNeighborEdges, filterNodesByTag, loadNodeSummaries } from "../db/graph-edges";
 import { FieldResolver } from "../services/field-resolver";
 import type { QueryAST, WhereClause, WhereGroup } from "./types";
 import { isWhereGroup } from "./types";
@@ -33,6 +33,9 @@ interface NodeRecord {
 /** Warning threshold for large intermediate sets */
 const LARGE_SET_THRESHOLD = 1000;
 
+/** FIND page size when CONNECTED TO clauses filter the primary set */
+const FIND_PAGE_SIZE = 5000;
+
 /**
  * Graph Query Executor
  *
@@ -40,15 +43,13 @@ const LARGE_SET_THRESHOLD = 1000;
  */
 export class GraphQueryExecutor {
   private queryEngine: UnifiedQueryEngine;
-  private traversalService: GraphTraversalService;
   private fieldResolver: FieldResolver;
-  private workspace: string;
+  private findPageSize: number;
 
-  constructor(private db: Database, private dbPath: string, workspace = "main") {
+  constructor(private db: Database, options: { findPageSize?: number } = {}) {
     this.queryEngine = new UnifiedQueryEngine(db);
-    this.traversalService = new GraphTraversalService(dbPath);
     this.fieldResolver = new FieldResolver(db);
-    this.workspace = workspace;
+    this.findPageSize = options.findPageSize ?? FIND_PAGE_SIZE;
   }
 
   /**
@@ -69,51 +70,90 @@ export class GraphQueryExecutor {
     const joinMaps = new Map<string, Map<string, string[]>>(); // per result set: source→target IDs
     const visitedIds = new Set<string>(); // Cycle detection
 
+    // Without CONNECTED TO, the FIND step alone is the result. With it, page
+    // through the FIND set until `limit` connected rows exist, so matches
+    // past the first page are not lost (#99).
+    const hasTraversal = ast.connected.length > 0;
+    const hasAggregates = ast.return.some((f) => f.aggregateFn);
+    const pageSize = hasTraversal ? this.findPageSize : limit;
+
+    for (let offset = 0; ; offset += pageSize) {
+      const pageCount = await this.executePage(plan, ast, pageSize, offset, sets, joinMaps, visitedIds);
+      if (!hasTraversal || pageCount < pageSize) break;
+      if (!hasAggregates && this.connectedPrimaryCount(sets, joinMaps) > limit) break;
+    }
+
+    const r1Size = sets.get("R1")?.length ?? 0;
+    if (r1Size > LARGE_SET_THRESHOLD) {
+      console.error(
+        `⚠️  Large intermediate result set (${r1Size} nodes). ` +
+          `Consider adding a WHERE clause to narrow the initial FIND results.`
+      );
+    }
+
+    const queryTimeMs = Date.now() - startTime;
+    return this.buildResult(sets, joinMaps, ast, limit, queryTimeMs);
+  }
+
+  /**
+   * Run every plan step for one page of the FIND set, merging the page's
+   * result sets and join maps into the accumulators.
+   *
+   * @returns Number of nodes the FIND step returned for this page
+   */
+  private async executePage(
+    plan: QueryPlan,
+    ast: GraphQueryAST,
+    pageSize: number,
+    offset: number,
+    sets: Map<string, NodeRecord[]>,
+    joinMaps: Map<string, Map<string, string[]>>,
+    visitedIds: Set<string>
+  ): Promise<number> {
+    const pageSets = new Map<string, NodeRecord[]>();
+    let findCount = 0;
+
     for (const step of plan.steps) {
       switch (step.type) {
         case "find_by_tag": {
-          const queryAst = this.buildQueryAST(step.tag, step.filters, limit);
+          const queryAst = this.buildQueryAST(step.tag, step.filters, pageSize, offset);
           const result = await this.queryEngine.execute(queryAst);
           const nodes: NodeRecord[] = result.results.map((r) => ({
             id: r.id as string,
             name: (r.name as string) ?? "",
             ...r,
           }));
+          findCount = nodes.length;
           // Track visited nodes
           for (const n of nodes) {
             visitedIds.add(n.id);
           }
-          sets.set(step.resultSet, nodes);
+          pageSets.set(step.resultSet, nodes);
           break;
         }
 
         case "traverse": {
-          const fromNodes = sets.get(step.fromSet) ?? [];
-          const { nodes: toNodes, joinMap } = await this.traverseSet(
+          const fromNodes = pageSets.get(step.fromSet) ?? [];
+          const { nodes: toNodes, joinMap } = this.traverseSet(
             fromNodes,
             step.toTag,
             step.viaField,
             ast.depth ?? 1,
-            visitedIds,
-            limit
+            visitedIds
           );
-          sets.set(step.resultSet, toNodes);
-          joinMaps.set(step.resultSet, joinMap);
+          pageSets.set(step.resultSet, toNodes);
 
-          // Warn and truncate large intermediate sets
-          if (toNodes.length > LARGE_SET_THRESHOLD) {
-            console.error(
-              `⚠️  Large intermediate result set (${toNodes.length} nodes). ` +
-                `Consider adding a WHERE clause to narrow the initial FIND results.`
-            );
-            sets.set(step.resultSet, toNodes.slice(0, LARGE_SET_THRESHOLD));
+          const merged = joinMaps.get(step.resultSet) ?? new Map<string, string[]>();
+          for (const [source, targets] of joinMap) {
+            merged.set(source, [...(merged.get(source) ?? []), ...targets]);
           }
+          joinMaps.set(step.resultSet, merged);
           break;
         }
 
         case "filter": {
-          const nodes = sets.get(step.resultSet) ?? [];
-          sets.set(step.resultSet, this.applyFilters(nodes, step.conditions));
+          const nodes = pageSets.get(step.resultSet) ?? [];
+          pageSets.set(step.resultSet, this.applyFilters(nodes, step.conditions));
           break;
         }
 
@@ -124,83 +164,100 @@ export class GraphQueryExecutor {
       }
     }
 
-    const queryTimeMs = Date.now() - startTime;
-    return this.buildResult(sets, joinMaps, ast, limit, queryTimeMs);
+    for (const [name, nodes] of pageSets) {
+      sets.set(name, [...(sets.get(name) ?? []), ...nodes]);
+    }
+
+    return findCount;
   }
 
-  /**
-   * Close resources
-   */
-  close(): void {
-    this.traversalService.close();
+  /** Number of primary (R0) nodes with a live connection into R1 */
+  private connectedPrimaryCount(
+    sets: Map<string, NodeRecord[]>,
+    joinMaps: Map<string, Map<string, string[]>>
+  ): number {
+    const joinMap = joinMaps.get("R1");
+    if (!joinMap) return 0;
+    const live = new Set((sets.get("R1") ?? []).map((n) => n.id));
+    return (sets.get("R0") ?? []).filter((n) =>
+      (joinMap.get(n.id) ?? []).some((t) => live.has(t))
+    ).length;
   }
 
   // ---------------------------------------------------------------------------
   // Internal: Traversal
   // ---------------------------------------------------------------------------
 
-  private async traverseSet(
+  /**
+   * Breadth-first expansion from `fromNodes`, `depth` hops out, collecting
+   * nodes tagged `toTag`. Every hop is one set-based edge query, and the tag
+   * filter runs on the full hop, so nothing is cut before filtering.
+   */
+  private traverseSet(
     fromNodes: NodeRecord[],
     toTag: string,
     viaField: string | undefined,
     depth: number,
-    visitedIds: Set<string>,
-    limit: number
-  ): Promise<{ nodes: NodeRecord[]; joinMap: Map<string, string[]> }> {
-    const results: NodeRecord[] = [];
+    visitedIds: Set<string>
+  ): { nodes: NodeRecord[]; joinMap: Map<string, string[]> } {
     const joinMap = new Map<string, string[]>(); // source node ID → target node IDs
-    const toTagLower = toTag.toLowerCase();
+    const matched = new Map<string, Set<string>>(); // source node ID → target node IDs
 
-    for (const fromNode of fromNodes) {
-      if (results.length >= limit * 10) break; // Safety limit
+    // frontier node → source nodes it was reached from
+    let frontier = new Map<string, Set<string>>(
+      fromNodes.map((n) => [n.id, new Set([n.id])])
+    );
+    const seen = new Set(frontier.keys());
 
-      try {
-        const traversalResult = await this.traversalService.traverse(
-          {
-            nodeId: fromNode.id,
-            direction: "both",
-            types: viaField ? ["field", "reference", "child"] : ["child", "reference", "field"],
-            depth,
-            limit: Math.min(limit * 2, 100),
-          },
-          this.workspace
-        );
+    for (let hop = 0; hop < depth && frontier.size > 0; hop++) {
+      const edges = findNeighborEdges(this.db, [...frontier.keys()], { viaField });
+      const tagged = filterNodesByTag(
+        this.db,
+        edges.map((e) => e.targetId),
+        toTag
+      );
 
-        for (const related of traversalResult.related) {
-          // Filter by target tag (case-insensitive)
-          const hasTags = related.tags?.some(
-            (t) => t.toLowerCase() === toTagLower
-          );
-          if (!hasTags) continue;
+      const next = new Map<string, Set<string>>();
+      for (const edge of edges) {
+        const origins = frontier.get(edge.sourceId);
+        if (!origins) continue;
 
-          // VIA field filter: only include if relationship came through the specified field
-          if (viaField && related.relationship.type !== "field") {
-            // Non-field relationship when VIA is specified — skip
-            continue;
+        if (tagged.has(edge.targetId)) {
+          for (const origin of origins) {
+            if (origin === edge.targetId) continue;
+            const targets = matched.get(origin) ?? new Set<string>();
+            targets.add(edge.targetId);
+            matched.set(origin, targets);
           }
-
-          // Track source→target association (even for already-visited nodes,
-          // so multiple source nodes can claim the same target)
-          const existing = joinMap.get(fromNode.id) ?? [];
-          existing.push(related.id);
-          joinMap.set(fromNode.id, existing);
-
-          // Only add to results if not visited (dedup)
-          if (!visitedIds.has(related.id)) {
-            visitedIds.add(related.id);
-            results.push({
-              id: related.id,
-              name: related.name,
-              tags: related.tags,
-            });
-          }
-
-          if (results.length >= limit * 10) break;
         }
-      } catch {
-        // Skip nodes that can't be traversed (e.g., deleted nodes)
-        continue;
+
+        if (!seen.has(edge.targetId)) {
+          const reachedFrom = next.get(edge.targetId) ?? new Set<string>();
+          for (const origin of origins) reachedFrom.add(origin);
+          next.set(edge.targetId, reachedFrom);
+        }
       }
+
+      for (const id of next.keys()) seen.add(id);
+      frontier = next;
+    }
+
+    const targetIds = new Set<string>();
+    for (const [origin, targets] of matched) {
+      joinMap.set(origin, [...targets]);
+      for (const t of targets) targetIds.add(t);
+    }
+
+    const summaries = loadNodeSummaries(this.db, [...targetIds]);
+    const results: NodeRecord[] = [];
+    for (const id of targetIds) {
+      // Only add to results if not visited (dedup); the join map still
+      // records the association so several sources can claim one target
+      if (visitedIds.has(id)) continue;
+      const summary = summaries.get(id);
+      if (!summary) continue;
+      visitedIds.add(id);
+      results.push({ id, name: summary.name, tags: summary.tags });
     }
 
     return { nodes: results, joinMap };
@@ -285,12 +342,14 @@ export class GraphQueryExecutor {
   private buildQueryAST(
     tag: string,
     filters: (WhereClause | WhereGroup)[],
-    limit: number
+    limit: number,
+    offset: number
   ): QueryAST {
     return {
       find: tag,
       where: filters.length > 0 ? filters : undefined,
       limit,
+      offset: offset > 0 ? offset : undefined,
     };
   }
 

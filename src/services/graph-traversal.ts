@@ -96,7 +96,7 @@ export class GraphTraversalService {
       // Get related nodes based on direction
       const related = await this.getRelatedInDirection(currentId, direction, types, limit);
 
-      for (const { targetId, type, relDirection } of related) {
+      for (const { targetId, type, relDirection, field } of related) {
         if (visited.has(targetId)) {
           continue;
         }
@@ -124,6 +124,7 @@ export class GraphTraversalService {
             direction: relDirection,
             path: newPath,
             distance: newDistance,
+            ...(field ? { field } : {}),
           },
         };
 
@@ -151,20 +152,20 @@ export class GraphTraversalService {
     direction: 'in' | 'out' | 'both',
     types: RelationshipType[],
     limit: number
-  ): Promise<Array<{ targetId: string; type: RelationshipType; relDirection: 'in' | 'out' }>> {
-    const results: Array<{ targetId: string; type: RelationshipType; relDirection: 'in' | 'out' }> = [];
+  ): Promise<Array<{ targetId: string; type: RelationshipType; relDirection: 'in' | 'out'; field?: string }>> {
+    const results: Array<{ targetId: string; type: RelationshipType; relDirection: 'in' | 'out'; field?: string }> = [];
 
     if (direction === 'out' || direction === 'both') {
       const outbound = await this.engine.getRelatedNodes(nodeId, 'out', types, limit);
       for (const r of outbound) {
-        results.push({ targetId: r.nodeId, type: r.type, relDirection: 'out' });
+        results.push({ targetId: r.nodeId, type: r.type, relDirection: 'out', field: r.field });
       }
     }
 
     if (direction === 'in' || direction === 'both') {
       const inbound = await this.engine.getRelatedNodes(nodeId, 'in', types, limit);
       for (const r of inbound) {
-        results.push({ targetId: r.nodeId, type: r.type, relDirection: 'in' });
+        results.push({ targetId: r.nodeId, type: r.type, relDirection: 'in', field: r.field });
       }
     }
 

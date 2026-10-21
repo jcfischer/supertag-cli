@@ -57,6 +57,8 @@ export interface RelatedNodeResult {
   nodeId: string;
   /** Relationship type (mapped from DB type) */
   type: RelationshipType;
+  /** Field name, for field relationships */
+  field?: string;
 }
 
 /**
@@ -694,39 +696,23 @@ export class TanaQueryEngine {
     limit: number
   ): Promise<RelatedNodeResult[]> {
     const results: RelatedNodeResult[] = [];
-    const includeField = types.includes('field');
 
-    // Map RelationshipType to database reference_type values for references table
-    const dbTypes: string[] = [];
-    for (const t of types) {
-      if (t === 'reference') {
-        dbTypes.push('inline_ref');
-      } else if (t === 'child' || t === 'parent') {
-        dbTypes.push(t);
-      }
-      // 'field' type is handled separately via field_values table
-    }
-
-    // Query references table for inline_ref, child, parent types
-    if (dbTypes.length > 0) {
+    if (types.includes('reference')) {
       const query = direction === 'out'
         ? this.sqlite.prepare(`
             SELECT to_node as nodeId, reference_type as refType
             FROM "references"
-            WHERE from_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+            WHERE from_node = ? AND reference_type = 'inline_ref'
             LIMIT ?
           `)
         : this.sqlite.prepare(`
             SELECT from_node as nodeId, reference_type as refType
             FROM "references"
-            WHERE to_node = ? AND reference_type IN (${dbTypes.map(() => '?').join(',')})
+            WHERE to_node = ? AND reference_type = 'inline_ref'
             LIMIT ?
           `);
 
-      const params = [nodeId, ...dbTypes, limit];
-      const rows = query.all(...params) as Array<{ nodeId: string; refType: string }>;
-
-      // Map database types back to RelationshipType
+      const rows = query.all(nodeId, limit) as Array<{ nodeId: string; refType: string }>;
       for (const row of rows) {
         results.push({
           nodeId: row.nodeId,
@@ -735,42 +721,78 @@ export class TanaQueryEngine {
       }
     }
 
-    // Query field_values table for field references
-    if (includeField) {
-      const remainingLimit = limit - results.length;
-      if (remainingLimit > 0) {
-        // direction='out': Find nodes this node references via field values
-        //   A uses F as "Topic" means A has outbound field reference to F
-        //   Query: parent_id = nodeId → value_node_id
-        // direction='in': Find nodes that reference this node via field values
-        //   F is used by A means F has inbound field reference from A
-        //   Query: value_node_id = nodeId → parent_id
-        const fieldQuery = direction === 'out'
-          ? this.sqlite.prepare(`
-              SELECT DISTINCT value_node_id as nodeId
-              FROM field_values
-              WHERE parent_id = ?
-              LIMIT ?
-            `)
-          : this.sqlite.prepare(`
-              SELECT DISTINCT parent_id as nodeId
-              FROM field_values
-              WHERE value_node_id = ?
-              LIMIT ?
-            `);
+    // The indexer writes no child/parent rows to "references"; the tree lives
+    // in nodes.parent_id (#99). 'out' child = my children, 'in' child = my
+    // parent; 'parent' is the mirror image. Field tuples are left out: their
+    // values come back as 'field' edges.
+    const wantsChildren =
+      (types.includes('child') && direction === 'out') ||
+      (types.includes('parent') && direction === 'in');
+    const wantsParent =
+      (types.includes('parent') && direction === 'out') ||
+      (types.includes('child') && direction === 'in');
 
-        const fieldRows = fieldQuery.all(nodeId, remainingLimit) as Array<{ nodeId: string }>;
-
-        for (const row of fieldRows) {
-          results.push({
-            nodeId: row.nodeId,
-            type: 'field',
-          });
-        }
+    if (wantsChildren) {
+      const rows = this.sqlite
+        .prepare(`
+          SELECT id as nodeId FROM nodes
+          WHERE parent_id = ?
+            AND COALESCE(json_extract(raw_data, '$.props._docType'), '') <> 'tuple'
+          LIMIT ?
+        `)
+        .all(nodeId, limit) as Array<{ nodeId: string }>;
+      const type: RelationshipType = direction === 'out' && types.includes('child') ? 'child' : 'parent';
+      for (const row of rows) {
+        results.push({ nodeId: row.nodeId, type });
       }
     }
 
-    return results;
+    if (wantsParent) {
+      const row = this.sqlite
+        .prepare(`SELECT parent_id as nodeId FROM nodes WHERE id = ? AND parent_id IS NOT NULL`)
+        .get(nodeId) as { nodeId: string } | null;
+      const type: RelationshipType = direction === 'out' && types.includes('parent') ? 'parent' : 'child';
+      if (row) {
+        results.push({ nodeId: row.nodeId, type });
+      }
+    }
+
+    // Query field_values table for field references
+    if (types.includes('field')) {
+      // direction='out': Find nodes this node references via field values
+      //   A uses F as "Topic" means A has outbound field reference to F
+      //   Query: parent_id = nodeId → value_node_id
+      // direction='in': Find nodes that reference this node via field values
+      //   F is used by A means F has inbound field reference from A
+      //   Query: value_node_id = nodeId → parent_id
+      const fieldQuery = direction === 'out'
+        ? this.sqlite.prepare(`
+            SELECT value_node_id as nodeId, MIN(field_name) as field
+            FROM field_values
+            WHERE parent_id = ?
+            GROUP BY value_node_id
+            LIMIT ?
+          `)
+        : this.sqlite.prepare(`
+            SELECT parent_id as nodeId, MIN(field_name) as field
+            FROM field_values
+            WHERE value_node_id = ?
+            GROUP BY parent_id
+            LIMIT ?
+          `);
+
+      const fieldRows = fieldQuery.all(nodeId, limit) as Array<{ nodeId: string; field: string }>;
+
+      for (const row of fieldRows) {
+        results.push({
+          nodeId: row.nodeId,
+          type: 'field',
+          field: row.field,
+        });
+      }
+    }
+
+    return results.slice(0, limit);
   }
 
   /**

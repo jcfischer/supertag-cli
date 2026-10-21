@@ -19,7 +19,6 @@ import { unlinkSync } from "fs";
 
 describe("Graph Query Executor", () => {
   const testDbPath = "/tmp/test-graph-executor.db";
-  let executor: GraphQueryExecutor;
 
   /**
    * Test graph:
@@ -141,20 +140,15 @@ describe("Graph Query Executor", () => {
 
   afterAll(() => {
     try {
-      executor?.close();
-    } catch {
-      // already closed
-    }
-    try {
       unlinkSync(testDbPath);
     } catch {
       // already removed
     }
   });
 
-  function createExecutor(): GraphQueryExecutor {
+  function createExecutor(): { exec: GraphQueryExecutor; db: Database } {
     const db = new Database(testDbPath);
-    return new GraphQueryExecutor(db, testDbPath, "main");
+    return { exec: new GraphQueryExecutor(db), db };
   }
 
   // ---------------------------------------------------------------------------
@@ -163,7 +157,7 @@ describe("Graph Query Executor", () => {
 
   describe("FIND by tag (find_by_tag step)", () => {
     it("should find all nodes with a given tag", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -185,12 +179,12 @@ describe("Graph Query Executor", () => {
         expect(names).toContain("Sprint Review");
         expect(names).toContain("Solo Planning");
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should find persons", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -212,7 +206,7 @@ describe("Graph Query Executor", () => {
         expect(names).toContain("Bob Jones");
         expect(names).toContain("Carol White");
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });
@@ -223,7 +217,7 @@ describe("Graph Query Executor", () => {
 
   describe("CONNECTED TO (traverse step with join maps)", () => {
     it("should find meetings connected to persons", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -247,12 +241,12 @@ describe("Graph Query Executor", () => {
         expect(names).toContain("Sprint Review");
         expect(names).not.toContain("Solo Planning");
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should resolve dot-notation projections per row via join map", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -294,14 +288,14 @@ describe("Graph Query Executor", () => {
         // Alice should NOT be in the review row
         expect(reviewPersons).not.toContain("Alice Smith");
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should handle shared targets across multiple source nodes", async () => {
       // Bob appears in both meeting1 and meeting2
       // The join map should associate bob with BOTH meetings
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -336,7 +330,7 @@ describe("Graph Query Executor", () => {
         expect(standupPersons).toContain("Bob Jones");
         expect(reviewPersons).toContain("Bob Jones");
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });
@@ -347,7 +341,7 @@ describe("Graph Query Executor", () => {
 
   describe("Result shape", () => {
     it("should produce correct column names for dot-notation projections", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -369,12 +363,12 @@ describe("Graph Query Executor", () => {
         const result = await exec.execute(plan, ast, 100);
         expect(result.columns).toEqual(["name", "person.name"]);
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should include queryTimeMs in result", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -392,12 +386,12 @@ describe("Graph Query Executor", () => {
         const result = await exec.execute(plan, ast, 100);
         expect(result.queryTimeMs).toBeGreaterThanOrEqual(0);
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should respect limit parameter", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -418,7 +412,7 @@ describe("Graph Query Executor", () => {
         // UnifiedQueryEngine applies LIMIT at SQL level, so executor sees exactly 2
         expect(result.count).toBeLessThanOrEqual(2);
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });
@@ -429,7 +423,7 @@ describe("Graph Query Executor", () => {
 
   describe("Projections", () => {
     it("should handle wildcard (*) projection", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -452,12 +446,12 @@ describe("Graph Query Executor", () => {
           expect(row).toHaveProperty("name");
         }
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should project id field", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -477,7 +471,7 @@ describe("Graph Query Executor", () => {
         expect(alice).toBeDefined();
         expect(alice!.id).toBe("alice");
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });
@@ -488,7 +482,7 @@ describe("Graph Query Executor", () => {
 
   describe("Edge cases", () => {
     it("should return empty when no traversal matches", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         // meeting CONNECTED TO project — no direct field/ref links exist
         const plan: QueryPlan = {
@@ -509,12 +503,12 @@ describe("Graph Query Executor", () => {
         // No meetings connect directly to projects
         expect(result.count).toBe(0);
       } finally {
-        exec.close();
+        db.close();
       }
     });
 
     it("should handle FIND with no matching tag", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -533,7 +527,7 @@ describe("Graph Query Executor", () => {
         expect(result.count).toBe(0);
         expect(result.rows).toEqual([]);
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });
@@ -544,7 +538,7 @@ describe("Graph Query Executor", () => {
 
   describe("Aggregates", () => {
     it("should support COUNT aggregate", async () => {
-      const exec = createExecutor();
+      const { exec, db } = createExecutor();
       try {
         const plan: QueryPlan = {
           steps: [
@@ -567,7 +561,7 @@ describe("Graph Query Executor", () => {
         // 3 unique persons connected to meetings (alice, bob, carol)
         expect(result.rows[0].attendee_count).toBe(3);
       } finally {
-        exec.close();
+        db.close();
       }
     });
   });

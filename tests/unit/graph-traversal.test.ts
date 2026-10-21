@@ -23,7 +23,8 @@ describe('GraphTraversalService', () => {
         name TEXT,
         created INTEGER,
         updated INTEGER,
-        parent_id TEXT
+        parent_id TEXT,
+        raw_data TEXT
       )
     `);
 
@@ -90,16 +91,14 @@ describe('GraphTraversalService', () => {
     insertNode.run('nodeG', 'Node G', now, now);   // Has field pointing to F
 
     const insertRef = db.prepare('INSERT INTO "references" (from_node, to_node, reference_type) VALUES (?, ?, ?)');
-    // A -> B (child)
-    insertRef.run('nodeA', 'nodeB', 'child');
-    insertRef.run('nodeB', 'nodeA', 'parent');
+    // A -> B (child): the tree lives in nodes.parent_id, as the indexer writes it
+    db.run("UPDATE nodes SET parent_id = 'nodeA' WHERE id = 'nodeB'");
     // A -> C (inline_ref)
     insertRef.run('nodeA', 'nodeC', 'inline_ref');
     // D -> A (inline_ref)
     insertRef.run('nodeD', 'nodeA', 'inline_ref');
     // B -> E (child)
-    insertRef.run('nodeB', 'nodeE', 'child');
-    insertRef.run('nodeE', 'nodeB', 'parent');
+    db.run("UPDATE nodes SET parent_id = 'nodeB' WHERE id = 'nodeE'");
 
     // Tags
     const insertTag = db.prepare('INSERT INTO tag_applications (data_node_id, tag_id, tag_name) VALUES (?, ?, ?)');
