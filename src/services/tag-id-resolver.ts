@@ -8,8 +8,22 @@
 
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
+import type { TanaBackend } from "../api/backend";
 import { resolveWorkspaceContext } from "../config/workspace-resolver";
 import { UnifiedSchemaService } from "./unified-schema-service";
+
+/** Injection points shared by the CLI and MCP tag mutations */
+export interface TagMutationDeps {
+  backend?: Pick<TanaBackend, "supportsMutations" | "addTags" | "removeTags">;
+  /** Workspace database used for name resolution (default: default workspace) */
+  dbPath?: string;
+}
+
+/** Output labels per tag action */
+export const TAG_ACTION_LABELS = {
+  add: { done: "Added", failed: "Failed to add", preposition: "to", mark: "+" },
+  remove: { done: "Removed", failed: "Failed to remove", preposition: "from", mark: "-" },
+} as const;
 
 /**
  * Path of the default workspace database, or undefined when none is usable.

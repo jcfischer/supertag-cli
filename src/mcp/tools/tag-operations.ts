@@ -4,20 +4,13 @@
  * Spec: F-094, Task: T-5.4
  */
 import { resolveBackend } from '../../api/backend-resolver';
-import type { TanaBackend } from '../../api/backend';
-import { resolveTagIds } from '../../services/tag-id-resolver';
+import { resolveTagIds, TAG_ACTION_LABELS, type TagMutationDeps } from '../../services/tag-id-resolver';
 import { handleMcpError } from '../error-handler';
-
-export interface TagOperationDeps {
-  backend?: Pick<TanaBackend, 'supportsMutations' | 'addTags' | 'removeTags'>;
-  /** Workspace database used for name resolution (default: default workspace) */
-  dbPath?: string;
-}
 
 async function changeTags(
   action: 'add' | 'remove',
   args: { nodeId: string; tagIds: string[] },
-  deps: TagOperationDeps,
+  deps: TagMutationDeps,
 ) {
   try {
     const backend = deps.backend ?? await resolveBackend();
@@ -35,12 +28,10 @@ async function changeTags(
       : await backend.removeTags(args.nodeId, tagIds);
 
     const failed = result.results.some((r) => !r.success);
-    const header = failed
-      ? `Failed to ${action === 'add' ? 'add tags to' : 'remove tags from'} ${result.nodeName} (${result.nodeId}):`
-      : `${action === 'add' ? 'Added tags to' : 'Removed tags from'} ${result.nodeName} (${result.nodeId}):`;
-    const lines = [header];
+    const labels = TAG_ACTION_LABELS[action];
+    const lines = [`${failed ? labels.failed : labels.done} tags ${labels.preposition} ${result.nodeName} (${result.nodeId}):`];
     for (const r of result.results) {
-      lines.push(`  ${r.success ? (action === 'add' ? '+' : '-') : '!'} ${r.tagName || r.tagId}: ${r.message}`);
+      lines.push(`  ${r.success ? labels.mark : '!'} ${r.tagName || r.tagId}: ${r.message}`);
     }
     return {
       content: [{ type: 'text' as const, text: lines.join('\n') }],
@@ -51,10 +42,10 @@ async function changeTags(
   }
 }
 
-export async function handleTagAdd(args: { nodeId: string; tagIds: string[] }, deps: TagOperationDeps = {}) {
+export async function handleTagAdd(args: { nodeId: string; tagIds: string[] }, deps: TagMutationDeps = {}) {
   return changeTags('add', args, deps);
 }
 
-export async function handleTagRemove(args: { nodeId: string; tagIds: string[] }, deps: TagOperationDeps = {}) {
+export async function handleTagRemove(args: { nodeId: string; tagIds: string[] }, deps: TagMutationDeps = {}) {
   return changeTags('remove', args, deps);
 }

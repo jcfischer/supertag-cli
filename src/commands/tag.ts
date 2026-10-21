@@ -8,15 +8,8 @@
  */
 import { Command } from 'commander';
 import { resolveBackend } from '../api/backend-resolver';
-import type { TanaBackend } from '../api/backend';
-import { resolveTagIds } from '../services/tag-id-resolver';
+import { resolveTagIds, TAG_ACTION_LABELS, type TagMutationDeps } from '../services/tag-id-resolver';
 import { exitWithError } from '../utils/errors';
-
-export interface TagChangeDeps {
-  backend?: Pick<TanaBackend, 'supportsMutations' | 'addTags' | 'removeTags'>;
-  /** Workspace database used for name resolution (default: default workspace) */
-  dbPath?: string;
-}
 
 /**
  * Add or remove one tag on a node. Resolves a tag name to its ID unless
@@ -27,7 +20,7 @@ export async function runTagChange(
   nodeId: string,
   tagNameOrId: string,
   options: { tagId?: boolean },
-  deps: TagChangeDeps = {},
+  deps: TagMutationDeps = {},
 ): Promise<number> {
   const backend = deps.backend ?? await resolveBackend();
   if (!backend.supportsMutations()) {
@@ -43,13 +36,10 @@ export async function runTagChange(
 
   const failed = result.results.some((r) => !r.success);
   const print = failed ? console.error : console.log;
-  const verb = action === 'add' ? 'add tag to' : 'remove tag from';
-  print(failed
-    ? `Failed to ${verb} ${result.nodeName} (${result.nodeId}):`
-    : `${action === 'add' ? 'Added tag to' : 'Removed tag from'} ${result.nodeName} (${result.nodeId}):`);
+  const labels = TAG_ACTION_LABELS[action];
+  print(`${failed ? labels.failed : labels.done} tag ${labels.preposition} ${result.nodeName} (${result.nodeId}):`);
   for (const r of result.results) {
-    const status = r.success ? (action === 'add' ? '  +' : '  -') : '  !';
-    print(`${status} ${r.tagName || r.tagId}: ${r.message}`);
+    print(`  ${r.success ? labels.mark : '!'} ${r.tagName || r.tagId}: ${r.message}`);
   }
   return failed ? 1 : 0;
 }
