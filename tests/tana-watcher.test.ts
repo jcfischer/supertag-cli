@@ -326,4 +326,37 @@ describe("TanaExportWatcher - Status and Statistics (🔴 RED)", () => {
     expect(status.lastIndexed).toBeDefined();
     expect(typeof status.lastIndexed).toBe("number");
   });
+
+  // #105: `sync status` runs in a fresh process, so the in-memory timestamp
+  // is always null there; the persisted sync_metadata value must be used.
+  test("should report last indexed from the database in a new watcher", async () => {
+    writeFileSync(TEST_EXPORT_FILE, MINIMAL_EXPORT);
+    await watcher.indexLatest();
+
+    const fresh = new TanaExportWatcher({
+      exportDir: TEST_EXPORT_DIR,
+      dbPath: TEST_DB_PATH,
+    });
+    try {
+      const status = fresh.getStatus();
+      expect(typeof status.lastIndexed).toBe("number");
+      expect(status.lastIndexed).toBeGreaterThan(0);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  test("should report never indexed for an empty database", () => {
+    const emptyDb = `/tmp/supertag-test-watcher-empty-${Date.now()}.db`;
+    const fresh = new TanaExportWatcher({
+      exportDir: TEST_EXPORT_DIR,
+      dbPath: emptyDb,
+    });
+    try {
+      expect(fresh.getStatus().lastIndexed).toBeNull();
+    } finally {
+      fresh.close();
+      cleanupSqliteDatabase(emptyDb);
+    }
+  });
 });

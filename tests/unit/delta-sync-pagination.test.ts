@@ -498,8 +498,11 @@ describe("DeltaSyncService - Pagination + Sync Orchestration (T-2.2)", () => {
       service = new DeltaSyncService({
         dbPath,
         localApiClient: {
-          searchNodes: async (_query, options) => {
+          searchNodes: async (query, options) => {
             callIndex++;
+            // Honor the #105 'edited.since' probe (since = now): nothing changed since then
+            const since = (query.edited as { since: number }).since;
+            if (since >= Math.floor(Date.now() / 1000) - 1) return [];
             const offset = options?.offset ?? 0;
             if (offset === 0) return page1;
             if (offset === 100) return page2;

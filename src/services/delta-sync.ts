@@ -29,6 +29,25 @@ const PAGE_SIZE = 100;
 const MAX_PAGE_ITERATIONS = 100_000;
 
 /**
+ * Fraction of `sync_metadata.total_nodes` that a single delta may reach
+ * before we abort. When the Local API ignores `edited.since` it returns
+ * ~100% of the workspace, so any threshold below that catches it; a real
+ * delta this large is better served by a full `sync index` anyway.
+ * (Ported from PR #85 by @lavarius.)
+ */
+const MAX_PAGES_RATIO = 0.25;
+
+/** Page cap when `total_nodes` is unavailable (~400K-node workspace under the ratio). */
+const FALLBACK_MAX_PAGES = 1000;
+
+/** Log progress on page 1 and every Nth page after it. */
+const PROGRESS_INTERVAL_PAGES = 10;
+
+const SINCE_IGNORED_HINT =
+  "This usually means the Local API is not honoring 'edited.since' and is " +
+  "returning the entire workspace. Run 'supertag sync index' for a full sync instead.";
+
+/**
  * Detect a Tana Local API HTTP 500 "poison page" error.
  *
  * The Local API occasionally 500s while serializing the response for a
@@ -63,6 +82,8 @@ export class DeltaSyncService {
   private localApiClient: DeltaSyncOptions["localApiClient"];
   private embeddingConfig?: DeltaSyncOptions["embeddingConfig"];
   private logger: NonNullable<DeltaSyncOptions["logger"]>;
+  /** Explicit page cap; when undefined, scaled per sync from `total_nodes`. */
+  private maxPagesOverride: number | undefined;
   private syncing = false;
 
   constructor(options: DeltaSyncOptions) {
@@ -76,6 +97,50 @@ export class DeltaSyncService {
       warn: () => {},
       error: () => {},
     };
+    this.maxPagesOverride = options.maxPages;
+  }
+
+  /**
+   * Per-sync abort cap: the explicit `maxPages` option, else
+   * MAX_PAGES_RATIO of `sync_metadata.total_nodes`, else FALLBACK_MAX_PAGES.
+   */
+  private resolveMaxPages(): number {
+    if (this.maxPagesOverride !== undefined) return this.maxPagesOverride;
+    const row = this.db
+      .query("SELECT total_nodes FROM sync_metadata WHERE id = 1")
+      .get() as { total_nodes: number } | null;
+    const totalNodes = row?.total_nodes ?? 0;
+    if (totalNodes <= 0) return FALLBACK_MAX_PAGES;
+    return Math.ceil((totalNodes * MAX_PAGES_RATIO) / PAGE_SIZE);
+  }
+
+  /**
+   * Throw if the Local API ignores `edited.since`.
+   *
+   * Asks for nodes edited since "now": an API that honors the filter returns
+   * almost nothing, one that ignores it returns a full page again. A failed
+   * probe is inconclusive, so it only warns; the page cap stays as backstop.
+   */
+  private async assertSinceHonored(): Promise<void> {
+    const nowSec = Math.floor(Date.now() / 1000);
+    let probe: SearchResultNode[];
+    try {
+      probe = await this.localApiClient.searchNodes(
+        { edited: { since: nowSec } },
+        { limit: PAGE_SIZE, offset: 0 }
+      );
+    } catch (error) {
+      this.logger.warn("Delta-sync 'edited.since' probe failed; relying on the page cap", {
+        error: String(error),
+      });
+      return;
+    }
+    if (probe.length >= PAGE_SIZE) {
+      throw new Error(
+        `Delta-sync aborted: the Local API returned ${probe.length} nodes edited since now ` +
+          `(watermark NOT advanced). ${SINCE_IGNORED_HINT}`
+      );
+    }
   }
 
   /**
@@ -296,12 +361,13 @@ export class DeltaSyncService {
     let iterations = 0;
 
     while (true) {
+      // Throw rather than break: a silent stop would advance the watermark
+      // past nodes we never fetched.
       if (++iterations > MAX_PAGE_ITERATIONS) {
-        this.logger.error(
-          "Delta-sync pagination exceeded safety limit; stopping",
-          { offset, iterations }
+        throw new Error(
+          `Delta-sync pagination exceeded ${MAX_PAGE_ITERATIONS} requests at offset ${offset} ` +
+            `(watermark NOT advanced). ${SINCE_IGNORED_HINT}`
         );
-        break;
       }
 
       const result = await this.fetchPageResilient(sinceSec, offset, PAGE_SIZE, stats);
@@ -432,6 +498,7 @@ export class DeltaSyncService {
 
       // Use 0 as fallback watermark if null (first delta after full sync with no delta timestamp)
       const sinceMs = watermarkBefore ?? 0;
+      const maxPages = this.resolveMaxPages();
 
       // Step 3: Page through changed nodes
       let nodesFound = 0;
@@ -443,9 +510,32 @@ export class DeltaSyncService {
       const changedNodeIds: string[] = [];
       const stats = { poisonNodesSkipped: 0 };
 
+      // Every abort below throws before Step 5, so the watermark stays put.
+      // Pages merged before an abort are committed and re-merge idempotently
+      // on the next run.
       for await (const page of this.fetchChangedNodes(sinceMs, stats)) {
         pages++;
+
+        // A full first page is the cheap moment to catch an API that ignores
+        // `since`, before merging anything.
+        if (pages === 1 && page.length >= PAGE_SIZE) {
+          await this.assertSinceHonored();
+        }
+
+        if (pages > maxPages) {
+          throw new Error(
+            `Delta-sync aborted after ${maxPages} pages (${nodesFound} nodes merged so far; ` +
+              `watermark NOT advanced). ${SINCE_IGNORED_HINT}`
+          );
+        }
+
         nodesFound += page.length;
+
+        if (pages === 1 || pages % PROGRESS_INTERVAL_PAGES === 0) {
+          this.logger.info(
+            `delta-sync progress: ${pages} page(s), ${nodesFound} nodes (latest page: ${page.length})`
+          );
+        }
 
         for (const node of page) {
           const result = this.mergeNode(node);

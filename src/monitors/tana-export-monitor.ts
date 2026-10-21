@@ -306,8 +306,25 @@ export class TanaExportWatcher extends EventEmitter {
       latestExport: this.latestExportFile
         ? basename(this.latestExportFile)
         : null,
-      lastIndexed: this.lastIndexedTimestamp,
+      lastIndexed: this.lastIndexedTimestamp ?? this.readPersistedLastIndexed(),
     };
+  }
+
+  /**
+   * Last full-index time from sync_metadata. `sync status` runs in a fresh
+   * process where the in-memory timestamp is always null.
+   */
+  private readPersistedLastIndexed(): number | null {
+    try {
+      const row = this.indexer
+        .getDatabase()
+        .query("SELECT last_sync_timestamp FROM sync_metadata WHERE id = 1")
+        .get() as { last_sync_timestamp: number } | null;
+      return row && row.last_sync_timestamp > 0 ? row.last_sync_timestamp : null;
+    } catch {
+      // sync_metadata does not exist until the first index
+      return null;
+    }
   }
 
   /**
