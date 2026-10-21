@@ -748,6 +748,45 @@ describe("Supertag Metadata Extraction", () => {
       expect(parents[0]).toBe("parent-tagdef");
     });
 
+    it("should skip a self-reference so a tag never becomes its own parent (#108)", () => {
+      const nodes = new Map<string, NodeDump>([
+        [
+          "self-tagdef",
+          {
+            id: "self-tagdef",
+            props: { name: "loop", _docType: "tagDef", _metaNodeId: "self-meta", created: 1000 },
+          } as NodeDump,
+        ],
+        [
+          "self-meta",
+          {
+            id: "self-meta",
+            props: { _docType: "metaNode", created: 1001 },
+            children: ["self-tuple"],
+          } as NodeDump,
+        ],
+        [
+          "self-tuple",
+          {
+            id: "self-tuple",
+            props: { _docType: "tuple", created: 1002 },
+            children: ["SYS_A13", "self-tagdef", "other-tagdef"],
+          } as NodeDump,
+        ],
+        [
+          "other-tagdef",
+          {
+            id: "other-tagdef",
+            props: { name: "other", _docType: "tagDef", created: 1 },
+          } as NodeDump,
+        ],
+      ]);
+
+      const parents = extractParentsFromTagDef(nodes.get("self-tagdef")!, nodes);
+
+      expect(parents).toEqual(["other-tagdef"]);
+    });
+
     it("should skip system references that do not resolve to nodes", () => {
       // Real exports have system refs like SYS_T01, SYS_T98 in SYS_A13 tuple
       // These are NOT node IDs - they're built-in Tana system tag references
